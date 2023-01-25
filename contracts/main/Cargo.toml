@@ -1,0 +1,39 @@
+[package]
+name = "main"
+version = "0.1.0"
+edition = "2021"
+description = "Main tge contract"
+authors = ["Sergey Ratiashvili <serg.s.r@gmail.com>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+overflow-checks = true
+
+[features]
+# for quicker tests, cargo test --lib
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+library = []
+
+[dependencies]
+cw2 = "0.15.1"
+serde = { version = "1.0.103", default-features = false, features = ["derive"] }
+cosmwasm-std = { version = "1.0.0" }
+cosmwasm-storage = { version = "1.0.0" }
+schemars = "0.8.10"
+
+[dev-dependencies]
+cosmwasm-schema = { version = "1.0.0" }
