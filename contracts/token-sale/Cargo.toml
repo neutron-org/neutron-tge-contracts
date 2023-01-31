@@ -1,8 +1,8 @@
 [package]
-name = "main"
+name = "token_sale"
 version = "0.1.0"
 edition = "2021"
-description = "Main tge contract"
+description = "Token sale contract"
 authors = ["Sergey Ratiashvili <serg.s.r@gmail.com>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
