@@ -1,2 +1,1 @@
-#
 # TGE contracts
