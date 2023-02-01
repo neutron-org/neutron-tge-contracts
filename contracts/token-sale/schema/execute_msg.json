@@ -5,10 +5,10 @@
     {
       "type": "object",
       "required": [
-        "Deposit"
+        "deposit"
       ],
       "properties": {
-        "Deposit": {
+        "deposit": {
           "type": "object"
         }
       },
@@ -17,10 +17,10 @@
     {
       "type": "object",
       "required": [
-        "Withdraw"
+        "withdraw"
       ],
       "properties": {
-        "Withdraw": {
+        "withdraw": {
           "type": "object",
           "properties": {
             "amount": {
@@ -41,10 +41,10 @@
     {
       "type": "object",
       "required": [
-        "WithdrawTokens"
+        "withdraw_tokens"
       ],
       "properties": {
-        "WithdrawTokens": {
+        "withdraw_tokens": {
           "type": "object"
         }
       },
@@ -53,10 +53,10 @@
     {
       "type": "object",
       "required": [
-        "PostInitialize"
+        "post_initialize"
       ],
       "properties": {
-        "PostInitialize": {
+        "post_initialize": {
           "type": "object",
           "required": [
             "config"
@@ -73,10 +73,10 @@
     {
       "type": "object",
       "required": [
-        "ReleaseTokens"
+        "release_tokens"
       ],
       "properties": {
-        "ReleaseTokens": {
+        "release_tokens": {
           "type": "object"
         }
       },
@@ -85,10 +85,10 @@
     {
       "type": "object",
       "required": [
-        "WithdrawReserve"
+        "withdraw_reserve"
       ],
       "properties": {
-        "WithdrawReserve": {
+        "withdraw_reserve": {
           "type": "object"
         }
       },

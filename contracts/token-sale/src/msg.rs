@@ -22,6 +22,7 @@ pub struct InstantiateMsg {
 pub struct MigrateMsg {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     Deposit {},
     Withdraw { amount: Option<Uint128> },
