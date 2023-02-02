@@ -16,6 +16,7 @@ pub struct InstantiateMsg {
     pub base_denom: String,
     pub reserve: String,
     pub token: String,
+    pub slot_duration: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -59,6 +60,7 @@ pub struct Config {
     pub base_denom: String,
     pub tokens_released: bool,
     pub reserve: Addr,
+    pub slot_duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
