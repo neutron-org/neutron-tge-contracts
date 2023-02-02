@@ -30,7 +30,6 @@ pub fn instantiate(
         token: deps.api.addr_validate(&msg.token)?,
         event_config: None,
         base_denom: msg.base_denom,
-        tokens_released: false,
         slot_duration: msg.slot_duration.unwrap_or(DEFAULT_SLOT_DURATION),
     };
     TOTAL_DEPOSIT.save(deps.storage, &Uint128::zero())?;
@@ -98,10 +97,8 @@ fn query_info(deps: Deps, env: Env, address: String) -> StdResult<Binary> {
         Uint128::zero()
     };
 
-    let clamable = time >= event_config.stage2_end
-        && !tokens_to_claim.is_zero()
-        && config.tokens_released
-        && !info.tokens_claimed;
+    let clamable =
+        time >= event_config.stage2_end && !tokens_to_claim.is_zero() && !info.tokens_claimed;
 
     to_binary(&InfoResponse {
         deposit: info.amount,
@@ -129,8 +126,7 @@ pub fn execute(
         ExecuteMsg::Deposit {} => execute_deposit(deps, env, info),
         ExecuteMsg::Withdraw { amount } => execute_withdraw(deps, env, info, amount),
         ExecuteMsg::WithdrawTokens {} => execute_withdraw_tokens(deps, env, info),
-        ExecuteMsg::PostInitialize { config } => execute_post_initialize(deps, env, info, config),
-        ExecuteMsg::ReleaseTokens {} => execute_release_tokens(deps, env, info),
+        ExecuteMsg::SetupEvent { config } => execute_setup_event(deps, env, info, config),
     }
 }
 
@@ -320,7 +316,7 @@ pub fn execute_withdraw_tokens(
     let config = CONFIG.load(deps.storage)?;
     let event_config = config.event_config.unwrap();
 
-    if env.block.time.seconds() < event_config.stage2_end || !config.tokens_released {
+    if env.block.time.seconds() < event_config.stage2_end {
         return Err(ContractError::WithdrawTokensError {
             text: "cannot withdraw tokens yet".to_string(),
         });
@@ -362,38 +358,7 @@ pub fn execute_withdraw_tokens(
         ]))
 }
 
-pub fn execute_release_tokens(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let launch_config = config.event_config.clone().unwrap();
-
-    if info.sender.as_str() != config.owner.as_str() {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    if env.block.time.seconds() < launch_config.stage2_end {
-        return Err(ContractError::ReleaseTokensError {
-            text: "tokens distribution currently on hold".to_string(),
-        });
-    }
-
-    if config.tokens_released {
-        return Err(ContractError::ReleaseTokensError {
-            text: "tokens have already been released".to_string(),
-        });
-    }
-
-    config.tokens_released = true;
-
-    CONFIG.save(deps.storage, &config)?;
-
-    Ok(Response::new().add_attribute("action", "release_tokens"))
-}
-
-pub fn execute_post_initialize(
+pub fn execute_setup_event(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
