@@ -180,7 +180,6 @@ fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
 
     if env.block.time.seconds() < event_config.stage1_begin {
         return Err(ContractError::DepositError {
-            // text: "deposit period is not start yet".to_string(),
             text: format!(
                 "deposit period is not start yet, now: {}, start: {}",
                 env.block.time.seconds(),
