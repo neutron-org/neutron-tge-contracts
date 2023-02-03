@@ -833,7 +833,7 @@ fn make_astro_ust_deposits(
     );
 
     // deposit UST Msg
-    let deposit_ust_msg = &ExecuteMsg::DepositUst {};
+    let deposit_ust_msg = &ExecuteMsg::DepositUst_delete {};
 
     // ######    SUCCESS :: UST Successfully deposited     ######
     app.execute_contract(
@@ -919,8 +919,8 @@ fn proper_initialization_only_auction_astro() {
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
 
-    assert!(resp.total_astro_delegated.is_zero());
-    assert!(resp.total_ust_delegated.is_zero());
+    assert!(resp.total_cw20_deposited.is_zero());
+    assert!(resp.total_opposite_deposited.is_zero());
     assert!(resp.lp_shares_minted.is_none());
     assert!(!resp.is_lp_staked);
     assert_eq!(0u64, resp.pool_init_timestamp);
@@ -974,8 +974,8 @@ fn proper_initialization_all_contracts() {
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
 
-    assert!(resp.total_astro_delegated.is_zero());
-    assert!(resp.total_ust_delegated.is_zero());
+    assert!(resp.total_cw20_deposited.is_zero());
+    assert!(resp.total_opposite_deposited.is_zero());
     assert!(resp.lp_shares_minted.is_none());
     assert!(!resp.is_lp_staked);
     assert_eq!(0u64, resp.pool_init_timestamp);
@@ -1091,11 +1091,8 @@ fn test_delegate_astro_tokens_from_airdrop() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(
-        Uint128::from(100000000u64),
-        state_resp.total_astro_delegated
-    );
-    assert_eq!(Uint128::from(0u64), state_resp.total_ust_delegated);
+    assert_eq!(Uint128::from(100000000u64), state_resp.total_cw20_deposited);
+    assert_eq!(Uint128::from(0u64), state_resp.total_opposite_deposited);
     assert_eq!(None, state_resp.lp_shares_minted);
     assert!(!state_resp.is_lp_staked);
     assert!(state_resp.generator_astro_per_share.is_zero());
@@ -1128,11 +1125,8 @@ fn test_delegate_astro_tokens_from_airdrop() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(
-        Uint128::from(200000000u64),
-        state_resp.total_astro_delegated
-    );
-    assert_eq!(Uint128::from(0u64), state_resp.total_ust_delegated);
+    assert_eq!(Uint128::from(200000000u64), state_resp.total_cw20_deposited);
+    assert_eq!(Uint128::from(0u64), state_resp.total_opposite_deposited);
     assert_eq!(None, state_resp.lp_shares_minted);
     assert!(!state_resp.is_lp_staked);
     assert!(state_resp.generator_astro_per_share.is_zero());
@@ -1282,10 +1276,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(
-        Uint128::from(100000000u64),
-        state_resp.total_astro_delegated
-    );
+    assert_eq!(Uint128::from(100000000u64), state_resp.total_cw20_deposited);
 
     // Check user response
     let user_resp: UserInfoResponse = app
@@ -1313,11 +1304,8 @@ fn test_delegate_astro_tokens_from_lockdrop() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(
-        Uint128::from(200000000u64),
-        state_resp.total_astro_delegated
-    );
-    assert_eq!(Uint128::from(0u64), state_resp.total_ust_delegated);
+    assert_eq!(Uint128::from(200000000u64), state_resp.total_cw20_deposited);
+    assert_eq!(Uint128::from(0u64), state_resp.total_opposite_deposited);
 
     // Check user response
     let user_resp: UserInfoResponse = app
@@ -1446,7 +1434,7 @@ fn test_deposit_ust() {
     );
 
     // deposit UST Msg
-    let deposit_ust_msg = &ExecuteMsg::DepositUst {};
+    let deposit_ust_msg = &ExecuteMsg::DepositUst_delete {};
     let coins = [Coin {
         denom: "uusd".to_string(),
         amount: Uint128::from(10000u128),
@@ -1502,8 +1490,8 @@ fn test_deposit_ust() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(Uint128::from(00u64), state_resp.total_astro_delegated);
-    assert_eq!(Uint128::from(10000u64), state_resp.total_ust_delegated);
+    assert_eq!(Uint128::from(00u64), state_resp.total_cw20_deposited);
+    assert_eq!(Uint128::from(10000u64), state_resp.total_opposite_deposited);
     assert_eq!(None, state_resp.lp_shares_minted);
     assert!(!state_resp.is_lp_staked);
 
@@ -1536,8 +1524,8 @@ fn test_deposit_ust() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(Uint128::from(00u64), state_resp.total_astro_delegated);
-    assert_eq!(Uint128::from(20000u64), state_resp.total_ust_delegated);
+    assert_eq!(Uint128::from(00u64), state_resp.total_cw20_deposited);
+    assert_eq!(Uint128::from(20000u64), state_resp.total_opposite_deposited);
 
     // Check user response
     user_resp = app
@@ -1624,7 +1612,7 @@ fn test_withdraw_ust() {
     );
 
     // deposit UST Msg
-    let deposit_ust_msg = &ExecuteMsg::DepositUst {};
+    let deposit_ust_msg = &ExecuteMsg::DepositUst_delete {};
     let coins = [Coin {
         denom: "uusd".to_string(),
         amount: Uint128::from(10000u128),
@@ -1663,8 +1651,8 @@ fn test_withdraw_ust() {
     app.execute_contract(
         user1_address.clone(),
         auction_instance.clone(),
-        &ExecuteMsg::WithdrawUst {
-            amount: Uint128::from(10000u64),
+        &ExecuteMsg::Withdraw {
+            amount_opposite: Uint128::from(10000u64),
         },
         &[],
     )
@@ -1674,7 +1662,7 @@ fn test_withdraw_ust() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(Uint128::from(20000u64), state_resp.total_ust_delegated);
+    assert_eq!(Uint128::from(20000u64), state_resp.total_opposite_deposited);
 
     // Check user response
     let mut user_resp: UserInfoResponse = app
@@ -1708,8 +1696,8 @@ fn test_withdraw_ust() {
         .execute_contract(
             user1_address.clone(),
             auction_instance.clone(),
-            &ExecuteMsg::WithdrawUst {
-                amount: Uint128::from(10000u64),
+            &ExecuteMsg::Withdraw {
+                amount_opposite: Uint128::from(10000u64),
             },
             &[],
         )
@@ -1724,8 +1712,8 @@ fn test_withdraw_ust() {
     app.execute_contract(
         user1_address.clone(),
         auction_instance.clone(),
-        &ExecuteMsg::WithdrawUst {
-            amount: Uint128::from(5000u64),
+        &ExecuteMsg::Withdraw {
+            amount_opposite: Uint128::from(5000u64),
         },
         &[],
     )
@@ -1735,7 +1723,7 @@ fn test_withdraw_ust() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(Uint128::from(25000u64), state_resp.total_ust_delegated);
+    assert_eq!(Uint128::from(25000u64), state_resp.total_opposite_deposited);
 
     // Check user response
     user_resp = app
@@ -1755,8 +1743,8 @@ fn test_withdraw_ust() {
         .execute_contract(
             user1_address.clone(),
             auction_instance.clone(),
-            &ExecuteMsg::WithdrawUst {
-                amount: Uint128::from(10u64),
+            &ExecuteMsg::Withdraw {
+                amount_opposite: Uint128::from(10u64),
             },
             &[],
         )
@@ -1778,8 +1766,8 @@ fn test_withdraw_ust() {
         .execute_contract(
             user2_address.clone(),
             auction_instance.clone(),
-            &ExecuteMsg::WithdrawUst {
-                amount: Uint128::from(10000u64),
+            &ExecuteMsg::Withdraw {
+                amount_opposite: Uint128::from(10000u64),
             },
             &[],
         )
@@ -1794,8 +1782,8 @@ fn test_withdraw_ust() {
     app.execute_contract(
         user2_address.clone(),
         auction_instance.clone(),
-        &ExecuteMsg::WithdrawUst {
-            amount: Uint128::from(2000u64),
+        &ExecuteMsg::Withdraw {
+            amount_opposite: Uint128::from(2000u64),
         },
         &[],
     )
@@ -1805,7 +1793,7 @@ fn test_withdraw_ust() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(Uint128::from(23000u64), state_resp.total_ust_delegated);
+    assert_eq!(Uint128::from(23000u64), state_resp.total_opposite_deposited);
 
     // Check user response
     user_resp = app
@@ -1825,8 +1813,8 @@ fn test_withdraw_ust() {
         .execute_contract(
             user2_address.clone(),
             auction_instance.clone(),
-            &ExecuteMsg::WithdrawUst {
-                amount: Uint128::from(10u64),
+            &ExecuteMsg::Withdraw {
+                amount_opposite: Uint128::from(10u64),
             },
             &[],
         )
@@ -1846,8 +1834,8 @@ fn test_withdraw_ust() {
         .execute_contract(
             user3_address.clone(),
             auction_instance.clone(),
-            &ExecuteMsg::WithdrawUst {
-                amount: Uint128::from(10u64),
+            &ExecuteMsg::Withdraw {
+                amount_opposite: Uint128::from(10u64),
             },
             &[],
         )
@@ -1982,11 +1970,11 @@ fn test_add_liquidity_to_astroport_pool() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
+    assert_eq!(Uint128::from(242189994u64), state_resp.total_cw20_deposited);
     assert_eq!(
-        Uint128::from(242189994u64),
-        state_resp.total_astro_delegated
+        Uint128::from(6530319u64),
+        state_resp.total_opposite_deposited
     );
-    assert_eq!(Uint128::from(6530319u64), state_resp.total_ust_delegated);
     assert_eq!(
         Some(Uint128::from(39769057u64)),
         state_resp.lp_shares_minted
@@ -2245,11 +2233,11 @@ fn test_stake_lp_tokens() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
+    assert_eq!(Uint128::from(242189994u64), state_resp.total_cw20_deposited);
     assert_eq!(
-        Uint128::from(242189994u64),
-        state_resp.total_astro_delegated
+        Uint128::from(6530319u64),
+        state_resp.total_opposite_deposited
     );
-    assert_eq!(Uint128::from(6530319u64), state_resp.total_ust_delegated);
     assert_eq!(
         Some(Uint128::from(39769057u64)),
         state_resp.lp_shares_minted

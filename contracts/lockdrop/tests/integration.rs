@@ -3119,7 +3119,7 @@ fn test_claim_rewards() {
     app.execute_contract(
         Addr::unchecked(user_address.clone()),
         Addr::unchecked(update_msg.auction_contract_address.clone().unwrap()),
-        &astroport_periphery::auction::ExecuteMsg::DepositUst {},
+        &astroport_periphery::auction::ExecuteMsg::DepositUst_delete {},
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(432423u128),
@@ -3547,7 +3547,7 @@ fn test_claim_rewards_and_unlock() {
     app.execute_contract(
         Addr::unchecked(user_address.clone()),
         Addr::unchecked(update_msg.auction_contract_address.clone().unwrap()),
-        &astroport_periphery::auction::ExecuteMsg::DepositUst {},
+        &astroport_periphery::auction::ExecuteMsg::DepositUst_delete {},
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(432423u128),

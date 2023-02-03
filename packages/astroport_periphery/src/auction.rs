@@ -1,5 +1,4 @@
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg};
-use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +12,8 @@ pub struct InstantiateMsg {
     pub init_timestamp: u64,
     pub deposit_window: u64,
     pub withdrawal_window: u64,
+    pub base_denom_contract: String,
+    pub opposite_denom: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -34,16 +35,25 @@ pub struct PoolInfo {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    Receive(Cw20ReceiveMsg),
-    UpdateConfig { new_config: UpdateConfigMsg },
-
-    DepositUst {},
-    WithdrawUst { amount: Uint128 },
-
-    InitPool { slippage: Option<Decimal> },
+    // Receive_delete(Cw20ReceiveMsg),
+    UpdateConfig {
+        new_config: UpdateConfigMsg,
+    },
+    Deposit {
+        cw20_amount: Uint128,
+    },
+    Withdraw {
+        amount_opposite: Uint128,
+        amount_cw20: Uint128,
+    },
+    InitPool {
+        slippage: Option<Decimal>,
+    },
     StakeLpTokens {},
 
-    ClaimRewards { withdraw_lp_shares: Option<Uint128> },
+    ClaimRewards {
+        withdraw_lp_shares: Option<Uint128>,
+    },
     Callback(CallbackMsg),
 }
 
@@ -117,15 +127,19 @@ pub struct Config {
     pub deposit_window: u64,
     /// Number of seconds post deposit_window completion during which only withdrawals are allowed
     pub withdrawal_window: u64,
+    /// Base denom contract cNTRN
+    pub base_denom_contract: Addr,
+    /// Opposit denom
+    pub opposite_denom: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct State {
-    /// Total ASTRO tokens delegated to the contract by lockdrop participants / airdrop recipients
-    pub total_astro_delegated: Uint128,
-    /// Total UST delegated to the contract
-    pub total_ust_delegated: Uint128,
+    /// Total cw20 (cNTRN) tokens delegated to the contract
+    pub total_cw20_deposited: Uint128,
+    /// Total Opposite (native) deposited to the contract
+    pub total_opposite_deposited: Uint128,
     /// ASTRO--UST LP Shares currently staked with the Staking contract
     pub is_lp_staked: bool,
     /// Total LP shares minted post liquidity addition to the ASTRO-UST Pool
@@ -139,12 +153,12 @@ pub struct State {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct UserInfo {
-    /// Total ASTRO Tokens delegated by the user
-    pub astro_delegated: Uint128,
-    /// Total UST delegated by the user
-    pub ust_delegated: Uint128,
-    /// Withdrawal counter to capture if the user already withdrew UST during the "only withdrawals" window
-    pub ust_withdrawn: bool,
+    /// Total cw20 (cNTRN) Tokens delegated by the user
+    pub cw20_delegated: Uint128,
+    /// Total Opposite (native) delegated by the user
+    pub opposite_delegated: Uint128,
+    /// Withdrawal counter to capture if the user already withdrew opposite (native) during the "only withdrawals" window
+    pub opposite_withdrawn: bool,
     /// User's LP share balance
     pub lp_shares: Option<Uint128>,
     /// LP shares withdrawn by the user

@@ -1,14 +1,14 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
+    attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
 };
 
 use astroport_periphery::airdrop::ExecuteMsg::EnableClaims as AirdropEnableClaims;
 use astroport_periphery::auction::{
-    CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolInfo, QueryMsg,
-    State, UpdateConfigMsg, UserInfo, UserInfoResponse,
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolInfo, QueryMsg, State,
+    UpdateConfigMsg, UserInfo, UserInfoResponse,
 };
 use astroport_periphery::helpers::{build_approve_cw20_msg, cw20_get_balance};
 use astroport_periphery::lockdrop::ExecuteMsg::EnableClaims as LockdropEnableClaims;
@@ -21,18 +21,15 @@ use astroport::generator::{
 use astroport::pair::QueryMsg as AstroportPairQueryMsg;
 use astroport::querier::query_token_balance;
 use cw2::set_contract_version;
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
-
-/// TerraUSD denom.
-const UUSD_DENOM: &str = "uusd";
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "astroport_auction";
+const CONTRACT_NAME: &str = "auction";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ## Description
-/// Creates a new contract with the specified parameters in the [`InstantiateMsg`].
+/// Creates a new contract with the specified parameters in the [`Instantiateamount: amount_opposite
 /// Returns the [`Response`] with the specified attributes if the operation was successful, or a [`StdError`] if
 /// the contract was not created.
 /// ## Params
@@ -78,6 +75,8 @@ pub fn instantiate(
         init_timestamp: msg.init_timestamp,
         deposit_window: msg.deposit_window,
         withdrawal_window: msg.withdrawal_window,
+        base_denom_contract: addr_validate_to_lower(deps.api, &msg.base_denom_contract)?,
+        opposite_denom: msg.opposite_denom,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -121,9 +120,11 @@ pub fn execute(
 ) -> Result<Response, StdError> {
     match msg {
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
-        ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
-        ExecuteMsg::DepositUst {} => handle_deposit_ust(deps, env, info),
-        ExecuteMsg::WithdrawUst { amount } => handle_withdraw_ust(deps, env, info, amount),
+        ExecuteMsg::Deposit { cw20_amount } => execute_deposit(deps, env, info, cw20_amount),
+        ExecuteMsg::Withdraw {
+            amount_opposite,
+            amount_cw20,
+        } => execute_withdraw(deps, env, info, amount_opposite, amount_cw20),
         ExecuteMsg::InitPool { slippage } => handle_init_pool(deps, env, info, slippage),
         ExecuteMsg::StakeLpTokens {} => handle_stake_lp_tokens(deps, env, info),
         ExecuteMsg::ClaimRewards { withdraw_lp_shares } => {
@@ -133,49 +134,74 @@ pub fn execute(
     }
 }
 
-/// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template.
-/// If the template is not found in the received message, then an [`StdError`] is returned,
-/// otherwise it returns the [`Response`] with the specified attributes if the operation was successful.
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **cw20_msg** is an object of type [`Cw20ReceiveMsg`]. This is the CW20 message that has to be processed.
-pub fn receive_cw20(
+pub fn execute_deposit(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    cw20_msg: Cw20ReceiveMsg,
+    cw20_amount: Uint128,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
 
-    if info.sender != config.astro_token_address {
-        return Err(StdError::generic_err("Only astro tokens are received!"));
+    // CHECK :: Auction deposit window open
+    if !is_deposit_open(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err("Deposit window closed"));
     }
 
     // CHECK ::: Amount needs to be valid
-    if cw20_msg.amount.is_zero() {
+    if cw20_amount.is_zero() {
+        return Err(StdError::generic_err(format!(
+            "{} amount must be greater than 0",
+            config.base_denom_contract
+        )));
+    }
+
+    let mut state = STATE.load(deps.storage)?;
+    let mut user_info = USERS
+        .may_load(deps.storage, &info.sender)?
+        .unwrap_or_default();
+
+    // Retrieve native sent by the user
+    if info.funds.len() != 1 || info.funds[0].denom != config.opposite_denom {
+        return Err(StdError::generic_err(format!(
+            "You may delegate {} native coin only",
+            config.opposite_denom
+        )));
+    }
+
+    let fund = &info.funds[0];
+
+    // CHECK ::: Amount needs to be valid
+    if fund.amount.is_zero() {
         return Err(StdError::generic_err("Amount must be greater than 0"));
     }
 
-    match from_binary(&cw20_msg.msg)? {
-        Cw20HookMsg::DelegateAstroTokens { user_address } => {
-            // CHECK :: Delegation can happen only via airdrop / lockdrop contracts
-            if cw20_msg.sender == config.airdrop_contract_address
-                || cw20_msg.sender == config.lockdrop_contract_address
-            {
-                handle_delegate_astro_tokens(deps, env, user_address, cw20_msg.amount)
-            } else {
-                Err(StdError::generic_err("Unauthorized"))
-            }
-        }
-        Cw20HookMsg::IncreaseAstroIncentives {} => {
-            handle_increasing_astro_incentives(deps, cw20_msg.amount)
-        }
+    // UPDATE STATE
+    state.total_opposite_deposited += fund.amount;
+    user_info.opposite_delegated += fund.amount;
+
+    // SEND CW20 TOKENS TO THE CONTRACT
+    // A user must give the contract permission to transfer the tokens before it
+    let cw20_msg = Asset {
+        info: AssetInfo::Token {
+            contract_addr: config.base_denom_contract,
+        },
+        amount: cw20_amount,
     }
+    .into_msg(&deps.querier, &env.contract.address)?;
+
+    state.total_cw20_deposited += cw20_amount;
+    user_info.cw20_delegated += cw20_amount;
+
+    // SAVE UPDATED STATE
+    STATE.save(deps.storage, &state)?;
+    USERS.save(deps.storage, &info.sender, &user_info)?;
+
+    Ok(Response::new().add_message(cw20_msg).add_attributes(vec![
+        attr("action", "Auction::ExecuteMsg::Delegate"),
+        attr("user", info.sender.to_string()),
+        attr("native_delegated", fund.amount),
+        attr("cw20_delegated", cw20_amount),
+    ]))
 }
 
 /// ## Description
@@ -311,131 +337,6 @@ pub fn handle_update_config(
     Ok(Response::new().add_attributes(attributes))
 }
 
-/// Increases ASTRO incentives. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **amount** is an object of type [`Uint128`].
-pub fn handle_increasing_astro_incentives(
-    deps: DepsMut,
-    amount: Uint128,
-) -> Result<Response, StdError> {
-    let state = STATE.load(deps.storage)?;
-    let mut config = CONFIG.load(deps.storage)?;
-
-    if state.lp_shares_minted.is_some() {
-        return Err(StdError::generic_err("ASTRO is already being distributed"));
-    };
-
-    // Anyone can increase astro incentives
-
-    config.astro_incentive_amount = config
-        .astro_incentive_amount
-        .map_or(Some(amount), |v| Some(v + amount));
-
-    CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new()
-        .add_attribute("action", "astro_incentives_increased")
-        .add_attribute("amount", amount))
-}
-
-/// Delegates ASTRO tokens. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **user_address** is an object of type [`String`].
-///
-/// * **amount** is an object of type [`Uint128`].
-pub fn handle_delegate_astro_tokens(
-    deps: DepsMut,
-    env: Env,
-    user_address: String,
-    amount: Uint128,
-) -> Result<Response, StdError> {
-    let config = CONFIG.load(deps.storage)?;
-
-    let user_address = addr_validate_to_lower(deps.api, &user_address)?;
-
-    // CHECK :: Auction deposit window open
-    if !is_deposit_open(env.block.time.seconds(), &config) {
-        return Err(StdError::generic_err("Deposit window closed"));
-    }
-
-    let mut state = STATE.load(deps.storage)?;
-    let mut user_info = USERS
-        .may_load(deps.storage, &user_address)?
-        .unwrap_or_default();
-
-    // UPDATE STATE
-    state.total_astro_delegated += amount;
-    user_info.astro_delegated += amount;
-
-    // SAVE UPDATED STATE
-    STATE.save(deps.storage, &state)?;
-    USERS.save(deps.storage, &user_address, &user_info)?;
-
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "Auction::ExecuteMsg::DelegateAstroTokens"),
-        attr("user", user_address.to_string()),
-        attr("astro_delegated", amount),
-    ]))
-}
-
-/// Facilitates UST deposits by users. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-pub fn handle_deposit_ust(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-) -> Result<Response, StdError> {
-    let config = CONFIG.load(deps.storage)?;
-
-    // CHECK :: Auction deposit window open
-    if !is_deposit_open(env.block.time.seconds(), &config) {
-        return Err(StdError::generic_err("Deposit window closed"));
-    }
-
-    let mut state = STATE.load(deps.storage)?;
-    let mut user_info = USERS
-        .may_load(deps.storage, &info.sender)?
-        .unwrap_or_default();
-
-    // Retrieve UST sent by the user
-    if info.funds.len() != 1 || info.funds[0].denom != UUSD_DENOM {
-        return Err(StdError::generic_err(
-            "You may delegate UST native coin only",
-        ));
-    }
-
-    let fund = &info.funds[0];
-
-    // CHECK ::: Amount needs to be valid
-    if fund.amount.is_zero() {
-        return Err(StdError::generic_err("Amount must be greater than 0"));
-    }
-
-    // UPDATE STATE
-    state.total_ust_delegated += fund.amount;
-    user_info.ust_delegated += fund.amount;
-
-    // SAVE UPDATED STATE
-    STATE.save(deps.storage, &state)?;
-    USERS.save(deps.storage, &info.sender, &user_info)?;
-
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "Auction::ExecuteMsg::DelegateUst"),
-        attr("user", info.sender.to_string()),
-        attr("ust_delegated", fund.amount),
-    ]))
-}
-
 /// Returns a boolean value indicating if the deposit is open.
 /// ## Params
 /// * **current_timestamp** is an object of type [`u64`].
@@ -446,7 +347,7 @@ fn is_deposit_open(current_timestamp: u64, config: &Config) -> bool {
         && current_timestamp < config.init_timestamp + config.deposit_window
 }
 
-/// Facilitates UST withdrawals by users. Returns a default object of type [`Response`].
+/// Facilitates Opposite (native) token withdrawals by users. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -455,29 +356,29 @@ fn is_deposit_open(current_timestamp: u64, config: &Config) -> bool {
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **amount** is an object of type [`Uint128`].
-pub fn handle_withdraw_ust(
+pub fn execute_withdraw(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    amount: Uint128,
+    amount_opposite: Uint128,
+    amount_cw20: Uint128,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
-
     let user_address = info.sender;
-
     let mut user_info = USERS.load(deps.storage, &user_address)?;
 
     // CHECK :: Has the user already withdrawn during the current window
-    if user_info.ust_withdrawn {
+    if user_info.opposite_withdrawn {
         return Err(StdError::generic_err("Max 1 withdrawal allowed"));
     }
 
     // Check :: Amount should be within the allowed withdrawal limit bounds
     let max_withdrawal_percent = allowed_withdrawal_percent(env.block.time.seconds(), &config);
-    let max_withdrawal_allowed = user_info.ust_delegated * max_withdrawal_percent;
+    let max_allowed_opposite = user_info.opposite_delegated * max_withdrawal_percent;
+    let max_allowed_cw20 = user_info.cw20_delegated * max_withdrawal_percent;
 
-    if amount > max_withdrawal_allowed {
+    if amount_opposite > max_allowed_opposite || amount_cw20 > max_allowed_cw20 {
         return Err(StdError::generic_err(format!(
             "Amount exceeds maximum allowed withdrawal limit of {}",
             max_withdrawal_percent
@@ -486,33 +387,44 @@ pub fn handle_withdraw_ust(
 
     // After deposit window is closed, we allow to withdraw only once
     if env.block.time.seconds() >= config.init_timestamp + config.deposit_window {
-        user_info.ust_withdrawn = true;
+        user_info.opposite_withdrawn = true;
     }
 
     // UPDATE STATE
-    state.total_ust_delegated -= amount;
-    user_info.ust_delegated -= amount;
+    state.total_opposite_deposited -= amount_opposite;
+    user_info.opposite_delegated -= amount_opposite;
 
     // SAVE UPDATED STATE
     STATE.save(deps.storage, &state)?;
     USERS.save(deps.storage, &user_address, &user_info)?;
 
-    // Transfer UST to the user
-    let transfer_ust = Asset {
-        amount,
-        info: AssetInfo::NativeToken {
-            denom: String::from(UUSD_DENOM),
+    // Transfer Native tokens to the user
+    let transfer_msg = CosmosMsg::Bank(BankMsg::Send {
+        to_address: user_address.to_string(),
+        amount: vec![Coin {
+            denom: config.opposite_denom,
+            amount: amount_opposite,
+        }],
+    });
+
+    // Transfer CW20 tokens to the user
+    let cw20_msg = Asset {
+        info: AssetInfo::Token {
+            contract_addr: config.base_denom_contract,
         },
-    };
+        amount: amount_cw20,
+    }
+    .into_msg(&deps.querier, user_address)?;
 
     Ok(Response::new()
+        .add_message(transfer_msg)
+        .add_message(cw20_msg)
         .add_attributes(vec![
-            attr("action", "Auction::ExecuteMsg::WithdrawUst"),
+            attr("action", "Auction::ExecuteMsg::Withdraw"),
             attr("user", user_address.to_string()),
-            attr("ust_withdrawn", amount),
-            attr("ust_commission", transfer_ust.compute_tax(&deps.querier)?),
-        ])
-        .add_message(transfer_ust.into_msg(&deps.querier, user_address)?))
+            attr("opposite_withdrawn", amount_opposite),
+            attr("cw20_withdrawn", amount_cw20),
+        ]))
 }
 
 /// Allow withdrawal percent. Returns a default object of type [`Response`].
@@ -610,7 +522,7 @@ pub fn handle_init_pool(
         msgs.push(build_approve_cw20_msg(
             config.astro_token_address.to_string(),
             astro_ust_pool_address.to_string(),
-            state.total_astro_delegated,
+            state.total_cw20_deposited,
             env.block.height + 1u64,
         )?);
 
@@ -619,7 +531,7 @@ pub fn handle_init_pool(
             config.astro_token_address,
             astro_ust_pool_address,
             ust_coin.amount,
-            state.total_astro_delegated,
+            state.total_cw20_deposited,
             slippage,
         )?);
 
@@ -631,7 +543,7 @@ pub fn handle_init_pool(
         );
         Ok(Response::new().add_messages(msgs).add_attributes(vec![
             attr("action", "Auction::ExecuteMsg::AddLiquidityToAstroportPool"),
-            attr("astro_provided", state.total_astro_delegated),
+            attr("astro_provided", state.total_cw20_deposited),
             attr("ust_provided", ust_coin.amount),
         ]))
     } else {
@@ -791,7 +703,7 @@ pub fn handle_claim_rewards_and_withdraw_lp_shares(
     let mut user_info = USERS.load(deps.storage, &user_address)?;
 
     // CHECK :: User has valid delegation / deposit balances
-    if user_info.astro_delegated.is_zero() && user_info.ust_delegated.is_zero() {
+    if user_info.cw20_delegated.is_zero() && user_info.opposite_delegated.is_zero() {
         return Err(StdError::generic_err("No delegated assets"));
     }
 
@@ -934,11 +846,11 @@ fn update_user_lp_shares(
     mut user_info: &mut UserInfo,
 ) -> StdResult<()> {
     let user_lp_share = (Decimal::from_ratio(
-        user_info.astro_delegated,
-        state.total_astro_delegated * Uint128::new(2),
+        user_info.cw20_delegated,
+        state.total_cw20_deposited * Uint128::new(2),
     ) + Decimal::from_ratio(
-        user_info.ust_delegated,
-        state.total_ust_delegated * Uint128::new(2),
+        user_info.opposite_delegated,
+        state.total_opposite_deposited * Uint128::new(2),
     )) * lp_balance;
     user_info.lp_shares = Some(user_lp_share);
 
@@ -1273,9 +1185,9 @@ fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<User
 
     // User Info Response
     let mut user_info_response = UserInfoResponse {
-        astro_delegated: user_info.astro_delegated,
-        ust_delegated: user_info.ust_delegated,
-        ust_withdrawn: user_info.ust_withdrawn,
+        astro_delegated: user_info.cw20_delegated,
+        ust_delegated: user_info.opposite_delegated,
+        ust_withdrawn: user_info.opposite_withdrawn,
         lp_shares: user_info.lp_shares,
         claimed_lp_shares: user_info.claimed_lp_shares,
         withdrawable_lp_shares: None,
@@ -1374,24 +1286,24 @@ fn calculate_auction_reward_for_user(
     user_info: &UserInfo,
     total_astro_rewards: Option<Uint128>,
 ) -> Option<Uint128> {
-    if !user_info.astro_delegated.is_zero() || !user_info.ust_delegated.is_zero() {
+    if !user_info.cw20_delegated.is_zero() || !user_info.opposite_delegated.is_zero() {
         if let Some(total_astro_rewards) = total_astro_rewards {
             let mut user_astro_incentives = Uint128::zero();
 
             // ASTRO incentives from ASTRO delegated
-            if state.total_astro_delegated > Uint128::zero() {
+            if state.total_cw20_deposited > Uint128::zero() {
                 let astro_incentives_from_astro = Decimal::from_ratio(
-                    user_info.astro_delegated,
-                    state.total_astro_delegated * Uint128::new(2),
+                    user_info.cw20_delegated,
+                    state.total_cw20_deposited * Uint128::new(2),
                 ) * total_astro_rewards;
                 user_astro_incentives += astro_incentives_from_astro;
             }
 
             // ASTRO incentives from UST delegated
-            if state.total_ust_delegated > Uint128::zero() {
+            if state.total_opposite_deposited > Uint128::zero() {
                 let astro_incentives_from_ust = Decimal::from_ratio(
-                    user_info.ust_delegated,
-                    state.total_ust_delegated * Uint128::new(2),
+                    user_info.opposite_delegated,
+                    state.total_opposite_deposited * Uint128::new(2),
                 ) * total_astro_rewards;
                 user_astro_incentives += astro_incentives_from_ust;
             }
