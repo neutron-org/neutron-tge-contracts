@@ -10,7 +10,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw_asset::{Asset, AssetInfo};
 
-pub const SLOT_DURATION: u64 = 60 * 60;
+pub const DEFAULT_SLOT_DURATION: u64 = 60 * 60;
 
 const CONTRACT_NAME: &str = concat!("crates.io:neutron-contracts__", env!("CARGO_PKG_NAME"));
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -30,7 +30,7 @@ pub fn instantiate(
         token: deps.api.addr_validate(&msg.token)?,
         event_config: None,
         base_denom: msg.base_denom,
-        tokens_released: false,
+        slot_duration: msg.slot_duration.unwrap_or(DEFAULT_SLOT_DURATION),
     };
     TOTAL_DEPOSIT.save(deps.storage, &Uint128::zero())?;
     CONFIG.save(deps.storage, &cfg)?;
@@ -75,8 +75,9 @@ fn query_info(deps: Deps, env: Env, address: String) -> StdResult<Binary> {
         if info.withdrew_stage2 || time >= event_config.stage2_end {
             Uint128::zero()
         } else {
-            let current_slot = (event_config.stage2_end - time) / SLOT_DURATION;
-            let total_slots = (event_config.stage2_end - event_config.stage2_begin) / SLOT_DURATION;
+            let current_slot = (event_config.stage2_end - time) / config.slot_duration;
+            let total_slots =
+                (event_config.stage2_end - event_config.stage2_begin) / config.slot_duration;
 
             let withdrawable_portion =
                 Decimal::from_ratio(current_slot + 1u64, total_slots).min(Decimal::one());
@@ -96,10 +97,8 @@ fn query_info(deps: Deps, env: Env, address: String) -> StdResult<Binary> {
         Uint128::zero()
     };
 
-    let clamable = time >= event_config.stage2_end
-        && !tokens_to_claim.is_zero()
-        && config.tokens_released
-        && !info.tokens_claimed;
+    let clamable =
+        time >= event_config.stage2_end && !tokens_to_claim.is_zero() && !info.tokens_claimed;
 
     to_binary(&InfoResponse {
         deposit: info.amount,
@@ -127,8 +126,7 @@ pub fn execute(
         ExecuteMsg::Deposit {} => execute_deposit(deps, env, info),
         ExecuteMsg::Withdraw { amount } => execute_withdraw(deps, env, info, amount),
         ExecuteMsg::WithdrawTokens {} => execute_withdraw_tokens(deps, env, info),
-        ExecuteMsg::PostInitialize { config } => execute_post_initialize(deps, env, info, config),
-        ExecuteMsg::ReleaseTokens {} => execute_release_tokens(deps, env, info),
+        ExecuteMsg::SetupEvent { config } => execute_setup_event(deps, env, info, config),
     }
 }
 
@@ -159,7 +157,7 @@ fn execute_withdraw_reserve(
     )?;
 
     let msg = BankMsg::Send {
-        to_address: info.sender.to_string(),
+        to_address: config.reserve.to_string(),
         amount: vec![Coin {
             denom: config.base_denom,
             amount: balance,
@@ -178,7 +176,11 @@ fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respons
 
     if env.block.time.seconds() < event_config.stage1_begin {
         return Err(ContractError::DepositError {
-            text: "deposit period is not start yet".to_string(),
+            text: format!(
+                "deposit period is not start yet, now: {}, start: {}",
+                env.block.time.seconds(),
+                event_config.stage1_begin
+            ),
         });
     }
 
@@ -249,8 +251,9 @@ fn execute_withdraw(
             });
         }
 
-        let current_slot = (event_config.stage2_end - current_time) / SLOT_DURATION;
-        let total_slots = (event_config.stage2_end - event_config.stage2_begin) / SLOT_DURATION;
+        let current_slot = (event_config.stage2_end - current_time) / config.slot_duration;
+        let total_slots =
+            (event_config.stage2_end - event_config.stage2_begin) / config.slot_duration;
         let withdrawable_portion =
             Decimal::from_ratio(current_slot + 1u64, total_slots).min(Decimal::one());
 
@@ -313,7 +316,7 @@ pub fn execute_withdraw_tokens(
     let config = CONFIG.load(deps.storage)?;
     let event_config = config.event_config.unwrap();
 
-    if env.block.time.seconds() < event_config.stage2_end || !config.tokens_released {
+    if env.block.time.seconds() < event_config.stage2_end {
         return Err(ContractError::WithdrawTokensError {
             text: "cannot withdraw tokens yet".to_string(),
         });
@@ -355,38 +358,7 @@ pub fn execute_withdraw_tokens(
         ]))
 }
 
-pub fn execute_release_tokens(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    let launch_config = config.event_config.clone().unwrap();
-
-    if info.sender.as_str() != config.owner.as_str() {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    if env.block.time.seconds() < launch_config.stage2_end {
-        return Err(ContractError::ReleaseTokensError {
-            text: "tokens distribution currently on hold".to_string(),
-        });
-    }
-
-    if config.tokens_released {
-        return Err(ContractError::ReleaseTokensError {
-            text: "tokens have already been released".to_string(),
-        });
-    }
-
-    config.tokens_released = true;
-
-    CONFIG.save(deps.storage, &config)?;
-
-    Ok(Response::new().add_attribute("action", "release_tokens"))
-}
-
-pub fn execute_post_initialize(
+pub fn execute_setup_event(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -401,15 +373,38 @@ pub fn execute_post_initialize(
         return Err(ContractError::DuplicatePostInit {});
     }
 
-    if env.block.time.seconds() > event_config.stage1_begin
-        || event_config.stage1_begin > event_config.stage2_begin
-        || event_config.stage2_begin > event_config.stage2_end
-    {
-        return Err(ContractError::InvalidEventConfig {});
+    if env.block.time.seconds() > event_config.stage1_begin {
+        return Err(ContractError::InvalidEventConfig {
+            text: format!(
+                "stage1_begin must be in the future, but is {}",
+                env.block.time.seconds()
+            ),
+        });
     }
-
-    if (event_config.stage2_end - event_config.stage2_begin) < SLOT_DURATION {
-        return Err(ContractError::InvalidEventConfig {});
+    if event_config.stage1_begin > event_config.stage2_begin {
+        return Err(ContractError::InvalidEventConfig {
+            text: format!(
+                "stage2_begin must be after stage1_begin, but stage1_begin is {} and stage2_begin is {}", 
+                event_config.stage1_begin,
+                event_config.stage2_begin
+            ),
+        });
+    }
+    if event_config.stage2_begin > event_config.stage2_end {
+        return Err(ContractError::InvalidEventConfig {
+            text: format!(
+                "stage2_end must be after stage2_begin, but stage2_begin is {} and stage2_end is {}",
+                event_config.stage2_begin, event_config.stage2_end
+            ),
+        });
+    }
+    if (event_config.stage2_end - event_config.stage2_begin) < config.slot_duration {
+        return Err(ContractError::InvalidEventConfig {
+            text: format!(
+                "stage2_end must be at least {} seconds after stage2_begin, but stage2_begin is {} and stage2_end is {}",
+               config.slot_duration, event_config.stage2_begin, event_config.stage2_end
+            ),
+        });
     }
 
     config.event_config = Some(event_config.clone());

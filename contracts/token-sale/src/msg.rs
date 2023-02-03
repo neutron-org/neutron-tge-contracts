@@ -16,6 +16,7 @@ pub struct InstantiateMsg {
     pub base_denom: String,
     pub reserve: String,
     pub token: String,
+    pub slot_duration: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -27,8 +28,7 @@ pub enum ExecuteMsg {
     Deposit {},
     Withdraw { amount: Option<Uint128> },
     WithdrawTokens {},
-    PostInitialize { config: EventConfig },
-    ReleaseTokens {},
+    SetupEvent { config: EventConfig },
     WithdrawReserve {},
 }
 
@@ -57,8 +57,8 @@ pub struct Config {
     pub token: Addr,
     pub event_config: Option<EventConfig>,
     pub base_denom: String,
-    pub tokens_released: bool,
     pub reserve: Addr,
+    pub slot_duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
