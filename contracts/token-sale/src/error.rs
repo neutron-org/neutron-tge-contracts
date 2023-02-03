@@ -12,8 +12,8 @@ pub enum ContractError {
     #[error("post_initialize called multiple times")]
     DuplicatePostInit {},
 
-    #[error("Invalid TGE config")]
-    InvalidEventConfig {},
+    #[error("Invalid TGE config {text}")]
+    InvalidEventConfig { text: String },
 
     #[error("Empty TGE config")]
     EmptyEventConfig {},
