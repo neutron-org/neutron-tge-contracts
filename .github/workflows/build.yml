@@ -2,6 +2,11 @@
 name: Build Contracts
 
 on:
+  schedule:
+    - cron: '0 5 * * 1-5'
+  push:
+    branches:
+      - '**'
   workflow_dispatch:
     inputs:
       toolchain:
@@ -19,11 +24,17 @@ on:
         default: "main"
         required: true
         type: string
+      id:
+        description: 'Workflow ID (Optional)'
+        default: "scheduled"
+        required: false
+        type: string
 
 env:
   TOOLCHAIN: ${{ inputs.toolchain || 'stable' }}
   TARGET: ${{ inputs.target || 'wasm32-unknown-unknown' }}
   BRANCH: ${{ inputs.branch || 'main' }}
+  ID: ${{ inputs.id || 'scheduled' }}
 
 jobs:
   build:
@@ -54,7 +65,18 @@ jobs:
           credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
       - name: 'Set up Cloud SDK'
         uses: 'google-github-actions/setup-gcloud@v1'
-      - name: 'Upload Contracts to the Cloud'
+      - name: 'Upload Contracts to the Cloud (repo/branch/sha)'
         run: 'gsutil -m cp -r artifacts/* gs://neutron-contracts/${{ github.repository }}/${{ env.BRANCH }}/${{ github.sha }}/'
+      - name: 'Set Metadata (repo/branch/sha)'
+        run: 'gsutil setmeta -r -h "x-goog-meta-Neutron-Repo: ${{ github.repository }}" -h "x-goog-meta-Neutron-Commit: ${{ github.sha }}" gs://neutron-contracts/${{ github.repository }}/${{ env.BRANCH }}/${{ github.sha }}/'
+      - name: 'Upload Contracts to the Cloud (repo/branch/WF/ID)'
+        run: 'gsutil -m cp -r artifacts/* gs://neutron-contracts/${{ github.repository }}/${{ env.BRANCH }}/WF/${{ env.ID }}/'
+      - name: 'Set Metadata (repo/branch/WF/ID)'
+        run: 'gsutil setmeta -r -h "x-goog-meta-Neutron-Repo: ${{ github.repository }}" -h "x-goog-meta-Neutron-Commit: ${{ github.sha }}" gs://neutron-contracts/${{ github.repository }}/${{ env.BRANCH }}/WF/${{ env.ID }}/'
+      - name: 'Upload Contracts to the Cloud (repo/sha)'
+        run: 'gsutil -m cp -r artifacts/* gs://neutron-contracts/${{ github.repository }}/${{ github.sha }}/'
+      - name: 'Set Metadata (repo/sha)'
+        run: 'gsutil setmeta -r -h "x-goog-meta-Neutron-Repo: ${{ github.repository }}" -h "x-goog-meta-Neutron-Commit: ${{ github.sha }}" gs://neutron-contracts/${{ github.repository }}/${{ github.sha }}/'
       - name: 'Cleanup'
+        if: always()
         uses: AutoModality/action-clean@v1.1.0
