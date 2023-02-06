@@ -21,7 +21,7 @@ use crate::migration::{
     migrate_generator_proxy_per_share_to_v120, ASSET_POOLS_V101, ASSET_POOLS_V111,
 };
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
-use astroport_periphery::auction::Cw20HookMsg::DelegateAstroTokens;
+use astroport_periphery::auction::Cw20HookMsg::DelegateCNtrnTokens;
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
     LockUpInfoSummary, LockupInfoV2, MigrateMsg, MigrationInfo, PendingAssetRewardResponse,
@@ -1323,7 +1323,7 @@ pub fn handle_delegate_astro_to_auction(
                 .auction_contract
                 .ok_or_else(|| StdError::generic_err("Auction contract hasn't been set yet!"))?
                 .to_string(),
-            msg: to_binary(&DelegateAstroTokens {
+            msg: to_binary(&DelegateCNtrnTokens {
                 user_address: user_address.to_string(),
             })?,
             amount,

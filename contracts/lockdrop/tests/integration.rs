@@ -379,7 +379,7 @@ fn instantiate_auction_contract(
 
     let auction_instantiate_msg = astroport_periphery::auction::InstantiateMsg {
         owner: Some(owner.to_string()),
-        astro_token_address: astro_token_instance.clone().into_string(),
+        cntrn_contract: astro_token_instance.clone().into_string(),
         airdrop_contract_address: airdrop_instance.to_string(),
         lockdrop_contract_address: lockdrop_instance.to_string(),
         lp_tokens_vesting_duration: 7776000u64,
@@ -405,7 +405,7 @@ fn instantiate_auction_contract(
         auction_instance.clone(),
         &AuctionExecuteMsg::UpdateConfig {
             new_config: AuctionUpdateConfigMsg {
-                astro_ust_pair_address: Some(pair_instance.to_string()),
+                cntrn_native_pair_address: Some(pair_instance.to_string()),
                 owner: None,
                 generator_contract: Some(generator_instance.to_string()),
             },

@@ -10,7 +10,7 @@ use astroport_periphery::auction::{
     CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolInfo, QueryMsg, State,
     UpdateConfigMsg, UserInfo, UserInfoResponse,
 };
-use astroport_periphery::helpers::{build_approve_cw20_msg, cw20_get_balance};
+use astroport_periphery::helpers::{build_approve_cntrn_msg, cntrn_get_balance};
 use astroport_periphery::lockdrop::ExecuteMsg::EnableClaims as LockdropEnableClaims;
 
 use crate::state::{CONFIG, STATE, USERS};
@@ -62,7 +62,6 @@ pub fn instantiate(
             .map(|v| addr_validate_to_lower(deps.api, &v))
             .transpose()?
             .unwrap_or(info.sender),
-        astro_token_address: addr_validate_to_lower(deps.api, &msg.astro_token_address)?,
         airdrop_contract_address: addr_validate_to_lower(deps.api, &msg.airdrop_contract_address)?,
         lockdrop_contract_address: addr_validate_to_lower(
             deps.api,
@@ -70,13 +69,13 @@ pub fn instantiate(
         )?,
         pool_info: None,
         generator_contract: None,
-        astro_incentive_amount: None,
+        cntrn_incentive_amount: None,
         lp_tokens_vesting_duration: msg.lp_tokens_vesting_duration,
         init_timestamp: msg.init_timestamp,
         deposit_window: msg.deposit_window,
         withdrawal_window: msg.withdrawal_window,
-        base_denom_contract: addr_validate_to_lower(deps.api, &msg.base_denom_contract)?,
-        opposite_denom: msg.opposite_denom,
+        cntrn_token_address: addr_validate_to_lower(deps.api, &msg.cntrn_token_contract)?,
+        native_denom: msg.native_denom,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -98,19 +97,19 @@ pub fn instantiate(
 ///
 /// ## Execute messages
 ///
-/// * **ExecuteMsg::Receive(msg)** Parse incoming messages from the ASTRO token.
+/// * **ExecuteMsg::Receive(msg)** Parse incoming messages from the cNTRN token.
 ///
 /// * **ExecuteMsg::UpdateConfig { new_config }** Admin function to update configuration parameters.
 ///
-/// * **ExecuteMsg::DepositUst {}** Facilitates UST deposits by users.
+/// * **ExecuteMsg::DepositUst {}** Facilitates NATIVE deposits by users.
 ///
-/// * **ExecuteMsg::WithdrawUst { amount }** Facilitates UST withdrawals by users.
+/// * **ExecuteMsg::WithdrawUst { amount }** Facilitates NATIVE withdrawals by users.
 ///
-/// * **ExecuteMsg::InitPool { slippage }** Admin function which facilitates Liquidity addtion to the Astroport ASTRO-UST Pool.
+/// * **ExecuteMsg::InitPool { slippage }** Admin function which facilitates Liquidity addtion to the Astroport cNTRN-NATIVE Pool.
 ///
-/// * **ExecuteMsg::StakeLpTokens {}** Admin function to stake ASTRO-UST LP tokens with the generator contract.
+/// * **ExecuteMsg::StakeLpTokens {}** Admin function to stake cNTRN-NATIVE LP tokens with the generator contract.
 ///
-/// * **ExecuteMsg::ClaimRewards { withdraw_lp_shares }** Facilitates ASTRO rewards claim.
+/// * **ExecuteMsg::ClaimRewards { withdraw_lp_shares }** Facilitates cNTRN rewards claim.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -120,11 +119,11 @@ pub fn execute(
 ) -> Result<Response, StdError> {
     match msg {
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
-        ExecuteMsg::Deposit { cw20_amount } => execute_deposit(deps, env, info, cw20_amount),
+        ExecuteMsg::Deposit { cntrn_amount } => execute_deposit(deps, env, info, cntrn_amount),
         ExecuteMsg::Withdraw {
             amount_opposite,
-            amount_cw20,
-        } => execute_withdraw(deps, env, info, amount_opposite, amount_cw20),
+            amount_cntrn,
+        } => execute_withdraw(deps, env, info, amount_opposite, amount_cntrn),
         ExecuteMsg::InitPool { slippage } => handle_init_pool(deps, env, info, slippage),
         ExecuteMsg::StakeLpTokens {} => handle_stake_lp_tokens(deps, env, info),
         ExecuteMsg::ClaimRewards { withdraw_lp_shares } => {
@@ -138,7 +137,7 @@ pub fn execute_deposit(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    cw20_amount: Uint128,
+    cntrn_amount: Uint128,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
 
@@ -148,10 +147,10 @@ pub fn execute_deposit(
     }
 
     // CHECK ::: Amount needs to be valid
-    if cw20_amount.is_zero() {
+    if cntrn_amount.is_zero() {
         return Err(StdError::generic_err(format!(
             "{} amount must be greater than 0",
-            config.base_denom_contract
+            config.cntrn_token_address
         )));
     }
 
@@ -161,10 +160,10 @@ pub fn execute_deposit(
         .unwrap_or_default();
 
     // Retrieve native sent by the user
-    if info.funds.len() != 1 || info.funds[0].denom != config.opposite_denom {
+    if info.funds.len() != 1 || info.funds[0].denom != config.native_denom {
         return Err(StdError::generic_err(format!(
             "You may delegate {} native coin only",
-            config.opposite_denom
+            config.native_denom
         )));
     }
 
@@ -179,28 +178,28 @@ pub fn execute_deposit(
     state.total_opposite_deposited += fund.amount;
     user_info.opposite_delegated += fund.amount;
 
-    // SEND CW20 TOKENS TO THE CONTRACT
+    // SEND cNTRN TOKENS TO THE CONTRACT
     // A user must give the contract permission to transfer the tokens before it
-    let cw20_msg = Asset {
+    let cntrn_msg = Asset {
         info: AssetInfo::Token {
-            contract_addr: config.base_denom_contract,
+            contract_addr: config.cntrn_token_address,
         },
-        amount: cw20_amount,
+        amount: cntrn_amount,
     }
     .into_msg(&deps.querier, &env.contract.address)?;
 
-    state.total_cw20_deposited += cw20_amount;
-    user_info.cw20_delegated += cw20_amount;
+    state.total_cntrn_deposited += cntrn_amount;
+    user_info.cntrn_delegated += cntrn_amount;
 
     // SAVE UPDATED STATE
     STATE.save(deps.storage, &state)?;
     USERS.save(deps.storage, &info.sender, &user_info)?;
 
-    Ok(Response::new().add_message(cw20_msg).add_attributes(vec![
-        attr("action", "Auction::ExecuteMsg::Delegate"),
+    Ok(Response::new().add_message(cntrn_msg).add_attributes(vec![
+        attr("action", "Auction::ExecuteMsg::Deposit"),
         attr("user", info.sender.to_string()),
         attr("native_delegated", fund.amount),
-        attr("cw20_delegated", cw20_amount),
+        attr("cntrn_delegated", cntrn_amount),
     ]))
 }
 
@@ -230,8 +229,8 @@ fn handle_callback(
         CallbackMsg::UpdateStateOnLiquidityAdditionToPool { prev_lp_balance } => {
             update_state_on_liquidity_addition_to_pool(deps, env, prev_lp_balance)
         }
-        CallbackMsg::UpdateStateOnRewardClaim { prev_astro_balance } => {
-            update_state_on_reward_claim(deps, env, prev_astro_balance)
+        CallbackMsg::UpdateStateOnRewardClaim { prev_cntrn_balance } => {
+            update_state_on_reward_claim(deps, env, prev_cntrn_balance)
         }
         CallbackMsg::WithdrawUserRewardsCallback {
             user_address,
@@ -304,28 +303,30 @@ pub fn handle_update_config(
         attributes.push(attr("owner", config.owner.to_string()));
     }
 
-    if let Some(astro_ust_pair_address) = new_config.astro_ust_pair_address {
+    if let Some(cntrn_native_pair_address) = new_config.cntrn_native_pair_address {
         if state.lp_shares_minted.is_some() {
             return Err(StdError::generic_err(
                 "Assets had already been provided to previous pool!",
             ));
         }
-        let astro_ust_pair_addr = addr_validate_to_lower(deps.api, &astro_ust_pair_address)?;
+        let cntrn_native_pair_addr = addr_validate_to_lower(deps.api, &cntrn_native_pair_address)?;
 
         let pair_info: PairInfo = deps
             .querier
-            .query_wasm_smart(astro_ust_pair_address, &AstroportPairQueryMsg::Pair {})?;
+            .query_wasm_smart(cntrn_native_pair_address, &AstroportPairQueryMsg::Pair {})?;
 
         config.pool_info = Some(PoolInfo {
-            astro_ust_pool_address: astro_ust_pair_addr,
-            astro_ust_lp_token_address: pair_info.liquidity_token,
+            cntrn_native_pool_address: cntrn_native_pair_addr,
+            cntrn_native_lp_token_address: pair_info.liquidity_token,
         })
     }
 
     if let Some(generator_contract) = new_config.generator_contract {
         // check if the LP tokens are already staked or not
         if state.is_lp_staked {
-            return Err(StdError::generic_err("ASTRO-UST LP tokens already staked"));
+            return Err(StdError::generic_err(
+                "cNTRN-NATIVE LP tokens already staked",
+            ));
         }
 
         let generator_addr = addr_validate_to_lower(deps.api, &generator_contract)?;
@@ -361,7 +362,7 @@ pub fn execute_withdraw(
     env: Env,
     info: MessageInfo,
     amount_opposite: Uint128,
-    amount_cw20: Uint128,
+    amount_cntrn: Uint128,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
@@ -376,9 +377,9 @@ pub fn execute_withdraw(
     // Check :: Amount should be within the allowed withdrawal limit bounds
     let max_withdrawal_percent = allowed_withdrawal_percent(env.block.time.seconds(), &config);
     let max_allowed_opposite = user_info.opposite_delegated * max_withdrawal_percent;
-    let max_allowed_cw20 = user_info.cw20_delegated * max_withdrawal_percent;
+    let max_allowed_cntrn = user_info.cntrn_delegated * max_withdrawal_percent;
 
-    if amount_opposite > max_allowed_opposite || amount_cw20 > max_allowed_cw20 {
+    if amount_opposite > max_allowed_opposite || amount_cntrn > max_allowed_cntrn {
         return Err(StdError::generic_err(format!(
             "Amount exceeds maximum allowed withdrawal limit of {}",
             max_withdrawal_percent
@@ -402,28 +403,28 @@ pub fn execute_withdraw(
     let transfer_msg = CosmosMsg::Bank(BankMsg::Send {
         to_address: user_address.to_string(),
         amount: vec![Coin {
-            denom: config.opposite_denom,
+            denom: config.native_denom,
             amount: amount_opposite,
         }],
     });
 
-    // Transfer CW20 tokens to the user
-    let cw20_msg = Asset {
+    // Transfer cNTRN tokens to the user
+    let cntrn_msg = Asset {
         info: AssetInfo::Token {
-            contract_addr: config.base_denom_contract,
+            contract_addr: config.cntrn_token_address,
         },
-        amount: amount_cw20,
+        amount: amount_cntrn,
     }
-    .into_msg(&deps.querier, user_address)?;
+    .into_msg(&deps.querier, user_address.clone())?;
 
     Ok(Response::new()
         .add_message(transfer_msg)
-        .add_message(cw20_msg)
+        .add_message(cntrn_msg)
         .add_attributes(vec![
             attr("action", "Auction::ExecuteMsg::Withdraw"),
             attr("user", user_address.to_string()),
             attr("opposite_withdrawn", amount_opposite),
-            attr("cw20_withdrawn", amount_cw20),
+            attr("cntrn_withdrawn", amount_cntrn),
         ]))
 }
 
@@ -462,7 +463,7 @@ fn allowed_withdrawal_percent(current_timestamp: u64, config: &Config) -> Decima
     }
 }
 
-/// Facilitates Liquidity addtion to the Astroport ASTRO-UST Pool. Returns a default object of type [`Response`].
+/// Facilitates Liquidity addtion to the Astroport cNTRN-NATIVE Pool. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -500,38 +501,38 @@ pub fn handle_init_pool(
     let mut msgs = vec![];
 
     if let Some(PoolInfo {
-        astro_ust_pool_address,
-        astro_ust_lp_token_address,
+        cntrn_native_pool_address,
+        cntrn_native_lp_token_address,
     }) = config.pool_info
     {
-        let ust_coin = deps
+        let native_coin = deps
             .querier
-            .query_balance(&env.contract.address, UUSD_DENOM)?;
+            .query_balance(&env.contract.address, config.native_denom)?;
 
         // QUERY CURRENT LP TOKEN BALANCE (FOR SAFETY - IN ANY CASE)
         let cur_lp_balance = query_token_balance(
             &deps.querier,
-            astro_ust_lp_token_address,
+            cntrn_native_lp_token_address,
             env.contract.address.clone(),
         )?;
 
         // COSMOS MSGS
-        // :: 1.  APPROVE ASTRO WITH LP POOL ADDRESS AS BENEFICIARY
+        // :: 1.  APPROVE cNTRN WITH LP POOL ADDRESS AS BENEFICIARY
         // :: 2.  ADD LIQUIDITY
         // :: 3. CallbackMsg :: Update state on liquidity addition to LP Pool
-        msgs.push(build_approve_cw20_msg(
-            config.astro_token_address.to_string(),
-            astro_ust_pool_address.to_string(),
-            state.total_cw20_deposited,
+        msgs.push(build_approve_cntrn_msg(
+            config.cntrn_token_address.to_string(),
+            cntrn_native_pool_address.to_string(),
+            state.total_cntrn_deposited,
             env.block.height + 1u64,
         )?);
 
         msgs.push(build_provide_liquidity_to_lp_pool_msg(
             deps.as_ref(),
-            config.astro_token_address,
-            astro_ust_pool_address,
-            ust_coin.amount,
-            state.total_cw20_deposited,
+            config.cntrn_token_address,
+            cntrn_native_pool_address,
+            native_coin.amount,
+            state.total_cntrn_deposited,
             slippage,
         )?);
 
@@ -542,9 +543,9 @@ pub fn handle_init_pool(
             .to_cosmos_msg(&env)?,
         );
         Ok(Response::new().add_messages(msgs).add_attributes(vec![
-            attr("action", "Auction::ExecuteMsg::AddLiquidityToAstroportPool"),
-            attr("astro_provided", state.total_cw20_deposited),
-            attr("ust_provided", ust_coin.amount),
+            attr("action", "Auction::ExecuteMsg::InitPool"),
+            attr("cntrn_provided", state.total_cntrn_deposited),
+            attr("native_provided", native_coin.amount),
         ]))
     } else {
         Err(StdError::generic_err("Pool info isn't set yet!"))
@@ -555,48 +556,47 @@ pub fn handle_init_pool(
 /// ## Params
 /// * **deps** is an object of type [`Deps`].
 ///
-/// * **astro_token_address** is an object of type [`Addr`].
+/// * **cntrn_token_address** is an object of type [`Addr`].
 ///
-/// * **astro_ust_pool_address** is an object of type [`Addr`].
+/// * **cntrn_native_pool_address** is an object of type [`Addr`].
 ///
-/// * **ust_amount** is an object of type [`Uint128`].
+/// * **native_amount** is an object of type [`Uint128`].
 ///
-/// * **astro_amount** is an object of type [`Uint128`].
+/// * **cntrn_amount** is an object of type [`Uint128`].
 ///
 /// * **slippage_tolerance** is an optional object of type [`Decimal`].
 fn build_provide_liquidity_to_lp_pool_msg(
     deps: Deps,
-    astro_token_address: Addr,
-    astro_ust_pool_address: Addr,
-    ust_amount: Uint128,
-    astro_amount: Uint128,
+    cntrn_token_address: Addr,
+    cntrn_native_pool_address: Addr,
+    native_amount: Uint128,
+    cntrn_amount: Uint128,
     slippage_tolerance: Option<Decimal>,
 ) -> StdResult<CosmosMsg> {
-    let astro = Asset {
-        amount: astro_amount,
+    let config = CONFIG.load(deps.storage)?;
+    let cntrn = Asset {
+        amount: cntrn_amount,
         info: AssetInfo::Token {
-            contract_addr: astro_token_address,
+            contract_addr: cntrn_token_address,
         },
     };
+    let native_denom = config.native_denom.clone();
 
-    let mut ust = Asset {
-        amount: ust_amount,
+    let native = Asset {
+        amount: native_amount,
         info: AssetInfo::NativeToken {
-            denom: String::from(UUSD_DENOM),
+            denom: native_denom.clone(),
         },
     };
-
-    // Deduct tax
-    ust.amount = ust.amount.checked_sub(ust.compute_tax(&deps.querier)?)?;
 
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: astro_ust_pool_address.to_string(),
+        contract_addr: cntrn_native_pool_address.to_string(),
         funds: vec![Coin {
-            denom: String::from(UUSD_DENOM),
-            amount: ust.amount,
+            denom: native_denom,
+            amount: native.amount,
         }],
         msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
-            assets: [ust, astro],
+            assets: [native, cntrn],
             slippage_tolerance,
             auto_stake: None,
             receiver: None,
@@ -604,7 +604,7 @@ fn build_provide_liquidity_to_lp_pool_msg(
     }))
 }
 
-/// Stakes ASTRO-UST LP tokens with the generator contract.
+/// Stakes CW20-NATIVE LP tokens with the generator contract.
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -635,17 +635,17 @@ pub fn handle_stake_lp_tokens(
 
     let lp_shares_minted = state
         .lp_shares_minted
-        .ok_or_else(|| StdError::generic_err("Should be provided to the ASTRO/UST pool!"))?;
+        .ok_or_else(|| StdError::generic_err("Should be provided to the cNTRN/NATIVE pool!"))?;
 
     if let Some(PoolInfo {
-        astro_ust_lp_token_address,
-        astro_ust_pool_address: _,
+        cntrn_native_lp_token_address,
+        cntrn_native_pool_address: _,
     }) = config.pool_info
     {
         // QUERY CURRENT LP TOKEN BALANCE (FOR SAFETY - IN ANY CASE)
         let cur_lp_balance = query_token_balance(
             &deps.querier,
-            astro_ust_lp_token_address.clone(),
+            cntrn_native_lp_token_address.clone(),
             env.contract.address.clone(),
         )?;
 
@@ -656,15 +656,15 @@ pub fn handle_stake_lp_tokens(
 
         // COSMOS MSGs
         // :: Add increase allowance msg so generator contract can transfer tokens to itself
-        // :: To stake LP Tokens to the Astroport generator contract
-        response.messages.push(SubMsg::new(build_approve_cw20_msg(
-            astro_ust_lp_token_address.to_string(),
+        // :: To stake LP Tokens to the Neutron generator contract
+        response.messages.push(SubMsg::new(build_approve_cntrn_msg(
+            cntrn_native_lp_token_address.to_string(),
             generator.to_string(),
             cur_lp_balance,
             env.block.height + 1u64,
         )?));
         response.messages.push(SubMsg::new(WasmMsg::Execute {
-            contract_addr: astro_ust_lp_token_address.to_string(),
+            contract_addr: cntrn_native_lp_token_address.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: generator.to_string(),
@@ -682,7 +682,7 @@ pub fn handle_stake_lp_tokens(
     }
 }
 
-/// Facilitates ASTRO Reward claim for users.
+/// Facilitates CW20 Reward claim for users.
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -703,28 +703,28 @@ pub fn handle_claim_rewards_and_withdraw_lp_shares(
     let mut user_info = USERS.load(deps.storage, &user_address)?;
 
     // CHECK :: User has valid delegation / deposit balances
-    if user_info.cw20_delegated.is_zero() && user_info.opposite_delegated.is_zero() {
+    if user_info.cntrn_delegated.is_zero() && user_info.opposite_delegated.is_zero() {
         return Err(StdError::generic_err("No delegated assets"));
     }
 
     let mut cosmos_msgs = vec![];
 
     if let Some(lp_balance) = state.lp_shares_minted {
-        // Calculate user's LP shares & ASTRO incentives (if possible)
+        // Calculate user's LP shares & cNTRN incentives (if possible)
         if user_info.lp_shares.is_none() {
             update_user_lp_shares(&state, lp_balance, &mut user_info)?;
-            update_user_astro_incentives(
-                config.astro_incentive_amount,
+            update_user_cntrn_incentives(
+                config.cntrn_incentive_amount,
                 user_info.lp_shares,
                 lp_balance,
                 &mut user_info,
             )?;
             USERS.save(deps.storage, &user_address, &user_info)?;
         }
-        // If user's ASTRO incentives are not set, but the total ASTRO incentives have been set
-        if config.astro_incentive_amount.is_some() && user_info.auction_incentive_amount.is_none() {
-            update_user_astro_incentives(
-                config.astro_incentive_amount,
+        // If user's cNTRN incentives are not set, but the total cNTRN incentives have been set
+        if config.cntrn_incentive_amount.is_some() && user_info.auction_incentive_amount.is_none() {
+            update_user_cntrn_incentives(
+                config.cntrn_incentive_amount,
                 user_info.lp_shares,
                 lp_balance,
                 &mut user_info,
@@ -753,15 +753,15 @@ pub fn handle_claim_rewards_and_withdraw_lp_shares(
                 .ok_or_else(|| StdError::generic_err("Generator should be set!"))?;
 
             if let Some(PoolInfo {
-                astro_ust_pool_address: _,
-                astro_ust_lp_token_address,
+                cntrn_native_pool_address: _,
+                cntrn_native_lp_token_address,
             }) = config.pool_info
             {
                 // QUERY :: Check if there are any pending staking rewards
                 let pending_rewards: PendingTokenResponse = deps.querier.query_wasm_smart(
                     &generator,
                     &GenQueryMsg::PendingToken {
-                        lp_token: astro_ust_lp_token_address.to_string(),
+                        lp_token: cntrn_native_lp_token_address.to_string(),
                         user: env.contract.address.to_string(),
                     },
                 )?;
@@ -773,11 +773,11 @@ pub fn handle_claim_rewards_and_withdraw_lp_shares(
                     let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
                         &generator,
                         &GenQueryMsg::RewardInfo {
-                            lp_token: astro_ust_lp_token_address.to_string(),
+                            lp_token: cntrn_native_lp_token_address.to_string(),
                         },
                     )?;
 
-                    let astro_balance = {
+                    let cntrn_balance = {
                         let res: BalanceResponse = deps.querier.query_wasm_smart(
                             rwi.base_reward_token,
                             &Cw20QueryMsg::Balance {
@@ -791,14 +791,14 @@ pub fn handle_claim_rewards_and_withdraw_lp_shares(
                         contract_addr: generator.to_string(),
                         funds: vec![],
                         msg: to_binary(&GenExecuteMsg::Withdraw {
-                            lp_token: astro_ust_lp_token_address.to_string(),
+                            lp_token: cntrn_native_lp_token_address.to_string(),
                             amount: Uint128::zero(),
                         })?,
                     }));
 
                     cosmos_msgs.push(
                         CallbackMsg::UpdateStateOnRewardClaim {
-                            prev_astro_balance: astro_balance,
+                            prev_cntrn_balance: cntrn_balance,
                         }
                         .to_cosmos_msg(&env)?,
                     );
@@ -808,7 +808,7 @@ pub fn handle_claim_rewards_and_withdraw_lp_shares(
             }
         }
         // If no rewards to claim and no LP tokens to be withdrawn.
-        else if user_info.astro_incentive_transferred && withdraw_lp_shares.is_none() {
+        else if user_info.cntrn_incentive_transferred && withdraw_lp_shares.is_none() {
             return Err(StdError::generic_err(
                 "Rewards already claimed. Provide number of LP tokens to claim!",
             ));
@@ -830,10 +830,10 @@ pub fn handle_claim_rewards_and_withdraw_lp_shares(
     Ok(Response::new().add_messages(cosmos_msgs))
 }
 
-/// Calculates user's ASTRO - UST LP shares based on amount delegated.
-/// User LP shares (ASTRO delegation share) = (1/2) *  (ASTRO delegated / total ASTRO delegated)
-/// User LP shares (UST deposit share) = (1/2) *  (UST deposited / total UST deposited)
-/// User's total LP shares  = User's ASTRO delegation LP share + User's UST deposit LP share
+/// Calculates user's cNTRN - NATIVE LP shares based on amount delegated.
+/// User LP shares (cNTRN delegation share) = (1/2) *  (cNTRN delegated / total cNTRN delegated)
+/// User LP shares (NATIVE deposit share) = (1/2) *  (NATIVE deposited / total NATIVE deposited)
+/// User's total LP shares  = User's cNTRN delegation LP share + User's NATIVE deposit LP share
 /// ## Params
 /// * **state** is an object of type [`State`].
 ///
@@ -846,8 +846,8 @@ fn update_user_lp_shares(
     mut user_info: &mut UserInfo,
 ) -> StdResult<()> {
     let user_lp_share = (Decimal::from_ratio(
-        user_info.cw20_delegated,
-        state.total_cw20_deposited * Uint128::new(2),
+        user_info.cntrn_delegated,
+        state.total_cntrn_deposited * Uint128::new(2),
     ) + Decimal::from_ratio(
         user_info.opposite_delegated,
         state.total_opposite_deposited * Uint128::new(2),
@@ -857,26 +857,26 @@ fn update_user_lp_shares(
     Ok(())
 }
 
-/// Calculates user's ASTRO incentives for auction participation
-/// Formula, == User's auction incentives (ASTRO) = (User's total LP shares / Total LP shares minted) * Total ASTRO auction incentives
+/// Calculates user's cNTRN incentives for auction participation
+/// Formula, == User's auction incentives (cNTRN) = (User's total LP shares / Total LP shares minted) * Total cNTRN auction incentives
 /// ## Params
-/// * **total_astro_incentives** is an optional object of type [`Uint128`].
+/// * **total_cntrn_incentives** is an optional object of type [`Uint128`].
 ///
 /// * **user_lp_share** is an optional object of type [`Uint128`].
 ///
 /// * **lp_balance** is an object of type [`Uint128`].
 ///
 /// * **user_info** is an object of type [`UserInfo`].
-fn update_user_astro_incentives(
-    total_astro_incentives: Option<Uint128>,
+fn update_user_cntrn_incentives(
+    total_cntrn_incentives: Option<Uint128>,
     user_lp_share: Option<Uint128>,
     lp_balance: Uint128,
     mut user_info: &mut UserInfo,
 ) -> StdResult<()> {
-    if let Some(total_astro_incentives) = total_astro_incentives {
+    if let Some(total_cntrn_incentives) = total_cntrn_incentives {
         if let Some(user_lp_share) = user_lp_share {
             user_info.auction_incentive_amount =
-                Some(Decimal::from_ratio(user_lp_share, lp_balance) * total_astro_incentives);
+                Some(Decimal::from_ratio(user_lp_share, lp_balance) * total_cntrn_incentives);
         }
     }
     Ok(())
@@ -905,15 +905,15 @@ pub fn callback_withdraw_user_rewards_and_optionally_lp(
     ];
 
     if let Some(PoolInfo {
-        astro_ust_pool_address: _,
-        astro_ust_lp_token_address,
+        cntrn_native_pool_address: _,
+        cntrn_native_lp_token_address,
     }) = config.pool_info
     {
         let user_lp_shares = user_info
             .lp_shares
             .ok_or_else(|| StdError::generic_err("Lp share should be calculated"))?;
 
-        let astroport_lp_amount = user_lp_shares - user_info.claimed_lp_shares;
+        let neutron_lp_amount = user_lp_shares - user_info.claimed_lp_shares;
 
         if state.is_lp_staked {
             let generator = config
@@ -923,34 +923,34 @@ pub fn callback_withdraw_user_rewards_and_optionally_lp(
             let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
                 &generator,
                 &GenQueryMsg::RewardInfo {
-                    lp_token: astro_ust_lp_token_address.to_string(),
+                    lp_token: cntrn_native_lp_token_address.to_string(),
                 },
             )?;
 
-            // Calculate ASTRO staking reward receivable by the user
-            let pending_astro_rewards = (state.generator_astro_per_share * astroport_lp_amount)
-                - (user_info.user_gen_astro_per_share * astroport_lp_amount);
-            user_info.user_gen_astro_per_share = state.generator_astro_per_share;
-            user_info.generator_astro_debt += pending_astro_rewards;
+            // Calculate cNTRN staking reward receivable by the user
+            let pending_cntrn_rewards = (state.generator_cntrn_per_share * neutron_lp_amount)
+                - (user_info.user_gen_cntrn_per_share * neutron_lp_amount);
+            user_info.user_gen_cntrn_per_share = state.generator_cntrn_per_share;
+            user_info.generator_cntrn_debt += pending_cntrn_rewards;
 
             // If no rewards / LP tokens to be claimed
-            if pending_astro_rewards == Uint128::zero()
-                && user_info.astro_incentive_transferred
+            if pending_cntrn_rewards == Uint128::zero()
+                && user_info.cntrn_incentive_transferred
                 && withdraw_lp_shares.is_none()
             {
                 return Err(StdError::generic_err("Nothing to claim!"));
             }
 
-            // COSMOS MSG ::: CLAIM Pending Generator ASTRO Rewards
+            // COSMOS MSG ::: CLAIM Pending Generator cNTRN Rewards
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: rwi.base_reward_token.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: user_address.to_string(),
-                    amount: pending_astro_rewards,
+                    amount: pending_cntrn_rewards,
                 })?,
             }));
-            attributes.push(attr("generator_astro_reward", pending_astro_rewards));
+            attributes.push(attr("generator_cntrn_reward", pending_cntrn_rewards));
 
             //  COSMOS MSG :: If LP Tokens are staked, we unstake the amount which needs to be returned to the user
             if let Some(withdrawn_lp_shares) = withdraw_lp_shares {
@@ -958,33 +958,33 @@ pub fn callback_withdraw_user_rewards_and_optionally_lp(
                     contract_addr: generator.to_string(),
                     funds: vec![],
                     msg: to_binary(&GenExecuteMsg::Withdraw {
-                        lp_token: astro_ust_lp_token_address.to_string(),
+                        lp_token: cntrn_native_lp_token_address.to_string(),
                         amount: withdrawn_lp_shares,
                     })?,
                 }));
             }
         }
 
-        // Transfer ASTRO incentives when they have been calculated
-        if user_info.auction_incentive_amount.is_some() && !user_info.astro_incentive_transferred {
+        // Transfer cNTRN incentives when they have been calculated
+        if user_info.auction_incentive_amount.is_some() && !user_info.cntrn_incentive_transferred {
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: config.astro_token_address.to_string(),
+                contract_addr: config.cntrn_token_address.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: user_address.to_string(),
                     amount: user_info.auction_incentive_amount.unwrap(),
                 })?,
             }));
-            user_info.astro_incentive_transferred = true;
+            user_info.cntrn_incentive_transferred = true;
             attributes.push(attr(
-                "auction_astro_reward",
+                "auction_cntrn_reward",
                 user_info.auction_incentive_amount.unwrap(),
             ));
         }
 
         if let Some(withdrawn_lp_shares) = withdraw_lp_shares {
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: astro_ust_lp_token_address.to_string(),
+                contract_addr: cntrn_native_lp_token_address.to_string(),
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: user_address.to_string(),
                     amount: withdrawn_lp_shares,
@@ -1004,7 +1004,7 @@ pub fn callback_withdraw_user_rewards_and_optionally_lp(
         .add_attributes(attributes))
 }
 
-/// Updates state after liquidity is added to the ASTRO-UST Pool
+/// Updates state after liquidity is added to the cNTRN-NATIVE Pool
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -1020,14 +1020,14 @@ pub fn update_state_on_liquidity_addition_to_pool(
     let mut state = STATE.load(deps.storage)?;
 
     if let Some(PoolInfo {
-        astro_ust_pool_address: _,
-        astro_ust_lp_token_address,
+        cntrn_native_pool_address: _,
+        cntrn_native_lp_token_address,
     }) = config.pool_info
     {
         // QUERY CURRENT LP TOKEN BALANCE :: NEWLY MINTED LP TOKENS
-        let cur_lp_balance = cw20_get_balance(
+        let cur_lp_balance = cntrn_get_balance(
             &deps.querier,
-            astro_ust_lp_token_address,
+            cntrn_native_lp_token_address,
             env.contract.address,
         )?;
         // STATE :: UPDATE --> SAVE
@@ -1064,17 +1064,17 @@ pub fn update_state_on_liquidity_addition_to_pool(
     }
 }
 
-/// Updates state after ASTRO rewards are claimed from the astroport generator
+/// Updates state after cNTRN rewards are claimed from the neutron generator
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
 /// * **env** is an object of type [`Env`].
 ///
-/// * **prev_astro_balance** is an object of type [`Uint128`]. Number of ASTRO tokens available with the contract before the claim
+/// * **prev_cntrn_balance** is an object of type [`Uint128`]. Number of cNTRN tokens available with the contract before the claim
 pub fn update_state_on_reward_claim(
     deps: DepsMut,
     env: Env,
-    prev_astro_balance: Uint128,
+    prev_cntrn_balance: Uint128,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
@@ -1084,34 +1084,34 @@ pub fn update_state_on_reward_claim(
         .ok_or_else(|| StdError::generic_err("Generator should be set!"))?;
 
     if let Some(PoolInfo {
-        astro_ust_pool_address: _,
-        astro_ust_lp_token_address,
+        cntrn_native_pool_address: _,
+        cntrn_native_lp_token_address,
     }) = config.pool_info
     {
         let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
             &generator,
             &GenQueryMsg::RewardInfo {
-                lp_token: astro_ust_lp_token_address.to_string(),
+                lp_token: cntrn_native_lp_token_address.to_string(),
             },
         )?;
 
         let lp_balance: Uint128 = deps.querier.query_wasm_smart(
             &generator,
             &GenQueryMsg::Deposit {
-                lp_token: astro_ust_lp_token_address.to_string(),
+                lp_token: cntrn_native_lp_token_address.to_string(),
                 user: env.contract.address.to_string(),
             },
         )?;
 
         let base_reward_received;
-        state.generator_astro_per_share += {
+        state.generator_cntrn_per_share += {
             let res: BalanceResponse = deps.querier.query_wasm_smart(
                 rwi.base_reward_token,
                 &Cw20QueryMsg::Balance {
                     address: env.contract.address.to_string(),
                 },
             )?;
-            base_reward_received = res.balance - prev_astro_balance;
+            base_reward_received = res.balance - prev_cntrn_balance;
             Decimal::from_ratio(base_reward_received, lp_balance)
         };
 
@@ -1119,10 +1119,10 @@ pub fn update_state_on_reward_claim(
         STATE.save(deps.storage, &state)?;
 
         Ok(Response::new()
-            .add_attribute("astro_reward_received", base_reward_received)
+            .add_attribute("cntrn_reward_received", base_reward_received)
             .add_attribute(
-                "generator_astro_per_share",
-                state.generator_astro_per_share.to_string(),
+                "generator_cntrn_per_share",
+                state.generator_cntrn_per_share.to_string(),
             ))
     } else {
         Err(StdError::generic_err("Pool info isn't set yet!"))
@@ -1185,47 +1185,47 @@ fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<User
 
     // User Info Response
     let mut user_info_response = UserInfoResponse {
-        astro_delegated: user_info.cw20_delegated,
-        ust_delegated: user_info.opposite_delegated,
-        ust_withdrawn: user_info.opposite_withdrawn,
+        cntrn_delegated: user_info.cntrn_delegated,
+        native_delegated: user_info.opposite_delegated,
+        native_withdrawn: user_info.opposite_withdrawn,
         lp_shares: user_info.lp_shares,
         claimed_lp_shares: user_info.claimed_lp_shares,
         withdrawable_lp_shares: None,
         auction_incentive_amount: user_info.auction_incentive_amount,
-        astro_incentive_transferred: user_info.astro_incentive_transferred,
-        generator_astro_debt: user_info.generator_astro_debt,
-        claimable_generator_astro: Uint128::zero(),
-        user_gen_astro_per_share: user_info.user_gen_astro_per_share,
+        cntrn_incentive_transferred: user_info.cntrn_incentive_transferred,
+        generator_cntrn_debt: user_info.generator_cntrn_debt,
+        claimable_generator_cntrn: Uint128::zero(),
+        user_gen_cntrn_per_share: user_info.user_gen_cntrn_per_share,
     };
 
-    // If ASTRO - UST Pool info is present
+    // If cNTRN - NATIVE Pool info is present
     if let Some(PoolInfo {
-        astro_ust_pool_address: _,
-        astro_ust_lp_token_address,
+        cntrn_native_pool_address: _,
+        cntrn_native_lp_token_address,
     }) = &config.pool_info
     {
-        // If ASTRO - UST LP Tokens have been minted
+        // If cNTRN - NATIVE LP Tokens have been minted
         if let Some(lp_balance) = state.lp_shares_minted {
-            // Calculate user's LP shares & ASTRO incentives (if possible)
+            // Calculate user's LP shares & cNTRN incentives (if possible)
             if user_info.lp_shares.is_none() {
                 update_user_lp_shares(&state, lp_balance, &mut user_info)?;
                 user_info_response.lp_shares = user_info.lp_shares;
             }
-            // If user's ASTRO incentives are not set, but the total ASTRO incentives have been set
-            if config.astro_incentive_amount.is_some()
+            // If user's cNTRN incentives are not set, but the total cNTRN incentives have been set
+            if config.cntrn_incentive_amount.is_some()
                 && user_info.auction_incentive_amount.is_none()
             {
-                update_user_astro_incentives(
-                    config.astro_incentive_amount,
+                update_user_cntrn_incentives(
+                    config.cntrn_incentive_amount,
                     user_info.lp_shares,
                     lp_balance,
                     &mut user_info,
                 )?;
                 user_info_response.auction_incentive_amount = user_info.auction_incentive_amount;
             }
-            let astroport_lp_amount = user_info.lp_shares.unwrap() - user_info.claimed_lp_shares;
-            // If LP tokens are staked and user has a > 0 LP share balance, we calculate user's claimable ASTRO staking rewards
-            if state.is_lp_staked && !astroport_lp_amount.is_zero() {
+            let neutron_lp_amount = user_info.lp_shares.unwrap() - user_info.claimed_lp_shares;
+            // If LP tokens are staked and user has a > 0 LP share balance, we calculate user's claimable cNTRN staking rewards
+            if state.is_lp_staked && !neutron_lp_amount.is_zero() {
                 let generator = config
                     .generator_contract
                     .clone()
@@ -1234,7 +1234,7 @@ fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<User
                 let lp_balance: Uint128 = deps.querier.query_wasm_smart(
                     &generator,
                     &GenQueryMsg::Deposit {
-                        lp_token: astro_ust_lp_token_address.to_string(),
+                        lp_token: cntrn_native_lp_token_address.to_string(),
                         user: env.contract.address.to_string(),
                     },
                 )?;
@@ -1243,18 +1243,18 @@ fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<User
                 let pending_rewards: PendingTokenResponse = deps.querier.query_wasm_smart(
                     &generator,
                     &GenQueryMsg::PendingToken {
-                        lp_token: astro_ust_lp_token_address.to_string(),
+                        lp_token: cntrn_native_lp_token_address.to_string(),
                         user: env.contract.address.to_string(),
                     },
                 )?;
 
-                state.generator_astro_per_share +=
+                state.generator_cntrn_per_share +=
                     Decimal::from_ratio(pending_rewards.pending, lp_balance);
 
-                // Calculated claimable ASTRO staking rewards
-                user_info_response.claimable_generator_astro = (state.generator_astro_per_share
-                    * astroport_lp_amount)
-                    - (user_info.user_gen_astro_per_share * astroport_lp_amount);
+                // Calculated claimable cNTRN staking rewards
+                user_info_response.claimable_generator_cntrn = (state.generator_cntrn_per_share
+                    * neutron_lp_amount)
+                    - (user_info.user_gen_cntrn_per_share * neutron_lp_amount);
             }
 
             // Updated withdrawable LP shares balance
@@ -1269,45 +1269,45 @@ fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<User
 
     if user_info_response.auction_incentive_amount.is_none() {
         user_info_response.auction_incentive_amount =
-            calculate_auction_reward_for_user(&state, &user_info, config.astro_incentive_amount);
+            calculate_auction_reward_for_user(&state, &user_info, config.cntrn_incentive_amount);
     }
 
     Ok(user_info_response)
 }
-/// Calculates ASTRO tokens receivable by a user for participating (providing UST & ASTRO) in the bootstraping phase of the ASTRO-UST Pool
+/// Calculates cNTRN tokens receivable by a user for participating (providing NATIVE & cNTRN) in the bootstraping phase of the CW20-NATIVE Pool
 /// ## Params
 /// * **state** is an object of type [`State`].
 ///
 /// * **user_info** is an object of type [`UserInfo`].
 ///
-/// * **total_astro_rewards** is an optional object of type [`Uint128`].
+/// * **total_cntrn_rewards** is an optional object of type [`Uint128`].
 fn calculate_auction_reward_for_user(
     state: &State,
     user_info: &UserInfo,
-    total_astro_rewards: Option<Uint128>,
+    total_cntrn_rewards: Option<Uint128>,
 ) -> Option<Uint128> {
-    if !user_info.cw20_delegated.is_zero() || !user_info.opposite_delegated.is_zero() {
-        if let Some(total_astro_rewards) = total_astro_rewards {
-            let mut user_astro_incentives = Uint128::zero();
+    if !user_info.cntrn_delegated.is_zero() || !user_info.opposite_delegated.is_zero() {
+        if let Some(total_cntrn_rewards) = total_cntrn_rewards {
+            let mut user_cntrn_incentives = Uint128::zero();
 
-            // ASTRO incentives from ASTRO delegated
-            if state.total_cw20_deposited > Uint128::zero() {
-                let astro_incentives_from_astro = Decimal::from_ratio(
-                    user_info.cw20_delegated,
-                    state.total_cw20_deposited * Uint128::new(2),
-                ) * total_astro_rewards;
-                user_astro_incentives += astro_incentives_from_astro;
+            // cNTRN incentives from cNTRN delegated
+            if state.total_cntrn_deposited > Uint128::zero() {
+                let cntrn_incentives_from_cntrn = Decimal::from_ratio(
+                    user_info.cntrn_delegated,
+                    state.total_cntrn_deposited * Uint128::new(2),
+                ) * total_cntrn_rewards;
+                user_cntrn_incentives += cntrn_incentives_from_cntrn;
             }
 
-            // ASTRO incentives from UST delegated
+            // cNTRN incentives from NATIVE delegated
             if state.total_opposite_deposited > Uint128::zero() {
-                let astro_incentives_from_ust = Decimal::from_ratio(
+                let cntrn_incentives_from_native = Decimal::from_ratio(
                     user_info.opposite_delegated,
                     state.total_opposite_deposited * Uint128::new(2),
-                ) * total_astro_rewards;
-                user_astro_incentives += astro_incentives_from_ust;
+                ) * total_cntrn_rewards;
+                user_cntrn_incentives += cntrn_incentives_from_native;
             }
-            return Some(user_astro_incentives);
+            return Some(user_cntrn_incentives);
         }
     }
 

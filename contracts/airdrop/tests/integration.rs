@@ -1252,7 +1252,7 @@ fn test_delegate_astro_to_bootstrap_auction() {
     let auction_contract_code_id = app.store_code(auction_contract);
     let auction_init_msg = astroport_periphery::auction::InstantiateMsg {
         owner: init_msg.owner.clone(),
-        astro_token_address: astro_instance.clone().to_string(),
+        cntrn_contract: astro_instance.clone().to_string(),
         airdrop_contract_address: airdrop_instance.clone().to_string(),
         lockdrop_contract_address: "lockdrop_contract_address".to_string(),
         lp_tokens_vesting_duration: 2592000u64,
@@ -1277,7 +1277,7 @@ fn test_delegate_astro_to_bootstrap_auction() {
         auction_contract_instance.clone(),
         &AuctionExecuteMsg::UpdateConfig {
             new_config: UpdateConfigMsg {
-                astro_ust_pair_address: Some(pair_instance.to_string()),
+                cntrn_native_pair_address: Some(pair_instance.to_string()),
                 owner: None,
                 generator_contract: None,
             },
