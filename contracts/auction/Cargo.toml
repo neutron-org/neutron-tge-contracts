@@ -1,9 +1,9 @@
 [package]
-name = "astroport-auction"
+name = "neutron-auction"
 version = "1.0.0"
-authors = ["_astromartian"]
+authors = ["Sergey Ratiashvili <serg.s.r@gmail.com>"]
 edition = "2021"
-description = "Contract to facilitate ASTRO-UST LP Pool bootstrapping via auction"
+description = "Contract to facilitate cNTRN-NATIVE LP Pool bootstrapping via auction"
 
 exclude = [
     # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.

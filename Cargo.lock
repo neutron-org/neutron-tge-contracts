@@ -26,7 +26,6 @@ name = "astroport-airdrop"
 version = "1.0.0"
 dependencies = [
  "astroport",
- "astroport-auction",
  "astroport-pair",
  "astroport-periphery",
  "astroport-token",
@@ -37,34 +36,10 @@ dependencies = [
  "cw2",
  "cw20 0.13.4",
  "hex",
+ "neutron-auction",
  "schemars",
  "serde",
  "sha3",
-]
-
-[[package]]
-name = "astroport-auction"
-version = "1.0.0"
-dependencies = [
- "astroport",
- "astroport-airdrop",
- "astroport-factory",
- "astroport-generator",
- "astroport-lockdrop",
- "astroport-pair",
- "astroport-periphery",
- "astroport-token",
- "astroport-vesting",
- "astroport-whitelist",
- "cosmwasm-schema",
- "cosmwasm-std 1.0.0",
- "cosmwasm-storage 1.0.0",
- "cw-multi-test",
- "cw-storage-plus",
- "cw2",
- "cw20 0.13.4",
- "schemars",
- "serde",
 ]
 
 [[package]]
@@ -134,7 +109,6 @@ version = "1.2.0"
 dependencies = [
  "astroport",
  "astroport-airdrop",
- "astroport-auction",
  "astroport-factory",
  "astroport-generator",
  "astroport-generator-proxy-to-mirror",
@@ -154,6 +128,7 @@ dependencies = [
  "cw2",
  "cw20 0.13.4",
  "cw20-base",
+ "neutron-auction",
  "schemars",
  "serde",
  "terraswap 2.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1047,6 +1022,31 @@ dependencies = [
  "schemars",
  "serde",
  "terraswap 2.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "neutron-auction"
+version = "1.0.0"
+dependencies = [
+ "astroport",
+ "astroport-airdrop",
+ "astroport-factory",
+ "astroport-generator",
+ "astroport-lockdrop",
+ "astroport-pair",
+ "astroport-periphery",
+ "astroport-token",
+ "astroport-vesting",
+ "astroport-whitelist",
+ "cosmwasm-schema",
+ "cosmwasm-std 1.0.0",
+ "cosmwasm-storage 1.0.0",
+ "cw-multi-test",
+ "cw-storage-plus",
+ "cw2",
+ "cw20 0.13.4",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

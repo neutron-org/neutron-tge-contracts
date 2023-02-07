@@ -111,19 +111,19 @@ fn store_whitelist_code(app: &mut App) -> u64 {
     app.store_code(whitelist_contract)
 }
 
-// Instantiate ASTRO Token Contract
+// Instantiate cNTRN Token Contract
 fn instantiate_astro_token(app: &mut App, owner: Addr) -> Addr {
-    let astro_token_contract = Box::new(ContractWrapper::new(
+    let cntrn_token_contract = Box::new(ContractWrapper::new(
         astroport_token::contract::execute,
         astroport_token::contract::instantiate,
         astroport_token::contract::query,
     ));
 
-    let astro_token_code_id = app.store_code(astro_token_contract);
+    let cntrn_token_code_id = app.store_code(cntrn_token_contract);
 
     let msg = astroport::token::InstantiateMsg {
-        name: String::from("Astro token"),
-        symbol: String::from("ASTRO"),
+        name: String::from("cNTRN token"),
+        symbol: String::from("CNTRN"),
         decimals: 6,
         initial_balances: vec![],
         mint: Some(cw20::MinterResponse {
@@ -134,11 +134,11 @@ fn instantiate_astro_token(app: &mut App, owner: Addr) -> Addr {
     };
 
     app.instantiate_contract(
-        astro_token_code_id,
+        cntrn_token_code_id,
         owner,
         &msg,
         &[],
-        String::from("ASTRO"),
+        String::from("CNTRN"),
         None,
     )
     .unwrap()
