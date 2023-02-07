@@ -231,6 +231,7 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
 /// * **auction_contract_address** is an optional object of type [`String`] that contains address of the new auction contract address.
 ///
 /// * **merkle_roots** is an optional vector of type [`String`] that contains new Markle roots.
+#[allow(clippy::too_many_arguments)]
 pub fn handle_update_config(
     deps: DepsMut,
     env: Env,

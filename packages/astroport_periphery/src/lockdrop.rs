@@ -7,7 +7,7 @@ use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct InstantiateMsg {
     /// Account which can update config
     pub owner: Option<String>,
@@ -29,7 +29,7 @@ pub struct InstantiateMsg {
     pub max_positions_per_user: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
     /// Astroport token address
     pub astro_token_address: Option<String>,
@@ -116,7 +116,7 @@ pub enum ExecuteMsg {
     ClaimOwnership {},
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Cw20HookMsg {
     /// Open a new user position or add to an existing position (Cw20ReceiveMsg)
@@ -167,7 +167,7 @@ impl CallbackMsg {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
@@ -193,16 +193,16 @@ pub enum QueryMsg {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct MigrateMsg {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct MigrationInfo {
     pub terraswap_migrated_amount: Uint128,
     pub astroport_lp_token: Addr,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
@@ -232,7 +232,7 @@ pub struct Config {
     pub max_positions_per_user: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 pub struct State {
     /// Total ASTRO incentives share
     pub total_incentives_share: u64,
@@ -261,7 +261,7 @@ pub struct PoolInfo {
     pub has_asset_rewards: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 pub struct UserInfo {
     /// Total ASTRO tokens user received as rewards for participation in the lockdrop
     pub total_astro_rewards: Uint128,
@@ -273,7 +273,7 @@ pub struct UserInfo {
     pub lockup_positions_index: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct LockupInfoV1 {
     /// Terraswap LP units locked by the user
     pub lp_units_locked: Uint128,
@@ -307,7 +307,7 @@ pub struct LockupInfoV2 {
     pub unlock_timestamp: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct StateResponse {
     /// Total ASTRO incentives share
     pub total_incentives_share: u64,
@@ -335,7 +335,7 @@ pub struct UserInfoResponse {
     pub lockup_positions_index: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UserInfoWithListResponse {
     /// Total ASTRO tokens user received as rewards for participation in the lockdrop
     pub total_astro_rewards: Uint128,
@@ -349,7 +349,7 @@ pub struct UserInfoWithListResponse {
     pub lockup_positions_index: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct LockUpInfoSummary {
     pub pool_address: String,
     pub duration: u64,
@@ -382,7 +382,7 @@ pub struct LockUpInfoResponse {
     pub astroport_lp_transferred: Option<Uint128>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct PendingAssetRewardResponse {
     pub amount: Uint128,
 }

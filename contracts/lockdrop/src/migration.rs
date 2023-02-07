@@ -9,7 +9,7 @@ use astroport::restricted_vector::RestrictedVector;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct PoolInfoV101 {
     pub terraswap_pool: Addr,
     pub terraswap_amount_in_lockups: Uint128,
@@ -26,7 +26,7 @@ pub struct PoolInfoV101 {
     pub is_staked: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct PoolInfoV111 {
     pub terraswap_pool: Addr,
     pub terraswap_amount_in_lockups: Uint128,

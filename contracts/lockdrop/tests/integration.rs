@@ -55,17 +55,15 @@ fn instantiate_astro_token(app: &mut App, owner: Addr) -> Addr {
         marketing: None,
     };
 
-    let astro_token_instance = app
-        .instantiate_contract(
-            astro_token_code_id,
-            owner.clone(),
-            &msg,
-            &[],
-            String::from("ASTRO"),
-            None,
-        )
-        .unwrap();
-    astro_token_instance
+    app.instantiate_contract(
+        astro_token_code_id,
+        owner,
+        &msg,
+        &[],
+        String::from("ASTRO"),
+        None,
+    )
+    .unwrap()
 }
 
 // Instantiate Terraswap
@@ -100,17 +98,15 @@ fn instantiate_terraswap(app: &mut App, owner: Addr) -> Addr {
         token_code_id: terraswap_token_code_id,
     };
 
-    let terraswap_factory_instance = app
-        .instantiate_contract(
-            terraswap_factory_code_id,
-            owner.clone(),
-            &msg,
-            &[],
-            String::from("Terraswap_Factory"),
-            None,
-        )
-        .unwrap();
-    terraswap_factory_instance
+    app.instantiate_contract(
+        terraswap_factory_code_id,
+        owner,
+        &msg,
+        &[],
+        String::from("Terraswap_Factory"),
+        None,
+    )
+    .unwrap()
 }
 
 // Instantiate Astroport
@@ -188,21 +184,19 @@ fn instantiate_astroport(app: &mut App, owner: Addr) -> Addr {
         token_code_id: astroport_token_code_id,
         fee_address: Some("fee_address".to_string()),
         generator_address: Some("generator_address".to_string()),
-        owner: owner.clone().to_string(),
+        owner: owner.to_string(),
         whitelist_code_id,
     };
 
-    let astroport_factory_instance = app
-        .instantiate_contract(
-            astroport_factory_code_id,
-            owner.clone(),
-            &msg,
-            &[],
-            String::from("Astroport_Factory"),
-            None,
-        )
-        .unwrap();
-    astroport_factory_instance
+    app.instantiate_contract(
+        astroport_factory_code_id,
+        owner,
+        &msg,
+        &[],
+        String::from("Astroport_Factory"),
+        None,
+    )
+    .unwrap()
 }
 
 // Instantiate Astroport's generator and vesting contracts
@@ -222,7 +216,7 @@ fn instantiate_generator_and_vesting(
 
     let init_msg = astroport::vesting::InstantiateMsg {
         owner: owner.to_string(),
-        token_addr: astro_token_instance.clone().to_string(),
+        token_addr: astro_token_instance.to_string(),
     };
 
     let vesting_instance = app
@@ -247,7 +241,7 @@ fn instantiate_generator_and_vesting(
         owner.clone(),
         astro_token_instance.clone(),
         &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: vesting_instance.clone().to_string(),
+            spender: vesting_instance.to_string(),
             amount: Uint128::new(900_000_000_000),
             expires: None,
         },
@@ -280,7 +274,7 @@ fn instantiate_generator_and_vesting(
         start_block: Uint64::from(app.block_info().height),
         astro_token: astro_token_instance.to_string(),
         tokens_per_block: Uint128::from(0u128),
-        vesting_contract: vesting_instance.clone().to_string(),
+        vesting_contract: vesting_instance.to_string(),
         owner: owner.to_string(),
         factory: astro_factory_instance.to_string(),
         generator_controller: None,
@@ -339,7 +333,7 @@ fn instantiate_generator_and_vesting(
         .unwrap(),
     };
 
-    app.execute_contract(owner.clone(), astro_token_instance.clone(), &msg, &[])
+    app.execute_contract(owner, astro_token_instance, &msg, &[])
         .unwrap();
 
     (generator_instance, vesting_instance)
@@ -349,10 +343,10 @@ fn instantiate_generator_and_vesting(
 fn mint_some_tokens(app: &mut App, owner: Addr, token_instance: Addr, amount: Uint128, to: String) {
     let msg = cw20::Cw20ExecuteMsg::Mint {
         recipient: to.clone(),
-        amount: amount,
+        amount,
     };
     let res = app
-        .execute_contract(owner.clone(), token_instance.clone(), &msg, &[])
+        .execute_contract(owner, token_instance, &msg, &[])
         .unwrap();
     assert_eq!(res.events[1].attributes[1], attr("action", "mint"));
     assert_eq!(res.events[1].attributes[2], attr("to", to));
@@ -379,13 +373,13 @@ fn instantiate_auction_contract(
 
     let auction_instantiate_msg = astroport_periphery::auction::InstantiateMsg {
         owner: Some(owner.to_string()),
-        astro_token_address: astro_token_instance.clone().into_string(),
+        astro_token_address: astro_token_instance.into_string(),
         airdrop_contract_address: airdrop_instance.to_string(),
         lockdrop_contract_address: lockdrop_instance.to_string(),
         lp_tokens_vesting_duration: 7776000u64,
         init_timestamp: EPOCH_START + 10_600_000,
-        deposit_window: 100_00_0,
-        withdrawal_window: 5_00_00,
+        deposit_window: 100_000,
+        withdrawal_window: 50_000,
     };
 
     // Init contract
@@ -401,7 +395,7 @@ fn instantiate_auction_contract(
         .unwrap();
 
     app.execute_contract(
-        owner.clone(),
+        owner,
         auction_instance.clone(),
         &AuctionExecuteMsg::UpdateConfig {
             new_config: AuctionUpdateConfigMsg {
@@ -427,7 +421,7 @@ fn instantiate_lockdrop_contract(app: &mut App, owner: Addr) -> (Addr, Instantia
     let lockdrop_code_id = app.store_code(lockdrop_contract);
 
     let lockdrop_instantiate_msg = InstantiateMsg {
-        owner: Some(owner.clone().to_string()),
+        owner: Some(owner.to_string()),
         init_timestamp: EPOCH_START + 100_000,
         deposit_window: 10_000_000,
         withdrawal_window: 500_000,
@@ -440,14 +434,14 @@ fn instantiate_lockdrop_contract(app: &mut App, owner: Addr) -> (Addr, Instantia
 
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 900_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 90_000)
     });
 
     // Init contract
     let lockdrop_instance = app
         .instantiate_contract(
             lockdrop_code_id,
-            owner.clone(),
+            owner,
             &lockdrop_instantiate_msg,
             &[],
             "lockdrop",
@@ -496,7 +490,7 @@ fn instantiate_all_contracts(
         .query_wasm_smart(
             &astroport_factory_instance,
             &astroport::factory::QueryMsg::Pair {
-                asset_infos: pair_info.clone(),
+                asset_infos: pair_info,
             },
         )
         .unwrap();
@@ -519,11 +513,11 @@ fn instantiate_all_contracts(
     let airdrop_code_id = app.store_code(airdrop_contract);
 
     let airdrop_msg = astroport_periphery::airdrop::InstantiateMsg {
-        owner: Some(owner.clone().to_string()),
+        owner: Some(owner.to_string()),
         astro_token_address: astro_token.clone().into_string(),
         merkle_roots: Some(vec!["merkle_roots".to_string()]),
-        from_timestamp: Some(1_000_00),
-        to_timestamp: 10000_000_00,
+        from_timestamp: Some(100_000),
+        to_timestamp: 1_000_000_000,
     };
 
     let airdrop_instance = app
@@ -551,10 +545,10 @@ fn instantiate_all_contracts(
     // Set auction contract in airdrop contract
     app.execute_contract(
         owner.clone(),
-        airdrop_instance.clone(),
+        airdrop_instance,
         &astroport_periphery::airdrop::ExecuteMsg::UpdateConfig {
             owner: None,
-            auction_contract_address: Some(auction_contract.clone().to_string()),
+            auction_contract_address: Some(auction_contract.to_string()),
             merkle_roots: None,
             from_timestamp: None,
             to_timestamp: None,
@@ -572,7 +566,7 @@ fn instantiate_all_contracts(
         owner.clone(),
         astro_token.clone(),
         &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: lockdrop_instance.clone().to_string(),
+            spender: lockdrop_instance.to_string(),
             amount: Uint128::new(1000000000u128),
             expires: None,
         },
@@ -591,7 +585,7 @@ fn instantiate_all_contracts(
     .unwrap();
 
     app.execute_contract(
-        owner.clone(),
+        owner,
         astro_token.clone(),
         &Cw20ExecuteMsg::Send {
             amount: Uint128::from(1000000000u64),
@@ -602,13 +596,13 @@ fn instantiate_all_contracts(
     )
     .unwrap();
 
-    return (
+    (
         astro_token,
         lockdrop_instance,
         astroport_factory_instance,
         terraswap_factory_instance,
         update_msg,
-    );
+    )
 }
 
 // Instantiate Pools and Migrate Liquidity to Astroport
@@ -646,7 +640,7 @@ fn initialize_and_migrate_liquidity_for_pool(
             &terraswap::pair::InstantiateMsg {
                 asset_infos: [
                     terraswap::asset::AssetInfo::Token {
-                        contract_addr: token_instance.clone().to_string(),
+                        contract_addr: token_instance.to_string(),
                     },
                     terraswap::asset::AssetInfo::NativeToken {
                         denom: "uusd".to_string(),
@@ -715,7 +709,7 @@ fn initialize_and_migrate_liquidity_for_pool(
             .init_balance(
                 storage,
                 &Addr::unchecked(user_address.clone()),
-                vec![Coin::new(1000000_000000, "uusd")],
+                vec![Coin::new(1_000_000_000_000, "uusd")],
             )
             .unwrap();
         router
@@ -723,7 +717,7 @@ fn initialize_and_migrate_liquidity_for_pool(
             .init_balance(
                 storage,
                 &Addr::unchecked(user2_address.clone()),
-                vec![Coin::new(1000000_000000, "uusd")],
+                vec![Coin::new(1_000_000_000_000, "uusd")],
             )
             .unwrap();
     });
@@ -734,7 +728,7 @@ fn initialize_and_migrate_liquidity_for_pool(
         Addr::unchecked(user_address.clone()),
         token_instance.clone(),
         &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: terraswap_pool_instance.clone().to_string(),
+            spender: terraswap_pool_instance.to_string(),
             amount: Uint128::new(1000_000000),
             expires: None,
         },
@@ -750,7 +744,7 @@ fn initialize_and_migrate_liquidity_for_pool(
             assets: [
                 terraswap::asset::Asset {
                     info: terraswap::asset::AssetInfo::Token {
-                        contract_addr: token_instance.clone().to_string(),
+                        contract_addr: token_instance.to_string(),
                     },
                     amount: Uint128::from(1000_000000u64),
                 },
@@ -772,7 +766,7 @@ fn initialize_and_migrate_liquidity_for_pool(
     let lp_balance_res: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &terraswap_token_instance.clone(),
+            &terraswap_token_instance,
             &cw20::Cw20QueryMsg::Balance {
                 address: user_address.clone(),
             },
@@ -782,7 +776,7 @@ fn initialize_and_migrate_liquidity_for_pool(
 
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 1_000_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 100_000)
     });
 
     // Lock LP Tokens into Lockup Position
@@ -790,7 +784,7 @@ fn initialize_and_migrate_liquidity_for_pool(
         Addr::unchecked(user_address.clone()),
         Addr::unchecked(terraswap_token_instance.clone()),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: user_lp_balance,
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 10u64 }).unwrap(),
         },
@@ -804,7 +798,7 @@ fn initialize_and_migrate_liquidity_for_pool(
         Addr::unchecked(user2_address.clone()),
         token_instance.clone(),
         &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: terraswap_pool_instance.clone().to_string(),
+            spender: terraswap_pool_instance.to_string(),
             amount: Uint128::new(1000_000000),
             expires: None,
         },
@@ -815,12 +809,12 @@ fn initialize_and_migrate_liquidity_for_pool(
     // add Liquidity to Terraswap pool
     app.execute_contract(
         Addr::unchecked(user2_address.clone()),
-        terraswap_pool_instance.clone(),
+        terraswap_pool_instance,
         &terraswap::pair::ExecuteMsg::ProvideLiquidity {
             assets: [
                 terraswap::asset::Asset {
                     info: terraswap::asset::AssetInfo::Token {
-                        contract_addr: token_instance.clone().to_string(),
+                        contract_addr: token_instance.to_string(),
                     },
                     amount: Uint128::from(1000_000000u64),
                 },
@@ -842,7 +836,7 @@ fn initialize_and_migrate_liquidity_for_pool(
     let lp_balance_res: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &terraswap_token_instance.clone(),
+            &terraswap_token_instance,
             &cw20::Cw20QueryMsg::Balance {
                 address: user2_address.clone(),
             },
@@ -852,7 +846,7 @@ fn initialize_and_migrate_liquidity_for_pool(
 
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 1_000_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 100_000)
     });
 
     // Lock LP Tokens into Lockup Position
@@ -860,7 +854,7 @@ fn initialize_and_migrate_liquidity_for_pool(
         Addr::unchecked(user2_address.clone()),
         Addr::unchecked(terraswap_token_instance.clone()),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: user_lp_balance,
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 10u64 }).unwrap(),
         },
@@ -902,7 +896,7 @@ fn initialize_and_migrate_liquidity_for_pool(
             &astroport::factory::QueryMsg::Pair {
                 asset_infos: [
                     astroport::asset::AssetInfo::Token {
-                        contract_addr: token_instance.clone(),
+                        contract_addr: token_instance,
                     },
                     astroport::asset::AssetInfo::NativeToken {
                         denom: "uusd".to_string(),
@@ -916,8 +910,8 @@ fn initialize_and_migrate_liquidity_for_pool(
 
     // Migrate Liquidity
     app.execute_contract(
-        owner.clone(),
-        lockdrop_instance.clone(),
+        owner,
+        lockdrop_instance,
         &ExecuteMsg::MigrateLiquidity {
             terraswap_lp_token: terraswap_token_instance.clone(),
             astroport_pool_addr: astro_pool_address.to_string(),
@@ -927,11 +921,11 @@ fn initialize_and_migrate_liquidity_for_pool(
     )
     .unwrap();
 
-    return (
+    (
         terraswap_token_instance,
         astro_lp_address,
         astro_pool_address,
-    );
+    )
 }
 
 #[test]
@@ -948,10 +942,7 @@ fn proper_initialization_lockdrop() {
         .unwrap();
 
     // Check config
-    assert_eq!(
-        lockdrop_instantiate_msg.owner.unwrap().to_string(),
-        resp.owner
-    );
+    assert_eq!(lockdrop_instantiate_msg.owner.unwrap(), resp.owner);
     assert_eq!(None, resp.astro_token);
     assert_eq!(None, resp.auction_contract);
     assert_eq!(None, resp.generator);
@@ -984,7 +975,7 @@ fn proper_initialization_lockdrop() {
 
     assert_eq!(0u64, resp.total_incentives_share);
     assert_eq!(Uint128::zero(), resp.total_astro_delegated);
-    assert_eq!(false, resp.are_claims_allowed);
+    assert!(!resp.are_claims_allowed);
 }
 
 #[test]
@@ -1023,7 +1014,7 @@ fn test_update_config() {
         .query_wasm_smart(
             &astroport_factory_instance,
             &astroport::factory::QueryMsg::Pair {
-                asset_infos: pair_info.clone(),
+                asset_infos: pair_info,
             },
         )
         .unwrap();
@@ -1033,7 +1024,7 @@ fn test_update_config() {
         &mut app,
         owner.clone(),
         astro_token.clone(),
-        astroport_factory_instance.clone(),
+        astroport_factory_instance,
     );
 
     // Initiate Auction contract
@@ -1080,7 +1071,7 @@ fn test_update_config() {
 
     app.execute_contract(
         owner.clone(),
-        astro_token.clone(),
+        astro_token,
         &Cw20ExecuteMsg::Send {
             amount: Uint128::from(1000000000u64),
             contract: lockdrop_instance.to_string(),
@@ -1125,10 +1116,10 @@ fn test_update_config() {
 
     let err = app
         .execute_contract(
-            owner.clone(),
-            lockdrop_instance.clone(),
+            owner,
+            lockdrop_instance,
             &ExecuteMsg::UpdateConfig {
-                new_config: update_msg.clone(),
+                new_config: update_msg,
             },
             &[],
         )
@@ -1206,7 +1197,7 @@ fn test_initialize_pool() {
         .unwrap();
     assert_eq!(10000000u64, state_resp.total_incentives_share);
     assert_eq!(Uint128::zero(), state_resp.total_astro_delegated);
-    assert_eq!(false, state_resp.are_claims_allowed);
+    assert!(!state_resp.are_claims_allowed);
     assert_eq!(
         vec![terraswap_token_instance.clone()],
         state_resp.supported_pairs_list
@@ -1217,7 +1208,7 @@ fn test_initialize_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
             },
         )
         .unwrap();
@@ -1228,7 +1219,7 @@ fn test_initialize_pool() {
     assert_eq!(CUint256::zero(), pool_resp.weighted_amount);
     // assert_eq!(Decimal::zero(), pool_resp.generator_astro_per_share);
     // assert_eq!(Decimal::zero(), pool_resp.generator_proxy_per_share);
-    assert_eq!(false, pool_resp.is_staked);
+    assert!(!pool_resp.is_staked);
 
     // ######    ERROR :: Already supported     ######
     let err = app
@@ -1283,10 +1274,7 @@ fn test_initialize_pool() {
         .unwrap();
     assert_eq!(20400000u64, state_resp.total_incentives_share);
     assert_eq!(
-        vec![
-            terraswap_token_instance.clone(),
-            terraswap_token_instance2.clone(),
-        ],
+        vec![terraswap_token_instance, terraswap_token_instance2.clone(),],
         state_resp.supported_pairs_list
     );
     // check Pool Info
@@ -1295,7 +1283,7 @@ fn test_initialize_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance2.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance2.to_string(),
             },
         )
         .unwrap();
@@ -1307,15 +1295,10 @@ fn test_initialize_pool() {
     // ######    ERROR :: Pools cannot be added post deposit window closure     ######
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 900000_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 90_000_000)
     });
     let err = app
-        .execute_contract(
-            owner.clone(),
-            lockdrop_instance.clone(),
-            &initialize_pool_msg,
-            &[],
-        )
+        .execute_contract(owner, lockdrop_instance, &initialize_pool_msg, &[])
         .unwrap_err();
     assert_eq!(
         err.root_cause().to_string(),
@@ -1403,7 +1386,7 @@ fn test_update_pool() {
         .unwrap();
     assert_eq!(3434543u64, state_resp.total_incentives_share);
     assert_eq!(Uint128::zero(), state_resp.total_astro_delegated);
-    assert_eq!(false, state_resp.are_claims_allowed);
+    assert!(!state_resp.are_claims_allowed);
     assert_eq!(
         vec![terraswap_token_instance.clone()],
         state_resp.supported_pairs_list
@@ -1414,7 +1397,7 @@ fn test_update_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
             },
         )
         .unwrap();
@@ -1431,17 +1414,17 @@ fn test_update_pool() {
         RestrictedVector::default(),
         pool_resp.generator_proxy_per_share
     );
-    assert_eq!(false, pool_resp.is_staked);
+    assert!(!pool_resp.is_staked);
 
     // ######    ERROR :: Pools cannot be added post deposit window closure     ######
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 900000_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 90_000_000)
     });
     let err = app
         .execute_contract(
-            owner.clone(),
-            lockdrop_instance.clone(),
+            owner,
+            lockdrop_instance,
             &astroport_periphery::lockdrop::ExecuteMsg::UpdatePool {
                 terraswap_lp_token: terraswap_token_instance.to_string(),
                 incentives_share: 3434543u64,
@@ -1514,7 +1497,7 @@ fn test_increase_lockup() {
 
     // SUCCESSFULLY INITIALIZES POOL
     app.execute_contract(
-        owner.clone(),
+        owner,
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::InitializePool {
             terraswap_lp_token: terraswap_token_instance.to_string(),
@@ -1575,9 +1558,9 @@ fn test_increase_lockup() {
     let err = app
         .execute_contract(
             Addr::unchecked(user_address.clone()),
-            terraswap_token_instance2.clone(),
+            terraswap_token_instance2,
             &cw20::Cw20ExecuteMsg::Send {
-                contract: lockdrop_instance.clone().to_string(),
+                contract: lockdrop_instance.to_string(),
                 amount: Uint128::from(10000u128),
                 msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 4u64 }).unwrap(),
             },
@@ -1596,7 +1579,7 @@ fn test_increase_lockup() {
             Addr::unchecked(user_address.clone()),
             terraswap_token_instance.clone(),
             &cw20::Cw20ExecuteMsg::Send {
-                contract: lockdrop_instance.clone().to_string(),
+                contract: lockdrop_instance.to_string(),
                 amount: Uint128::from(10000u128),
                 msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 5u64 }).unwrap(),
             },
@@ -1612,7 +1595,7 @@ fn test_increase_lockup() {
 
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 1_000_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 100_000)
     });
 
     let err = app
@@ -1620,7 +1603,7 @@ fn test_increase_lockup() {
             Addr::unchecked(user_address.clone()),
             terraswap_token_instance.clone(),
             &cw20::Cw20ExecuteMsg::Send {
-                contract: lockdrop_instance.clone().to_string(),
+                contract: lockdrop_instance.to_string(),
                 amount: Uint128::from(10000u128),
                 msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 0u64 }).unwrap(),
             },
@@ -1637,7 +1620,7 @@ fn test_increase_lockup() {
             Addr::unchecked(user_address.clone()),
             terraswap_token_instance.clone(),
             &cw20::Cw20ExecuteMsg::Send {
-                contract: lockdrop_instance.clone().to_string(),
+                contract: lockdrop_instance.to_string(),
                 amount: Uint128::from(10000u128),
                 msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 53u64 }).unwrap(),
             },
@@ -1654,7 +1637,7 @@ fn test_increase_lockup() {
         Addr::unchecked(user_address.clone()),
         terraswap_token_instance.clone(),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: Uint128::from(10000u128),
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 5u64 }).unwrap(),
         },
@@ -1668,7 +1651,7 @@ fn test_increase_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
             },
         )
         .unwrap();
@@ -1691,13 +1674,13 @@ fn test_increase_lockup() {
         .unwrap();
     assert_eq!(Uint128::from(1000000000u64), user_resp.total_astro_rewards);
     assert_eq!(Uint128::zero(), user_resp.delegated_astro_rewards);
-    assert_eq!(false, user_resp.astro_transferred);
+    assert!(!user_resp.astro_transferred);
 
     assert_eq!(
         Uint128::from(10000u128),
         user_resp.lockup_infos[0].lp_units_locked
     );
-    assert_eq!(false, user_resp.lockup_infos[0].withdrawal_flag);
+    assert!(!user_resp.lockup_infos[0].withdrawal_flag);
     assert_eq!(
         user_resp.total_astro_rewards,
         user_resp.lockup_infos[0].astro_rewards
@@ -1723,7 +1706,7 @@ fn test_increase_lockup() {
         Addr::unchecked(user2_address.clone()),
         terraswap_token_instance.clone(),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: Uint128::from(10000u128),
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 10u64 }).unwrap(),
         },
@@ -1737,7 +1720,7 @@ fn test_increase_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
             },
         )
         .unwrap();
@@ -1753,7 +1736,7 @@ fn test_increase_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::UserInfo {
-                address: user2_address.clone(),
+                address: user2_address,
             },
         )
         .unwrap();
@@ -1792,7 +1775,7 @@ fn test_increase_lockup() {
         Addr::unchecked(user_address.clone()),
         terraswap_token_instance.clone(),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: Uint128::from(10u128),
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 51u64 }).unwrap(),
         },
@@ -1806,7 +1789,7 @@ fn test_increase_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
             },
         )
         .unwrap();
@@ -1835,15 +1818,15 @@ fn test_increase_lockup() {
     // ######    ERROR :: Deposit window closed   ######
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 900_000000)
+        b.time = Timestamp::from_seconds(EPOCH_START + 90_0000000)
     });
 
     let err = app
         .execute_contract(
-            Addr::unchecked(user_address.clone()),
-            terraswap_token_instance.clone(),
+            Addr::unchecked(user_address),
+            terraswap_token_instance,
             &cw20::Cw20ExecuteMsg::Send {
-                contract: lockdrop_instance.clone().to_string(),
+                contract: lockdrop_instance.to_string(),
                 amount: Uint128::from(100u128),
                 msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 5u64 }).unwrap(),
             },
@@ -1895,7 +1878,7 @@ fn test_withdraw_from_lockup() {
 
     // SUCCESSFULLY INITIALIZES POOL
     app.execute_contract(
-        owner.clone(),
+        owner,
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::InitializePool {
             terraswap_lp_token: terraswap_token_instance.to_string(),
@@ -1924,14 +1907,14 @@ fn test_withdraw_from_lockup() {
 
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 1_000_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 100_000)
     });
 
     app.execute_contract(
         Addr::unchecked(user_address.clone()),
         terraswap_token_instance.clone(),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: Uint128::from(10000000u128),
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 10u64 }).unwrap(),
         },
@@ -1946,7 +1929,7 @@ fn test_withdraw_from_lockup() {
             Addr::unchecked(user_address.clone()),
             lockdrop_instance.clone(),
             &ExecuteMsg::WithdrawFromLockup {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
                 amount: Uint128::from(0u128),
                 duration: 1u64,
             },
@@ -1984,7 +1967,7 @@ fn test_withdraw_from_lockup() {
             Addr::unchecked(user_address.clone()),
             lockdrop_instance.clone(),
             &ExecuteMsg::WithdrawFromLockup {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
                 amount: Uint128::from(10u128),
                 duration: 1u64,
             },
@@ -2001,7 +1984,7 @@ fn test_withdraw_from_lockup() {
         Addr::unchecked(user_address.clone()),
         lockdrop_instance.clone(),
         &ExecuteMsg::WithdrawFromLockup {
-            terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+            terraswap_lp_token: terraswap_token_instance.to_string(),
             amount: Uint128::from(10000000u128),
             duration: 10u64,
         },
@@ -2015,7 +1998,7 @@ fn test_withdraw_from_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
             },
         )
         .unwrap();
@@ -2041,7 +2024,7 @@ fn test_withdraw_from_lockup() {
         Addr::unchecked(user_address.clone()),
         terraswap_token_instance.clone(),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: Uint128::from(10000000u128),
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 10u64 }).unwrap(),
         },
@@ -2061,7 +2044,7 @@ fn test_withdraw_from_lockup() {
             Addr::unchecked(user_address.clone()),
             lockdrop_instance.clone(),
             &ExecuteMsg::WithdrawFromLockup {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
                 amount: Uint128::from(5000001u128),
                 duration: 10u64,
             },
@@ -2084,7 +2067,7 @@ fn test_withdraw_from_lockup() {
             Addr::unchecked(user_address.clone()),
             lockdrop_instance.clone(),
             &ExecuteMsg::WithdrawFromLockup {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
                 amount: Uint128::from(5000001u128),
                 duration: 10u64,
             },
@@ -2101,7 +2084,7 @@ fn test_withdraw_from_lockup() {
         Addr::unchecked(user_address.clone()),
         lockdrop_instance.clone(),
         &ExecuteMsg::WithdrawFromLockup {
-            terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+            terraswap_lp_token: terraswap_token_instance.to_string(),
             amount: Uint128::from(4200000u128),
             duration: 10u64,
         },
@@ -2115,7 +2098,7 @@ fn test_withdraw_from_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
             },
         )
         .unwrap();
@@ -2142,16 +2125,16 @@ fn test_withdraw_from_lockup() {
         Uint128::from(5800000u128),
         user_resp.lockup_infos[0].lp_units_locked
     );
-    assert_eq!(true, user_resp.lockup_infos[0].withdrawal_flag);
+    assert!(user_resp.lockup_infos[0].withdrawal_flag);
 
     // ######    ERROR :: Amount exceeds maximum allowed withdrawal limit of {}    ######
 
     let err = app
         .execute_contract(
-            Addr::unchecked(user_address.clone()),
-            lockdrop_instance.clone(),
+            Addr::unchecked(user_address),
+            lockdrop_instance,
             &ExecuteMsg::WithdrawFromLockup {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.to_string(),
                 amount: Uint128::from(1u128),
                 duration: 10u64,
             },
@@ -2229,7 +2212,7 @@ fn test_migrate_liquidity() {
             &terraswap::pair::InstantiateMsg {
                 asset_infos: [
                     terraswap::asset::AssetInfo::Token {
-                        contract_addr: anc_instance.clone().to_string(),
+                        contract_addr: anc_instance.to_string(),
                     },
                     terraswap::asset::AssetInfo::NativeToken {
                         denom: "uusd".to_string(),
@@ -2298,7 +2281,7 @@ fn test_migrate_liquidity() {
             .init_balance(
                 storage,
                 &Addr::unchecked(user_address.clone()),
-                vec![Coin::new(1000000_000000, "uusd")],
+                vec![Coin::new(1_000_000_000_000, "uusd")],
             )
             .unwrap();
         router
@@ -2306,7 +2289,7 @@ fn test_migrate_liquidity() {
             .init_balance(
                 storage,
                 &Addr::unchecked(user2_address.clone()),
-                vec![Coin::new(1000000_000000, "uusd")],
+                vec![Coin::new(1_000_000_000_000, "uusd")],
             )
             .unwrap();
     });
@@ -2317,7 +2300,7 @@ fn test_migrate_liquidity() {
         Addr::unchecked(user_address.clone()),
         anc_instance.clone(),
         &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: terraswap_pool_instance.clone().to_string(),
+            spender: terraswap_pool_instance.to_string(),
             amount: Uint128::new(1000_000000),
             expires: None,
         },
@@ -2328,12 +2311,12 @@ fn test_migrate_liquidity() {
     // add Liquidity to Terraswap pool
     app.execute_contract(
         Addr::unchecked(user_address.clone()),
-        terraswap_pool_instance.clone(),
+        terraswap_pool_instance,
         &terraswap::pair::ExecuteMsg::ProvideLiquidity {
             assets: [
                 terraswap::asset::Asset {
                     info: terraswap::asset::AssetInfo::Token {
-                        contract_addr: anc_instance.clone().to_string(),
+                        contract_addr: anc_instance.to_string(),
                     },
                     amount: Uint128::from(1000_000000u64),
                 },
@@ -2355,7 +2338,7 @@ fn test_migrate_liquidity() {
     let lp_balance_res: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &terraswap_token_instance.clone(),
+            &terraswap_token_instance,
             &cw20::Cw20QueryMsg::Balance {
                 address: user_address.clone(),
             },
@@ -2365,7 +2348,7 @@ fn test_migrate_liquidity() {
 
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 1_000_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 100_000)
     });
 
     // Lock LP Tokens into Lockup Position
@@ -2373,7 +2356,7 @@ fn test_migrate_liquidity() {
         Addr::unchecked(user_address.clone()),
         Addr::unchecked(terraswap_token_instance.clone()),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: user_lp_balance,
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 10u64 }).unwrap(),
         },
@@ -2415,7 +2398,7 @@ fn test_migrate_liquidity() {
             &astroport::factory::QueryMsg::Pair {
                 asset_infos: [
                     astroport::asset::AssetInfo::Token {
-                        contract_addr: anc_instance.clone(),
+                        contract_addr: anc_instance,
                     },
                     astroport::asset::AssetInfo::NativeToken {
                         denom: "uusd".to_string(),
@@ -2433,7 +2416,7 @@ fn test_migrate_liquidity() {
         .query_wasm_smart(
             &terraswap_token_instance,
             &Cw20QueryMsg::Balance {
-                address: lockdrop_instance.clone().to_string(),
+                address: lockdrop_instance.to_string(),
             },
         )
         .unwrap();
@@ -2444,7 +2427,7 @@ fn test_migrate_liquidity() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.clone(),
             },
         )
         .unwrap();
@@ -2457,12 +2440,12 @@ fn test_migrate_liquidity() {
         CUint256::from(1750000000u128),
         pool_resp_before_migration.weighted_amount
     );
-    assert_eq!(false, pool_resp_before_migration.is_staked);
+    assert!(!pool_resp_before_migration.is_staked);
     assert_eq!(None, pool_resp_before_migration.migration_info);
 
     // Migrate Liquidity
     app.execute_contract(
-        owner.clone(),
+        owner,
         lockdrop_instance.clone(),
         &ExecuteMsg::MigrateLiquidity {
             terraswap_lp_token: terraswap_token_instance.clone(),
@@ -2479,7 +2462,7 @@ fn test_migrate_liquidity() {
         .query_wasm_smart(
             &astro_lp_address,
             &Cw20QueryMsg::Balance {
-                address: lockdrop_instance.clone().to_string(),
+                address: lockdrop_instance.to_string(),
             },
         )
         .unwrap();
@@ -2490,7 +2473,7 @@ fn test_migrate_liquidity() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance,
             },
         )
         .unwrap();
@@ -2612,8 +2595,8 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
                 storage,
                 &Addr::unchecked(user_address.clone()),
                 vec![
-                    Coin::new(1000000_000000, "uusd"),
-                    Coin::new(1000000_000000, "uluna"),
+                    Coin::new(1_000_000_000_000, "uusd"),
+                    Coin::new(1_000_000_000_000, "uluna"),
                 ],
             )
             .unwrap();
@@ -2623,8 +2606,8 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
                 storage,
                 &Addr::unchecked(user2_address.clone()),
                 vec![
-                    Coin::new(1000000_000000, "uusd"),
-                    Coin::new(1000000_000000, "uluna"),
+                    Coin::new(1_000_000_000_000, "uusd"),
+                    Coin::new(1_000_000_000_000, "uluna"),
                 ],
             )
             .unwrap();
@@ -2635,7 +2618,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
     // add Liquidity to Terraswap pool
     app.execute_contract(
         Addr::unchecked(user_address.clone()),
-        terraswap_pool_instance.clone(),
+        terraswap_pool_instance,
         &terraswap::pair::ExecuteMsg::ProvideLiquidity {
             assets: [
                 terraswap::asset::Asset {
@@ -2665,7 +2648,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
     let lp_balance_res: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &terraswap_token_instance.clone(),
+            &terraswap_token_instance,
             &cw20::Cw20QueryMsg::Balance {
                 address: user_address.clone(),
             },
@@ -2675,7 +2658,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
 
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(EPOCH_START + 1_000_00)
+        b.time = Timestamp::from_seconds(EPOCH_START + 100_000)
     });
 
     // Lock LP Tokens into Lockup Position
@@ -2683,7 +2666,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         Addr::unchecked(user_address.clone()),
         Addr::unchecked(terraswap_token_instance.clone()),
         &cw20::Cw20ExecuteMsg::Send {
-            contract: lockdrop_instance.clone().to_string(),
+            contract: lockdrop_instance.to_string(),
             amount: user_lp_balance,
             msg: to_binary(&lockdrop::Cw20HookMsg::IncreaseLockup { duration: 10u64 }).unwrap(),
         },
@@ -2744,7 +2727,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         .query_wasm_smart(
             &terraswap_token_instance,
             &Cw20QueryMsg::Balance {
-                address: lockdrop_instance.clone().to_string(),
+                address: lockdrop_instance.to_string(),
             },
         )
         .unwrap();
@@ -2755,7 +2738,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance.clone(),
             },
         )
         .unwrap();
@@ -2768,12 +2751,12 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         CUint256::from(1750000000u128),
         pool_resp_before_migration.weighted_amount
     );
-    assert_eq!(false, pool_resp_before_migration.is_staked);
+    assert!(!pool_resp_before_migration.is_staked);
     assert_eq!(None, pool_resp_before_migration.migration_info);
 
     // Migrate Liquidity
     app.execute_contract(
-        owner.clone(),
+        owner,
         lockdrop_instance.clone(),
         &ExecuteMsg::MigrateLiquidity {
             terraswap_lp_token: terraswap_token_instance.clone(),
@@ -2790,7 +2773,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         .query_wasm_smart(
             &astro_lp_address,
             &Cw20QueryMsg::Balance {
-                address: lockdrop_instance.clone().to_string(),
+                address: lockdrop_instance.to_string(),
             },
         )
         .unwrap();
@@ -2801,7 +2784,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance,
             },
         )
         .unwrap();
@@ -2920,13 +2903,13 @@ fn test_stake_lp_tokens() {
         .query_wasm_smart(
             &astro_lp_address,
             &Cw20QueryMsg::Balance {
-                address: lockdrop_instance.clone().to_string(),
+                address: lockdrop_instance.to_string(),
             },
         )
         .unwrap();
 
     app.execute_contract(
-        Addr::unchecked(owner.clone()),
+        Addr::unchecked(owner),
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::StakeLpTokens {
             terraswap_lp_token: terraswap_token_instance.clone(),
@@ -2941,7 +2924,7 @@ fn test_stake_lp_tokens() {
         .query_wasm_smart(
             &astro_lp_address,
             &Cw20QueryMsg::Balance {
-                address: update_msg.clone().generator_address.unwrap().to_string(),
+                address: update_msg.generator_address.unwrap(),
             },
         )
         .unwrap();
@@ -2957,12 +2940,12 @@ fn test_stake_lp_tokens() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                terraswap_lp_token: terraswap_token_instance,
             },
         )
         .unwrap();
 
-    assert_eq!(true, pool_resp_after_migration.is_staked);
+    assert!(pool_resp_after_migration.is_staked);
 }
 
 #[test]
@@ -3047,7 +3030,7 @@ fn test_claim_rewards() {
         )
         .unwrap();
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
-    assert_eq!(false, user_info.astro_transferred);
+    assert!(!user_info.astro_transferred);
     assert_eq!(Uint128::zero(), user_info.delegated_astro_rewards);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
@@ -3198,7 +3181,7 @@ fn test_claim_rewards() {
         Uint128::from(500000000u64),
         user_info.delegated_astro_rewards
     );
-    assert_eq!(false, user_info.astro_transferred);
+    assert!(!user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
@@ -3253,7 +3236,7 @@ fn test_claim_rewards() {
         Uint128::from(500000000u64),
         user_info.delegated_astro_rewards
     );
-    assert_eq!(true, user_info.astro_transferred);
+    assert!(user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
@@ -3276,7 +3259,7 @@ fn test_claim_rewards() {
         .query_wasm_smart(
             &update_msg.astro_token_address.clone().unwrap(),
             &Cw20QueryMsg::Balance {
-                address: user_address.clone(),
+                address: user_address,
             },
         )
         .unwrap();
@@ -3314,7 +3297,7 @@ fn test_claim_rewards() {
 
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(Uint128::from(1000u64), user_info.delegated_astro_rewards);
-    assert_eq!(false, user_info.astro_transferred);
+    assert!(!user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
@@ -3356,7 +3339,7 @@ fn test_claim_rewards() {
         .unwrap();
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(Uint128::from(1000u64), user_info.delegated_astro_rewards);
-    assert_eq!(true, user_info.astro_transferred);
+    assert!(user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
@@ -3368,8 +3351,8 @@ fn test_claim_rewards() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: Some(astro_lp_address),
+        terraswap_lp_token: Addr::unchecked(terraswap_token_instance),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -3377,9 +3360,9 @@ fn test_claim_rewards() {
     let user2_astro_balance_after: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
+            &update_msg.astro_token_address.unwrap(),
             &Cw20QueryMsg::Balance {
-                address: user2_address.clone(),
+                address: user2_address,
             },
         )
         .unwrap();
@@ -3475,7 +3458,7 @@ fn test_claim_rewards_and_unlock() {
         )
         .unwrap();
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
-    assert_eq!(false, user_info.astro_transferred);
+    assert!(!user_info.astro_transferred);
     assert_eq!(Uint128::zero(), user_info.delegated_astro_rewards);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
@@ -3591,7 +3574,7 @@ fn test_claim_rewards_and_unlock() {
         Uint128::from(500000000u64),
         user_info.delegated_astro_rewards
     );
-    assert_eq!(false, user_info.astro_transferred);
+    assert!(!user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
@@ -3622,7 +3605,7 @@ fn test_claim_rewards_and_unlock() {
     let user1_astro_lp_balance_before: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &astro_lp_address.clone(),
+            &astro_lp_address,
             &Cw20QueryMsg::Balance {
                 address: user_address.clone(),
             },
@@ -3656,7 +3639,7 @@ fn test_claim_rewards_and_unlock() {
         Uint128::from(500000000u64),
         user_info.delegated_astro_rewards
     );
-    assert_eq!(true, user_info.astro_transferred);
+    assert!(user_info.astro_transferred);
 
     let user1_astro_balance_after: cw20::BalanceResponse = app
         .wrap()
@@ -3671,9 +3654,9 @@ fn test_claim_rewards_and_unlock() {
     let user1_astro_lp_balance_after: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &astro_lp_address.clone(),
+            &astro_lp_address,
             &Cw20QueryMsg::Balance {
-                address: user_address.clone(),
+                address: user_address,
             },
         )
         .unwrap();
@@ -3714,7 +3697,7 @@ fn test_claim_rewards_and_unlock() {
 
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(Uint128::from(1000u64), user_info.delegated_astro_rewards);
-    assert_eq!(false, user_info.astro_transferred);
+    assert!(!user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
@@ -3735,7 +3718,7 @@ fn test_claim_rewards_and_unlock() {
     let user2_astro_lp_balance_before: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &astro_lp_address.clone(),
+            &astro_lp_address,
             &Cw20QueryMsg::Balance {
                 address: user2_address.clone(),
             },
@@ -3746,7 +3729,7 @@ fn test_claim_rewards_and_unlock() {
         Addr::unchecked(user2_address.clone()),
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-            terraswap_lp_token: terraswap_token_instance.clone(),
+            terraswap_lp_token: terraswap_token_instance,
             duration: 10u64,
             withdraw_lp_stake: true,
         },
@@ -3766,12 +3749,12 @@ fn test_claim_rewards_and_unlock() {
         .unwrap();
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(Uint128::from(1000u64), user_info.delegated_astro_rewards);
-    assert_eq!(true, user_info.astro_transferred);
+    assert!(user_info.astro_transferred);
 
     let user2_astro_balance_after: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
+            &update_msg.astro_token_address.unwrap(),
             &Cw20QueryMsg::Balance {
                 address: user2_address.clone(),
             },
@@ -3781,9 +3764,9 @@ fn test_claim_rewards_and_unlock() {
     let user2_astro_lp_balance_after: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &astro_lp_address.clone(),
+            &astro_lp_address,
             &Cw20QueryMsg::Balance {
-                address: user2_address.clone(),
+                address: user2_address,
             },
         )
         .unwrap();
@@ -3849,7 +3832,7 @@ fn test_delegate_astro_to_auction() {
     // Add pool to ASTRO Generator
     app.execute_contract(
         Addr::unchecked(owner.clone()),
-        Addr::unchecked(update_msg.clone().generator_address.unwrap()),
+        Addr::unchecked(update_msg.generator_address.unwrap()),
         &astroport::generator::ExecuteMsg::SetupPools {
             pools: vec![(astro_lp_address.to_string(), Uint128::from(10u128))],
         },
@@ -3859,7 +3842,7 @@ fn test_delegate_astro_to_auction() {
 
     // Stake LP Tokens with Generator
     app.execute_contract(
-        Addr::unchecked(owner.clone()),
+        Addr::unchecked(owner),
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::StakeLpTokens {
             terraswap_lp_token: terraswap_token_instance.clone(),
@@ -3882,7 +3865,7 @@ fn test_delegate_astro_to_auction() {
         )
         .unwrap();
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
-    assert_eq!(false, user_info.astro_transferred);
+    assert!(!user_info.astro_transferred);
     assert_eq!(Uint128::zero(), user_info.delegated_astro_rewards);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
         lp_units_locked: Uint128::from(1000000000u64),
@@ -3895,8 +3878,8 @@ fn test_delegate_astro_to_auction() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: Some(astro_lp_address),
+        terraswap_lp_token: Addr::unchecked(terraswap_token_instance),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -3918,7 +3901,7 @@ fn test_delegate_astro_to_auction() {
     .unwrap();
 
     app.execute_contract(
-        Addr::unchecked(user2_address.clone()),
+        Addr::unchecked(user2_address),
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::DelegateAstroToAuction {
             amount: Uint128::from(1000u64),
@@ -3940,7 +3923,7 @@ fn test_delegate_astro_to_auction() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::UserInfo {
-                address: user_address.clone(),
+                address: user_address,
             },
         )
         .unwrap();

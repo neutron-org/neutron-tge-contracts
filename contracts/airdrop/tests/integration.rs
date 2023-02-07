@@ -57,7 +57,7 @@ fn init_contracts(app: &mut App) -> (Addr, Addr, InstantiateMsg, u64) {
     let airdrop_code_id = app.store_code(airdrop_contract);
 
     let aidrop_instantiate_msg = InstantiateMsg {
-        owner: Some(owner.clone().to_string()),
+        owner: Some(owner.to_string()),
         astro_token_address: astro_token_instance.clone().into_string(),
         merkle_roots: Some(vec!["merkle_roots".to_string()]),
         from_timestamp: Some(1571897419),
@@ -68,7 +68,7 @@ fn init_contracts(app: &mut App) -> (Addr, Addr, InstantiateMsg, u64) {
     let airdrop_instance = app
         .instantiate_contract(
             airdrop_code_id,
-            owner.clone(),
+            owner,
             &aidrop_instantiate_msg,
             &[],
             "airdrop",
@@ -93,10 +93,10 @@ fn mint_some_astro(
 ) {
     let msg = cw20::Cw20ExecuteMsg::Mint {
         recipient: to.clone(),
-        amount: amount,
+        amount,
     };
     let res = app
-        .execute_contract(owner.clone(), astro_token_instance.clone(), &msg, &[])
+        .execute_contract(owner, astro_token_instance, &msg, &[])
         .unwrap();
     assert_eq!(res.events[1].attributes[1], attr("action", "mint"));
     assert_eq!(res.events[1].attributes[2], attr("to", to));
@@ -124,7 +124,7 @@ fn enable_claims(app: &mut App, airdrop_instance: Addr, owner: Addr) {
     .unwrap();
 
     app.execute_contract(
-        Addr::unchecked(auction_contract_address.clone()),
+        Addr::unchecked(auction_contract_address),
         airdrop_instance.clone(),
         &msg,
         &[],
@@ -135,7 +135,7 @@ fn enable_claims(app: &mut App, airdrop_instance: Addr, owner: Addr) {
         .wrap()
         .query_wasm_smart(&airdrop_instance, &QueryMsg::Config {})
         .unwrap();
-    assert_eq!(true, resp.are_claims_enabled);
+    assert!(resp.are_claims_enabled);
 }
 
 #[test]
@@ -177,10 +177,10 @@ fn proper_initialization() {
 
     // Set ASTRO airdrop incentives
     app.execute_contract(
-        Addr::unchecked(init_msg.owner.clone().unwrap()),
+        Addr::unchecked(init_msg.owner.unwrap()),
         astro_token_instance,
         &Cw20ExecuteMsg::Send {
-            amount: Uint128::new(100_000_000000),
+            amount: Uint128::new(100_000_000_000),
             contract: airdrop_instance.to_string(),
             msg: to_binary(&Cw20HookMsg::IncreaseAstroIncentives {}).unwrap(),
         },
@@ -194,8 +194,8 @@ fn proper_initialization() {
         .query_wasm_smart(&airdrop_instance, &QueryMsg::State {})
         .unwrap();
 
-    assert_eq!(Uint128::new(100_000_000000), resp.total_airdrop_size);
-    assert_eq!(Uint128::new(100_000_000000), resp.unclaimed_tokens);
+    assert_eq!(Uint128::new(100_000_000_000), resp.total_airdrop_size);
+    assert_eq!(Uint128::new(100_000_000_000), resp.unclaimed_tokens);
     assert_eq!(Uint128::new(0), resp.total_delegated_amount);
 }
 
@@ -296,9 +296,9 @@ fn test_transfer_unclaimed_tokens() {
     let bal_resp: cw20::BalanceResponse = app
         .wrap()
         .query_wasm_smart(
-            &astro_token_instance.clone(),
+            &astro_token_instance,
             &cw20::Cw20QueryMsg::Balance {
-                address: airdrop_instance.clone().to_string(),
+                address: airdrop_instance.to_string(),
             },
         )
         .unwrap();
@@ -311,7 +311,7 @@ fn test_transfer_unclaimed_tokens() {
             airdrop_instance.clone(),
             &ExecuteMsg::TransferUnclaimedTokens {
                 recipient: "recipient".to_string(),
-                amount: Uint128::from(1000000 as u64),
+                amount: Uint128::from(1000000_u64),
             },
             &[],
         )
@@ -335,7 +335,7 @@ fn test_transfer_unclaimed_tokens() {
             airdrop_instance.clone(),
             &ExecuteMsg::TransferUnclaimedTokens {
                 recipient: "recipient".to_string(),
-                amount: Uint128::from(1000000 as u64),
+                amount: Uint128::from(1000000_u64),
             },
             &[],
         )
@@ -359,7 +359,7 @@ fn test_transfer_unclaimed_tokens() {
             airdrop_instance.clone(),
             &ExecuteMsg::TransferUnclaimedTokens {
                 recipient: "recipient".to_string(),
-                amount: Uint128::from(100_000_000_0000 as u64),
+                amount: Uint128::from(1_000_000_000_000_u64),
             },
             &[],
         )
@@ -372,11 +372,11 @@ fn test_transfer_unclaimed_tokens() {
 
     // Should successfully transfer and update state
     app.execute_contract(
-        Addr::unchecked(init_msg.owner.clone().unwrap()),
+        Addr::unchecked(init_msg.owner.unwrap()),
         airdrop_instance.clone(),
         &ExecuteMsg::TransferUnclaimedTokens {
             recipient: "recipient".to_string(),
-            amount: Uint128::from(100_000_00 as u64),
+            amount: Uint128::from(10_000_000_u64),
         },
         &[],
     )
@@ -430,7 +430,7 @@ fn test_claim_by_terra_user() {
         .query_wasm_smart(
             &astro_instance,
             &cw20::Cw20QueryMsg::Balance {
-                address: airdrop_instance.clone().to_string(),
+                address: airdrop_instance.to_string(),
             },
         )
         .unwrap();
@@ -473,7 +473,7 @@ fn test_claim_by_terra_user() {
     });
 
     let mut claim_msg = ExecuteMsg::Claim {
-        claim_amount: Uint128::from(250000000 as u64),
+        claim_amount: Uint128::from(250000000_u64),
         merkle_proof: vec![
             "7719b79a65e5aa0bbfd144cf5373138402ab1c374d9049e490b5b61c23d90065".to_string(),
             "60368f2058e0fb961a7721a241f9b973c3dd6c57e10a627071cd81abca6aa490".to_string(),
@@ -481,7 +481,7 @@ fn test_claim_by_terra_user() {
         root_index: 0,
     };
     let mut claim_msg_wrong_amount = ExecuteMsg::Claim {
-        claim_amount: Uint128::from(210000000 as u64),
+        claim_amount: Uint128::from(210000000_u64),
         merkle_proof: vec![
             "7719b79a65e5aa0bbfd144cf5373138402ab1c374d9049e490b5b61c23d90065".to_string(),
             "60368f2058e0fb961a7721a241f9b973c3dd6c57e10a627071cd81abca6aa490".to_string(),
@@ -489,7 +489,7 @@ fn test_claim_by_terra_user() {
         root_index: 0,
     };
     let mut claim_msg_incorrect_proof = ExecuteMsg::Claim {
-        claim_amount: Uint128::from(250000000 as u64),
+        claim_amount: Uint128::from(250000000_u64),
         merkle_proof: vec![
             "7719b79a65e4aa0bbfd144cf5373138402ab1c374d9049e490b5b61c23d90065".to_string(),
             "60368f2058e0fb961a7721a241f9b973c3dd6c57e10a627071cd81abca6aa490".to_string(),
@@ -527,7 +527,7 @@ fn test_claim_by_terra_user() {
             Addr::unchecked("terra17lmam6zguazs5q5u6z5mmx76uj63gldnse2pdp".to_string()),
             airdrop_instance.clone(),
             &ExecuteMsg::Claim {
-                claim_amount: Uint128::from(250000000 as u64),
+                claim_amount: Uint128::from(250000000_u64),
                 merkle_proof: vec![
                     "7719b79a65e4aa0bbfd144cf5373138402ab1c374d9049e490b5b61c23d90065".to_string(),
                     "60368f2058e0fb961a7721a241f9b973c3dd6c57e10a627071cd81abca6aa490".to_string(),
@@ -585,7 +585,7 @@ fn test_claim_by_terra_user() {
             },
         )
         .unwrap();
-    assert_eq!(false, resp.is_claimed);
+    assert!(!resp.is_claimed);
 
     // Should be a success
     let mut success_ = app
@@ -620,7 +620,7 @@ fn test_claim_by_terra_user() {
             },
         )
         .unwrap();
-    assert_eq!(true, claim_query_resp.is_claimed);
+    assert!(claim_query_resp.is_claimed);
 
     // Check :: User state
     let mut user_info_query_resp: UserInfo = app
@@ -637,7 +637,7 @@ fn test_claim_by_terra_user() {
         user_info_query_resp.claimed_amount
     );
     assert_eq!(Uint128::from(0u64), user_info_query_resp.delegated_amount);
-    assert_eq!(false, user_info_query_resp.tokens_withdrawn);
+    assert!(!user_info_query_resp.tokens_withdrawn);
 
     // Check :: Contract state
     let mut state_query_resp: State = app
@@ -681,7 +681,7 @@ fn test_claim_by_terra_user() {
     // ################################
 
     claim_msg = ExecuteMsg::Claim {
-        claim_amount: Uint128::from(1 as u64),
+        claim_amount: Uint128::from(1_u64),
         merkle_proof: vec![
             "7fd0f6ac4074cef9f89eedcf72459ad7b0891855f8084b54dc7de7569849d1c8".to_string(),
             "4fab6b0ef8d988835ad968d03d61de408772d033e9ce734394bb623309c5d7fc".to_string(),
@@ -689,7 +689,7 @@ fn test_claim_by_terra_user() {
         root_index: 0,
     };
     claim_msg_wrong_amount = ExecuteMsg::Claim {
-        claim_amount: Uint128::from(2 as u64),
+        claim_amount: Uint128::from(2_u64),
         merkle_proof: vec![
             "7fd0f6ac4074cef9f89eedcf72459ad7b0891855f8084b54dc7de7569849d1c8".to_string(),
             "4fab6b0ef8d988835ad968d03d61de408772d033e9ce734394bb623309c5d7fc".to_string(),
@@ -697,7 +697,7 @@ fn test_claim_by_terra_user() {
         root_index: 0,
     };
     claim_msg_incorrect_proof = ExecuteMsg::Claim {
-        claim_amount: Uint128::from(1 as u64),
+        claim_amount: Uint128::from(1_u64),
         merkle_proof: vec![
             "7fd0f6ac4074cef1f89eedcf72459ad7b0891855f8084b54dc7de7569849d1c8".to_string(),
             "4fab6b0ef8d988835ad968d03d61de408772d033e9ce734394bb623309c5d7fc".to_string(),
@@ -711,7 +711,7 @@ fn test_claim_by_terra_user() {
             Addr::unchecked("terra1757tkx08n0cqrw7p86ny9lnxsqeth0wgp0em95".to_string()),
             airdrop_instance.clone(),
             &ExecuteMsg::Claim {
-                claim_amount: Uint128::from(1 as u64),
+                claim_amount: Uint128::from(1_u64),
                 merkle_proof: vec![
                     "7fd0f6ac4074cef9f89eedcf72459ad7b0891855f8084b54dc7de7569849d1c8".to_string(),
                     "4fab6b0ef8d988835ad968d03d61de408772d033e9ce734394bb623309c5d7fc".to_string(),
@@ -769,7 +769,7 @@ fn test_claim_by_terra_user() {
             },
         )
         .unwrap();
-    assert_eq!(false, resp.is_claimed);
+    assert!(!resp.is_claimed);
 
     // Should be a success
     success_ = app
@@ -813,7 +813,7 @@ fn test_claim_by_terra_user() {
             },
         )
         .unwrap();
-    assert_eq!(true, claim_query_resp.is_claimed);
+    assert!(claim_query_resp.is_claimed);
 
     // Check :: User state
     user_info_query_resp = app
@@ -827,7 +827,7 @@ fn test_claim_by_terra_user() {
         .unwrap();
     assert_eq!(Uint128::from(1u64), user_info_query_resp.claimed_amount);
     assert_eq!(Uint128::from(0u64), user_info_query_resp.delegated_amount);
-    assert_eq!(true, user_info_query_resp.tokens_withdrawn);
+    assert!(user_info_query_resp.tokens_withdrawn);
 
     // Check :: Contract state
     state_query_resp = app
@@ -870,7 +870,7 @@ fn test_claim_by_terra_user() {
     claim_f = app
         .execute_contract(
             Addr::unchecked("terra1757tkx08n0cqrw7p86ny9lnxsqeth0wgp0em95".to_string()),
-            airdrop_instance.clone(),
+            airdrop_instance,
             &claim_msg,
             &[],
         )
@@ -934,14 +934,14 @@ fn test_enable_claims() {
         .wrap()
         .query_wasm_smart(&airdrop_instance, &QueryMsg::Config {})
         .unwrap();
-    assert_eq!(true, resp.are_claims_enabled);
+    assert!(resp.are_claims_enabled);
 
     // ###### Should give "Claims already enabled" Error ######
 
     resp_f = app
         .execute_contract(
-            Addr::unchecked(auction_contract_address.clone()),
-            airdrop_instance.clone(),
+            Addr::unchecked(auction_contract_address),
+            airdrop_instance,
             &msg,
             &[],
         )
@@ -986,7 +986,7 @@ fn test_withdraw_airdrop_rewards() {
         .query_wasm_smart(
             &astro_instance,
             &cw20::Cw20QueryMsg::Balance {
-                address: airdrop_instance.clone().to_string(),
+                address: airdrop_instance.to_string(),
             },
         )
         .unwrap();
@@ -1034,7 +1034,7 @@ fn test_withdraw_airdrop_rewards() {
     // ################################
 
     let claim_msg = ExecuteMsg::Claim {
-        claim_amount: Uint128::from(250000000 as u64),
+        claim_amount: Uint128::from(250000000_u64),
         merkle_proof: vec![
             "7719b79a65e5aa0bbfd144cf5373138402ab1c374d9049e490b5b61c23d90065".to_string(),
             "60368f2058e0fb961a7721a241f9b973c3dd6c57e10a627071cd81abca6aa490".to_string(),
@@ -1054,7 +1054,7 @@ fn test_withdraw_airdrop_rewards() {
             },
         )
         .unwrap();
-    assert_eq!(false, resp.is_claimed);
+    assert!(!resp.is_claimed);
 
     // Should be a success
     let success_ = app
@@ -1089,7 +1089,7 @@ fn test_withdraw_airdrop_rewards() {
             },
         )
         .unwrap();
-    assert_eq!(true, claim_query_resp.is_claimed);
+    assert!(claim_query_resp.is_claimed);
 
     // Check :: User state
     let user_info_query_resp: UserInfo = app
@@ -1106,7 +1106,7 @@ fn test_withdraw_airdrop_rewards() {
         user_info_query_resp.claimed_amount
     );
     assert_eq!(Uint128::from(0u64), user_info_query_resp.delegated_amount);
-    assert_eq!(false, user_info_query_resp.tokens_withdrawn);
+    assert!(!user_info_query_resp.tokens_withdrawn);
 
     // Check :: Contract state
     let state_query_resp: State = app
@@ -1146,7 +1146,7 @@ fn test_withdraw_airdrop_rewards() {
     enable_claims(
         &mut app,
         Addr::unchecked(airdrop_instance.clone()),
-        Addr::unchecked(init_msg.owner.clone().unwrap()),
+        Addr::unchecked(init_msg.owner.unwrap()),
     );
 
     // Should be a success
@@ -1173,7 +1173,7 @@ fn test_withdraw_airdrop_rewards() {
         user_info_query_resp.claimed_amount
     );
     assert_eq!(Uint128::from(0u64), user_info_query_resp.delegated_amount);
-    assert_eq!(true, user_info_query_resp.tokens_withdrawn);
+    assert!(user_info_query_resp.tokens_withdrawn);
 }
 
 #[cfg(test)]
@@ -1252,8 +1252,8 @@ fn test_delegate_astro_to_bootstrap_auction() {
     let auction_contract_code_id = app.store_code(auction_contract);
     let auction_init_msg = astroport_periphery::auction::InstantiateMsg {
         owner: init_msg.owner.clone(),
-        astro_token_address: astro_instance.clone().to_string(),
-        airdrop_contract_address: airdrop_instance.clone().to_string(),
+        astro_token_address: astro_instance.to_string(),
+        airdrop_contract_address: airdrop_instance.to_string(),
         lockdrop_contract_address: "lockdrop_contract_address".to_string(),
         lp_tokens_vesting_duration: 2592000u64,
         init_timestamp: 1571897419u64,
@@ -1298,7 +1298,7 @@ fn test_delegate_astro_to_bootstrap_auction() {
     };
 
     // Update Config :: should be a success
-    app.execute_contract(owner.clone(), airdrop_instance.clone(), &update_msg, &[])
+    app.execute_contract(owner, airdrop_instance.clone(), &update_msg, &[])
         .unwrap();
 
     let resp: Config = app
@@ -1323,7 +1323,7 @@ fn test_delegate_astro_to_bootstrap_auction() {
     // ################################
 
     let claim_msg = ExecuteMsg::Claim {
-        claim_amount: Uint128::from(250000000 as u64),
+        claim_amount: Uint128::from(250000000_u64),
         merkle_proof: vec![
             "7719b79a65e5aa0bbfd144cf5373138402ab1c374d9049e490b5b61c23d90065".to_string(),
             "60368f2058e0fb961a7721a241f9b973c3dd6c57e10a627071cd81abca6aa490".to_string(),
@@ -1416,7 +1416,7 @@ fn test_delegate_astro_to_bootstrap_auction() {
         Uint128::from(250000000u64),
         user_info_query_resp.delegated_amount
     );
-    assert_eq!(false, user_info_query_resp.tokens_withdrawn);
+    assert!(!user_info_query_resp.tokens_withdrawn);
 
     // Check :: Airdrop :: Contract state
     let state_query_resp: State = app

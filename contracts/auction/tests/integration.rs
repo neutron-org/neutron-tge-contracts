@@ -28,7 +28,7 @@ fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
 }
 
 fn validate_and_send_funds(router: &mut App, sender: &Addr, recipient: &Addr, funds: Vec<Coin>) {
-    for fund in funds.clone() {
+    for fund in funds {
         // we cannot transfer zero coins
         if !fund.amount.is_zero() {
             router
@@ -80,7 +80,7 @@ fn create_pair(
         Addr::unchecked(OWNER),
         factory.clone(),
         &FactoryExecuteMsg::CreatePair {
-            pair_type: pair_type.unwrap_or_else(|| PairType::Xyk {}),
+            pair_type: pair_type.unwrap_or(PairType::Xyk {}),
             asset_infos: assets.clone(),
             init_params: init_param,
         },
@@ -163,13 +163,13 @@ fn instantiate_auction_contract(
 
     let auction_instantiate_msg = astroport_periphery::auction::InstantiateMsg {
         owner: Some(owner.to_string()),
-        astro_token_address: astro_token_instance.clone().into_string(),
+        astro_token_address: astro_token_instance.into_string(),
         airdrop_contract_address: airdrop_instance.to_string(),
         lockdrop_contract_address: lockdrop_instance.to_string(),
         lp_tokens_vesting_duration: 7776000u64,
-        init_timestamp: 1_000_00,
-        deposit_window: 100_000_00,
-        withdrawal_window: 5_000_00,
+        init_timestamp: 100_000,
+        deposit_window: 10_000_000,
+        withdrawal_window: 500_000,
     };
 
     // Init contract
@@ -185,7 +185,7 @@ fn instantiate_auction_contract(
         .unwrap();
 
     app.execute_contract(
-        owner.clone(),
+        owner,
         auction_instance.clone(),
         &ExecuteMsg::UpdateConfig {
             new_config: UpdateConfigMsg {
@@ -333,14 +333,7 @@ fn instantiate_pair(
     };
 
     let pair_instance = app
-        .instantiate_contract(
-            pair_code_id,
-            owner.clone(),
-            &msg,
-            &[],
-            String::from("PAIR"),
-            None,
-        )
+        .instantiate_contract(pair_code_id, owner, &msg, &[], String::from("PAIR"), None)
         .unwrap();
 
     let resp: astroport::asset::PairInfo = app
@@ -379,18 +372,18 @@ fn instantiate_airdrop_lockdrop_contracts(
     let lockdrop_code_id = app.store_code(lockdrop_contract);
 
     let airdrop_msg = astroport_periphery::airdrop::InstantiateMsg {
-        owner: Some(owner.clone().to_string()),
+        owner: Some(owner.to_string()),
         astro_token_address: astro_token_instance.clone().into_string(),
         merkle_roots: Some(vec!["merkle_roots".to_string()]),
-        from_timestamp: Some(1_000_00),
-        to_timestamp: 100_000_00,
+        from_timestamp: Some(100_000),
+        to_timestamp: 10_000_000,
     };
 
     let lockdrop_msg = astroport_periphery::lockdrop::InstantiateMsg {
         owner: Some(owner.to_string()),
-        init_timestamp: 1_000_00,
-        deposit_window: 100_000_00,
-        withdrawal_window: 5_000_00,
+        init_timestamp: 100_000,
+        deposit_window: 10_000_000,
+        withdrawal_window: 500_000,
         weekly_multiplier: 3,
         weekly_divider: 51,
         min_lock_duration: 1u64,
@@ -415,7 +408,7 @@ fn instantiate_airdrop_lockdrop_contracts(
         Addr::unchecked(owner.clone()),
         astro_token_instance.clone(),
         Uint128::from(100_000_000_000u64),
-        owner.clone().to_string(),
+        owner.to_string(),
     );
 
     // Set ASTRO airdrop incentives
@@ -434,7 +427,7 @@ fn instantiate_airdrop_lockdrop_contracts(
     // open claim period for successful deposit
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(900_00)
+        b.time = Timestamp::from_seconds(90_000)
     });
 
     let lockdrop_instance = app
@@ -452,14 +445,14 @@ fn instantiate_airdrop_lockdrop_contracts(
         app,
         owner.clone(),
         astro_token_instance.clone(),
-        Uint128::new(100_000_00u128),
+        Uint128::new(10_000_000u128),
         owner.to_string(),
     );
     app.execute_contract(
         owner.clone(),
         astro_token_instance.clone(),
         &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: lockdrop_instance.clone().to_string(),
+            spender: lockdrop_instance.to_string(),
             amount: Uint128::new(900_000_000_000),
             expires: None,
         },
@@ -482,10 +475,10 @@ fn instantiate_airdrop_lockdrop_contracts(
     .unwrap();
 
     app.execute_contract(
-        owner.clone(),
+        owner,
         astro_token_instance,
         &Cw20ExecuteMsg::Send {
-            amount: Uint128::from(100_000_00u64),
+            amount: Uint128::from(10_000_000u64),
             contract: lockdrop_instance.to_string(),
             msg: to_binary(&Cw20HookMsg::IncreaseAstroIncentives {}).unwrap(),
         },
@@ -556,7 +549,7 @@ fn instantiate_factory(
 
 // Instantiate Astroport's generator and vesting contracts
 fn instantiate_generator_and_vesting(
-    mut app: &mut App,
+    app: &mut App,
     owner: Addr,
     astro_token_instance: Addr,
     lp_token_instance: Addr,
@@ -573,7 +566,7 @@ fn instantiate_generator_and_vesting(
 
     let init_msg = astroport::vesting::InstantiateMsg {
         owner: owner.to_string(),
-        token_addr: astro_token_instance.clone().to_string(),
+        token_addr: astro_token_instance.to_string(),
     };
 
     let vesting_instance = app
@@ -588,7 +581,7 @@ fn instantiate_generator_and_vesting(
         .unwrap();
 
     mint_some_astro(
-        &mut app,
+        app,
         owner.clone(),
         astro_token_instance.clone(),
         Uint128::new(900_000_000_000),
@@ -598,7 +591,7 @@ fn instantiate_generator_and_vesting(
         owner.clone(),
         astro_token_instance.clone(),
         &Cw20ExecuteMsg::IncreaseAllowance {
-            spender: vesting_instance.clone().to_string(),
+            spender: vesting_instance.to_string(),
             amount: Uint128::new(900_000_000_000),
             expires: None,
         },
@@ -617,18 +610,18 @@ fn instantiate_generator_and_vesting(
     );
 
     let generator_code_id = app.store_code(generator_contract);
-    let whitelist_code_id = store_whitelist_code(&mut app);
-    let factory_code_id = store_factory_code(&mut app);
+    let whitelist_code_id = store_whitelist_code(app);
+    let factory_code_id = store_factory_code(app);
 
     let factory_instance =
-        instantiate_factory(&mut app, factory_code_id, token_code_id, pair_code_id, None);
+        instantiate_factory(app, factory_code_id, token_code_id, pair_code_id, None);
 
     let init_msg = astroport::generator::InstantiateMsg {
         allowed_reward_proxies: vec![],
         start_block: Uint64::from(app.block_info().height),
         astro_token: astro_token_instance.to_string(),
         tokens_per_block: Uint128::from(0u128),
-        vesting_contract: vesting_instance.clone().to_string(),
+        vesting_contract: vesting_instance.to_string(),
         owner: owner.to_string(),
         factory: factory_instance.to_string(),
         generator_controller: None,
@@ -687,11 +680,11 @@ fn instantiate_generator_and_vesting(
         .unwrap(),
     };
 
-    app.execute_contract(owner.clone(), astro_token_instance.clone(), &msg, &[])
+    app.execute_contract(owner, astro_token_instance.clone(), &msg, &[])
         .unwrap();
 
     let (_, _) = create_pair(
-        &mut app,
+        app,
         &factory_instance,
         None,
         None,
@@ -700,14 +693,14 @@ fn instantiate_generator_and_vesting(
                 denom: "uusd".to_string(),
             },
             AssetInfo::Token {
-                contract_addr: astro_token_instance.clone(),
+                contract_addr: astro_token_instance,
             },
         ],
     );
 
     // Set pool alloc points
     register_lp_tokens_in_generator(
-        &mut app,
+        app,
         &generator_instance,
         vec![PoolWithProxy {
             pool: (lp_token_instance.to_string(), Uint128::new(10)),
@@ -728,10 +721,10 @@ fn mint_some_astro(
 ) {
     let msg = cw20::Cw20ExecuteMsg::Mint {
         recipient: to.clone(),
-        amount: amount,
+        amount,
     };
     let res = app
-        .execute_contract(owner.clone(), astro_token_instance.clone(), &msg, &[])
+        .execute_contract(owner, astro_token_instance, &msg, &[])
         .unwrap();
     assert_eq!(res.events[1].attributes[1], attr("action", "mint"));
     assert_eq!(res.events[1].attributes[2], attr("to", to));
@@ -740,7 +733,7 @@ fn mint_some_astro(
 
 // Makes ASTRO & UST deposits into Auction contract
 fn make_astro_ust_deposits(
-    mut app: &mut App,
+    app: &mut App,
     auction_instance: Addr,
     auction_init_msg: InstantiateMsg,
     astro_token_instance: Addr,
@@ -752,7 +745,7 @@ fn make_astro_ust_deposits(
     // open claim period for successful deposit
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(1_000_01)
+        b.time = Timestamp::from_seconds(100_001)
     });
 
     // ######    SUCCESS :: ASTRO Successfully deposited     ######
@@ -760,7 +753,7 @@ fn make_astro_ust_deposits(
         Addr::unchecked(auction_init_msg.lockdrop_contract_address.clone()),
         astro_token_instance.clone(),
         &Cw20ExecuteMsg::Send {
-            contract: auction_instance.clone().to_string(),
+            contract: auction_instance.to_string(),
             amount: Uint128::new(100000000),
             msg: to_binary(&Cw20HookMsg::DelegateAstroTokens {
                 user_address: user1_address.to_string(),
@@ -775,7 +768,7 @@ fn make_astro_ust_deposits(
         Addr::unchecked(auction_init_msg.lockdrop_contract_address.clone()),
         astro_token_instance.clone(),
         &Cw20ExecuteMsg::Send {
-            contract: auction_instance.clone().to_string(),
+            contract: auction_instance.to_string(),
             amount: Uint128::new(65435340),
             msg: to_binary(&Cw20HookMsg::DelegateAstroTokens {
                 user_address: user2_address.to_string(),
@@ -787,10 +780,10 @@ fn make_astro_ust_deposits(
     .unwrap();
 
     app.execute_contract(
-        Addr::unchecked(auction_init_msg.lockdrop_contract_address.clone()),
-        astro_token_instance.clone(),
+        Addr::unchecked(auction_init_msg.lockdrop_contract_address),
+        astro_token_instance,
         &Cw20ExecuteMsg::Send {
-            contract: auction_instance.clone().to_string(),
+            contract: auction_instance.to_string(),
             amount: Uint128::new(76754654),
             msg: to_binary(&Cw20HookMsg::DelegateAstroTokens {
                 user_address: user3_address.to_string(),
@@ -803,7 +796,7 @@ fn make_astro_ust_deposits(
 
     // Set user balances
     validate_and_send_funds(
-        &mut app,
+        app,
         &Addr::unchecked(OWNER),
         &user1_address,
         vec![Coin {
@@ -813,7 +806,7 @@ fn make_astro_ust_deposits(
     );
 
     validate_and_send_funds(
-        &mut app,
+        app,
         &Addr::unchecked(OWNER),
         &user2_address,
         vec![Coin {
@@ -823,7 +816,7 @@ fn make_astro_ust_deposits(
     );
 
     validate_and_send_funds(
-        &mut app,
+        app,
         &Addr::unchecked(OWNER),
         &user3_address,
         vec![Coin {
@@ -860,7 +853,7 @@ fn make_astro_ust_deposits(
 
     app.execute_contract(
         user3_address.clone(),
-        auction_instance.clone(),
+        auction_instance,
         &deposit_ust_msg,
         &[Coin {
             denom: "uusd".to_string(),
@@ -876,7 +869,7 @@ fn make_astro_ust_deposits(
 fn proper_initialization_only_auction_astro() {
     let owner = Addr::unchecked(OWNER);
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -931,7 +924,7 @@ fn proper_initialization_only_auction_astro() {
 fn proper_initialization_all_contracts() {
     let owner = Addr::unchecked(OWNER);
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -986,7 +979,7 @@ fn proper_initialization_all_contracts() {
 fn test_delegate_astro_tokens_from_airdrop() {
     let owner = Addr::unchecked(OWNER);
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -1021,7 +1014,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
 
     // deposit ASTRO Msg
     let send_cw20_msg = &Cw20ExecuteMsg::Send {
-        contract: auction_instance.clone().to_string(),
+        contract: auction_instance.to_string(),
         amount: Uint128::new(100000000),
         msg: to_binary(&Cw20HookMsg::DelegateAstroTokens {
             user_address: "airdrop_recipient".to_string(),
@@ -1046,7 +1039,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
             airdrop_instance.clone(),
             astro_token_instance.clone(),
             &Cw20ExecuteMsg::Send {
-                contract: auction_instance.clone().to_string(),
+                contract: auction_instance.to_string(),
                 amount: Uint128::new(0),
                 msg: to_binary(&Cw20HookMsg::DelegateAstroTokens {
                     user_address: "airdrop_recipient".to_string(),
@@ -1075,7 +1068,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
     // open claim period for successful deposit
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(1_000_01)
+        b.time = Timestamp::from_seconds(100_001)
     });
 
     // ######    SUCCESS :: ASTRO Successfully deposited     ######
@@ -1160,12 +1153,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
         b.time = Timestamp::from_seconds(10100001)
     });
     err = app
-        .execute_contract(
-            airdrop_instance,
-            astro_token_instance.clone(),
-            &send_cw20_msg,
-            &[],
-        )
+        .execute_contract(airdrop_instance, astro_token_instance, &send_cw20_msg, &[])
         .unwrap_err();
     assert_eq!(
         err.root_cause().to_string(),
@@ -1177,7 +1165,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
 fn test_delegate_astro_tokens_from_lockdrop() {
     let owner = Addr::unchecked(OWNER);
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -1212,7 +1200,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
 
     // deposit ASTRO Msg
     let send_cw20_msg = &Cw20ExecuteMsg::Send {
-        contract: auction_instance.clone().to_string(),
+        contract: auction_instance.to_string(),
         amount: Uint128::new(100000000),
         msg: to_binary(&Cw20HookMsg::DelegateAstroTokens {
             user_address: "lockdrop_participant".to_string(),
@@ -1237,7 +1225,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
             lockdrop_instance.clone(),
             astro_token_instance.clone(),
             &Cw20ExecuteMsg::Send {
-                contract: auction_instance.clone().to_string(),
+                contract: auction_instance.to_string(),
                 amount: Uint128::new(0),
                 msg: to_binary(&Cw20HookMsg::DelegateAstroTokens {
                     user_address: "lockdrop_participant".to_string(),
@@ -1266,7 +1254,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
     // open claim period for successful deposit
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(1_000_01)
+        b.time = Timestamp::from_seconds(100_001)
     });
 
     // ######    SUCCESS :: ASTRO Successfully deposited     ######
@@ -1339,12 +1327,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
         b.time = Timestamp::from_seconds(10100001)
     });
     err = app
-        .execute_contract(
-            lockdrop_instance,
-            astro_token_instance.clone(),
-            &send_cw20_msg,
-            &[],
-        )
+        .execute_contract(lockdrop_instance, astro_token_instance, &send_cw20_msg, &[])
         .unwrap_err();
     assert_eq!(
         err.root_cause().to_string(),
@@ -1356,7 +1339,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
 fn test_update_config() {
     let owner = Addr::unchecked("owner");
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -1410,7 +1393,7 @@ fn test_update_config() {
     // Check config
     assert_eq!(update_msg.clone().owner.unwrap(), resp.owner);
     assert_eq!(
-        update_msg.clone().generator_contract.unwrap(),
+        update_msg.generator_contract.unwrap(),
         resp.generator_contract.unwrap()
     );
 }
@@ -1469,7 +1452,7 @@ fn test_deposit_ust() {
     // open claim period for successful deposit
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(1_000_01)
+        b.time = Timestamp::from_seconds(100_001)
     });
 
     // ######    ERROR :: Amount must be greater than 0     ######
@@ -1560,7 +1543,7 @@ fn test_deposit_ust() {
     err = app
         .execute_contract(
             user_address.clone(),
-            auction_instance.clone(),
+            auction_instance,
             &deposit_ust_msg,
             &coins,
         )
@@ -1633,7 +1616,7 @@ fn test_withdraw_ust() {
     // open claim period for successful deposit
     app.update_block(|b| {
         b.height += 17280;
-        b.time = Timestamp::from_seconds(1_000_01)
+        b.time = Timestamp::from_seconds(100_001)
     });
 
     // ######    SUCCESS :: UST Successfully deposited     ######
@@ -1845,7 +1828,7 @@ fn test_withdraw_ust() {
     err = app
         .execute_contract(
             user3_address.clone(),
-            auction_instance.clone(),
+            auction_instance,
             &ExecuteMsg::WithdrawUst {
                 amount: Uint128::from(10u64),
             },
@@ -1862,7 +1845,7 @@ fn test_withdraw_ust() {
 fn test_add_liquidity_to_astroport_pool() {
     let owner = Addr::unchecked("owner");
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -1948,7 +1931,7 @@ fn test_add_liquidity_to_astroport_pool() {
         lockdrop_instance.clone(),
         astro_token_instance,
         &Cw20ExecuteMsg::Send {
-            amount: Uint128::new(100_000_000000),
+            amount: Uint128::new(100_000_000_000),
             contract: auction_instance.to_string(),
             msg: to_binary(&Cw20HookMsg::IncreaseAstroIncentives {}).unwrap(),
         },
@@ -2010,7 +1993,7 @@ fn test_add_liquidity_to_astroport_pool() {
             &astroport_periphery::airdrop::QueryMsg::Config {},
         )
         .unwrap();
-    assert_eq!(true, airdrop_config_resp.are_claims_enabled);
+    assert!(airdrop_config_resp.are_claims_enabled);
 
     // Lockdrop :: Check state for claims
     let lockdrop_config_resp: astroport_periphery::lockdrop::StateResponse = app
@@ -2020,7 +2003,7 @@ fn test_add_liquidity_to_astroport_pool() {
             &astroport_periphery::lockdrop::QueryMsg::State {},
         )
         .unwrap();
-    assert_eq!(true, lockdrop_config_resp.are_claims_allowed);
+    assert!(lockdrop_config_resp.are_claims_allowed);
 
     app.update_block(|b| {
         b.height += 17280;
@@ -2099,7 +2082,7 @@ fn test_add_liquidity_to_astroport_pool() {
     err = app
         .execute_contract(
             Addr::unchecked(auction_init_msg.owner.unwrap()),
-            auction_instance.clone(),
+            auction_instance,
             &ExecuteMsg::InitPool { slippage: None },
             &[],
         )
@@ -2114,7 +2097,7 @@ fn test_add_liquidity_to_astroport_pool() {
 fn test_stake_lp_tokens() {
     let owner = Addr::unchecked("owner");
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -2161,7 +2144,7 @@ fn test_stake_lp_tokens() {
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
-        lp_token_instance.clone(),
+        lp_token_instance,
         token_code_id,
         pair_code_id,
     );
@@ -2176,7 +2159,7 @@ fn test_stake_lp_tokens() {
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         auction_instance.clone(),
         &ExecuteMsg::UpdateConfig {
-            new_config: update_msg.clone(),
+            new_config: update_msg,
         },
         &[],
     )
@@ -2189,10 +2172,10 @@ fn test_stake_lp_tokens() {
     });
 
     app.execute_contract(
-        owner.clone(),
+        owner,
         astro_token_instance,
         &Cw20ExecuteMsg::Send {
-            amount: Uint128::new(100_000_000000),
+            amount: Uint128::new(100_000_000_000),
             contract: auction_instance.to_string(),
             msg: to_binary(&Cw20HookMsg::IncreaseAstroIncentives {}).unwrap(),
         },
@@ -2336,7 +2319,7 @@ fn test_stake_lp_tokens() {
     err = app
         .execute_contract(
             Addr::unchecked(auction_init_msg.owner.unwrap()),
-            auction_instance.clone(),
+            auction_instance,
             &ExecuteMsg::StakeLpTokens {},
             &[],
         )
@@ -2351,7 +2334,7 @@ fn test_stake_lp_tokens() {
 fn test_claim_rewards() {
     let owner = Addr::unchecked("owner");
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -2411,7 +2394,7 @@ fn test_claim_rewards() {
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
-        lp_token_instance.clone(),
+        lp_token_instance,
         token_code_id,
         pair_code_id,
     );
@@ -2426,7 +2409,7 @@ fn test_claim_rewards() {
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         auction_instance.clone(),
         &ExecuteMsg::UpdateConfig {
-            new_config: update_msg.clone(),
+            new_config: update_msg,
         },
         &[],
     )
@@ -2436,7 +2419,7 @@ fn test_claim_rewards() {
         owner.clone(),
         astro_token_instance,
         &Cw20ExecuteMsg::Send {
-            amount: Uint128::new(100_000_000000),
+            amount: Uint128::new(100_000_000_000),
             contract: auction_instance.to_string(),
             msg: to_binary(&Cw20HookMsg::IncreaseAstroIncentives {}).unwrap(),
         },
@@ -2699,7 +2682,7 @@ fn test_claim_rewards() {
 fn test_withdraw_unlocked_lp_shares() {
     let owner = Addr::unchecked(OWNER);
     let mut app = mock_app(
-        owner.clone(),
+        owner,
         vec![
             Coin {
                 denom: "uusd".to_string(),
@@ -2759,7 +2742,7 @@ fn test_withdraw_unlocked_lp_shares() {
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
-        lp_token_instance.clone(),
+        lp_token_instance,
         token_code_id,
         pair_code_id,
     );
@@ -2774,7 +2757,7 @@ fn test_withdraw_unlocked_lp_shares() {
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         auction_instance.clone(),
         &ExecuteMsg::UpdateConfig {
-            new_config: update_msg.clone(),
+            new_config: update_msg,
         },
         &[],
     )
@@ -2819,10 +2802,10 @@ fn test_withdraw_unlocked_lp_shares() {
     // ######    Sucess :: Initialize ASTRO-UST Pool   ######
 
     app.execute_contract(
-        owner.clone(),
+        owner,
         astro_token_instance,
         &Cw20ExecuteMsg::Send {
-            amount: Uint128::new(100_000_000000),
+            amount: Uint128::new(100_000_000_000),
             contract: auction_instance.to_string(),
             msg: to_binary(&Cw20HookMsg::IncreaseAstroIncentives {}).unwrap(),
         },
