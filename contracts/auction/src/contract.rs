@@ -118,18 +118,18 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, StdError> {
     match msg {
-        ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
+        ExecuteMsg::UpdateConfig { new_config } => execute_update_config(deps, info, new_config),
         ExecuteMsg::Deposit { cntrn_amount } => execute_deposit(deps, env, info, cntrn_amount),
         ExecuteMsg::Withdraw {
             amount_opposite,
             amount_cntrn,
         } => execute_withdraw(deps, env, info, amount_opposite, amount_cntrn),
-        ExecuteMsg::InitPool { slippage } => handle_init_pool(deps, env, info, slippage),
-        ExecuteMsg::StakeLpTokens {} => handle_stake_lp_tokens(deps, env, info),
+        ExecuteMsg::InitPool { slippage } => execute_init_pool(deps, env, info, slippage),
+        ExecuteMsg::StakeLpTokens {} => execute_stake_lp_tokens(deps, env, info),
         ExecuteMsg::ClaimRewards { withdraw_lp_shares } => {
-            handle_claim_rewards_and_withdraw_lp_shares(deps, env, info, withdraw_lp_shares)
+            execute_claim_rewards_and_withdraw_lp_shares(deps, env, info, withdraw_lp_shares)
         }
-        ExecuteMsg::Callback(msg) => handle_callback(deps, env, info, msg),
+        ExecuteMsg::Callback(msg) => execute_callback(deps, env, info, msg),
     }
 }
 
@@ -213,7 +213,7 @@ pub fn execute_deposit(
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **msg** is an object of type [`CallbackMsg`].
-fn handle_callback(
+fn execute_callback(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -283,7 +283,7 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **new_config** is an object of type [`UpdateConfigMsg`].
-pub fn handle_update_config(
+pub fn execute_update_config(
     deps: DepsMut,
     info: MessageInfo,
     new_config: UpdateConfigMsg,
@@ -361,7 +361,7 @@ pub fn execute_withdraw(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    amount_opposite: Uint128,
+    amount_native: Uint128,
     amount_cntrn: Uint128,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
@@ -376,14 +376,19 @@ pub fn execute_withdraw(
 
     // Check :: Amount should be within the allowed withdrawal limit bounds
     let max_withdrawal_percent = allowed_withdrawal_percent(env.block.time.seconds(), &config);
-    let max_allowed_opposite = user_info.opposite_delegated * max_withdrawal_percent;
+    let max_allowed_native = user_info.opposite_delegated * max_withdrawal_percent;
     let max_allowed_cntrn = user_info.cntrn_delegated * max_withdrawal_percent;
 
-    if amount_opposite > max_allowed_opposite || amount_cntrn > max_allowed_cntrn {
+    if amount_native > max_allowed_native || amount_cntrn > max_allowed_cntrn {
         return Err(StdError::generic_err(format!(
             "Amount exceeds maximum allowed withdrawal limit of {}",
             max_withdrawal_percent
         )));
+    }
+    if amount_native.gt(&Uint128::zero()) && amount_native.gt(&Uint128::zero()) {
+        return Err(StdError::generic_err(
+            "At least one token must be withdrawn",
+        ));
     }
 
     // After deposit window is closed, we allow to withdraw only once
@@ -391,41 +396,46 @@ pub fn execute_withdraw(
         user_info.opposite_withdrawn = true;
     }
 
+    let mut res = Response::new();
+
+    if amount_native.gt(&Uint128::zero()) {
+        // Transfer Native tokens to the user
+        let transfer_msg = CosmosMsg::Bank(BankMsg::Send {
+            to_address: user_address.to_string(),
+            amount: vec![Coin {
+                denom: config.native_denom,
+                amount: amount_native,
+            }],
+        });
+        res = res.add_message(transfer_msg);
+    }
+
+    if amount_native.gt(&Uint128::zero()) {
+        // Transfer cNTRN tokens to the user
+        let cntrn_msg = Asset {
+            info: AssetInfo::Token {
+                contract_addr: config.cntrn_token_address,
+            },
+            amount: amount_cntrn,
+        }
+        .into_msg(&deps.querier, user_address.clone())?;
+        res = res.add_message(cntrn_msg);
+    }
+
     // UPDATE STATE
-    state.total_opposite_deposited -= amount_opposite;
-    user_info.opposite_delegated -= amount_opposite;
+    state.total_opposite_deposited -= amount_native;
+    user_info.opposite_delegated -= amount_native;
 
     // SAVE UPDATED STATE
     STATE.save(deps.storage, &state)?;
     USERS.save(deps.storage, &user_address, &user_info)?;
 
-    // Transfer Native tokens to the user
-    let transfer_msg = CosmosMsg::Bank(BankMsg::Send {
-        to_address: user_address.to_string(),
-        amount: vec![Coin {
-            denom: config.native_denom,
-            amount: amount_opposite,
-        }],
-    });
-
-    // Transfer cNTRN tokens to the user
-    let cntrn_msg = Asset {
-        info: AssetInfo::Token {
-            contract_addr: config.cntrn_token_address,
-        },
-        amount: amount_cntrn,
-    }
-    .into_msg(&deps.querier, user_address.clone())?;
-
-    Ok(Response::new()
-        .add_message(transfer_msg)
-        .add_message(cntrn_msg)
-        .add_attributes(vec![
-            attr("action", "Auction::ExecuteMsg::Withdraw"),
-            attr("user", user_address.to_string()),
-            attr("opposite_withdrawn", amount_opposite),
-            attr("cntrn_withdrawn", amount_cntrn),
-        ]))
+    Ok(res.add_attributes(vec![
+        attr("action", "Auction::ExecuteMsg::Withdraw"),
+        attr("user", user_address.to_string()),
+        attr("opposite_withdrawn", amount_native),
+        attr("cntrn_withdrawn", amount_cntrn),
+    ]))
 }
 
 /// Allow withdrawal percent. Returns a default object of type [`Response`].
@@ -472,7 +482,7 @@ fn allowed_withdrawal_percent(current_timestamp: u64, config: &Config) -> Decima
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **slippage** is an optional object of type [`Decimal`].
-pub fn handle_init_pool(
+pub fn execute_init_pool(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -611,7 +621,7 @@ fn build_provide_liquidity_to_lp_pool_msg(
 /// * **env** is an object of type [`Env`].
 ///
 /// * **info** is an object of type [`MessageInfo`].
-pub fn handle_stake_lp_tokens(
+pub fn execute_stake_lp_tokens(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -691,7 +701,7 @@ pub fn handle_stake_lp_tokens(
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **withdraw_lp_shares** is an optional object of type [`Uint128`].
-pub fn handle_claim_rewards_and_withdraw_lp_shares(
+pub fn execute_claim_rewards_and_withdraw_lp_shares(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
