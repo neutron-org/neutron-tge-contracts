@@ -590,7 +590,7 @@ fn build_provide_liquidity_to_lp_pool_msg(
             contract_addr: cntrn_token_address,
         },
     };
-    let native_denom = config.native_denom.clone();
+    let native_denom = config.native_denom;
 
     let native = Asset {
         amount: native_amount,
