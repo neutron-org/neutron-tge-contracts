@@ -114,8 +114,6 @@ pub struct Config {
     pub pool_info: Option<PoolInfo>,
     ///  Astroport Generator contract with which ASTRO-UST LP Tokens are staked
     pub generator_contract: Option<Addr>,
-    /// Total ASTRO token rewards to be used to incentivize bootstrap auction participants
-    pub cntrn_incentive_amount: Option<Uint128>,
     ///  Number of seconds over which LP Tokens are vested
     pub lp_tokens_vesting_duration: u64,
     /// Timestamp since which ASTRO / UST deposits will be allowed
@@ -185,10 +183,6 @@ pub struct UserInfoResponse {
     pub claimed_lp_shares: Uint128,
     /// LP shares that are available to withdraw
     pub withdrawable_lp_shares: Option<Uint128>,
-    /// User's cNTRN rewards for participating in the auction
-    pub auction_incentive_amount: Option<Uint128>,
-    /// cNTRN tokens were transferred to user
-    pub cntrn_incentive_transferred: bool,
     /// Claimable cNTRN staking rewards
     pub claimable_generator_cntrn: Uint128,
     /// cNTRN staking incentives (LP token staking) withdrawn by the user

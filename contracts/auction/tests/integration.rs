@@ -154,22 +154,23 @@ fn instantiate_auction_contract(
     pair_instance: Addr,
 ) -> (Addr, InstantiateMsg) {
     let auction_contract = Box::new(ContractWrapper::new(
-        astroport_auction::contract::execute,
-        astroport_auction::contract::instantiate,
-        astroport_auction::contract::query,
+        neutron_auction::contract::execute,
+        neutron_auction::contract::instantiate,
+        neutron_auction::contract::query,
     ));
 
     let auction_code_id = app.store_code(auction_contract);
 
     let auction_instantiate_msg = astroport_periphery::auction::InstantiateMsg {
         owner: Some(owner.to_string()),
-        cntrn_contract: astro_token_instance.clone().into_string(),
+        cntrn_token_contract: astro_token_instance.clone().into_string(),
         airdrop_contract_address: airdrop_instance.to_string(),
         lockdrop_contract_address: lockdrop_instance.to_string(),
         lp_tokens_vesting_duration: 7776000u64,
         init_timestamp: 1_000_00,
         deposit_window: 100_000_00,
         withdrawal_window: 5_000_00,
+        native_denom: "usdc".to_string(),
     };
 
     // Init contract
@@ -200,21 +201,21 @@ fn instantiate_auction_contract(
     (auction_instance, auction_instantiate_msg)
 }
 
-fn init_auction_astro_contracts(app: &mut App) -> (Addr, Addr, Addr, Addr, InstantiateMsg) {
+fn init_auction_cntrn_contracts(app: &mut App) -> (Addr, Addr, Addr, Addr, InstantiateMsg) {
     let owner = Addr::unchecked("contract_owner");
-    let astro_token_instance = instantiate_astro_token(app, owner.clone());
+    let cntrn_token_instance = instantiate_astro_token(app, owner.clone());
 
     // Instantiate LP Pair &  Airdrop / Lockdrop Contracts
     let (pair_instance, _, _, _) =
-        instantiate_pair(app, owner.clone(), astro_token_instance.clone());
+        instantiate_pair(app, owner.clone(), cntrn_token_instance.clone());
     let (airdrop_instance, lockdrop_instance) =
-        instantiate_airdrop_lockdrop_contracts(app, owner.clone(), astro_token_instance.clone());
+        instantiate_airdrop_lockdrop_contracts(app, owner.clone(), cntrn_token_instance.clone());
 
     // Instantiate Auction Contract
     let (auction_instance, auction_instantiate_msg) = instantiate_auction_contract(
         app,
         owner,
-        astro_token_instance.clone(),
+        cntrn_token_instance.clone(),
         airdrop_instance.clone(),
         lockdrop_instance.clone(),
         pair_instance,
@@ -224,7 +225,7 @@ fn init_auction_astro_contracts(app: &mut App) -> (Addr, Addr, Addr, Addr, Insta
         airdrop_instance,
         lockdrop_instance,
         auction_instance,
-        astro_token_instance,
+        cntrn_token_instance,
         auction_instantiate_msg,
     )
 }
@@ -234,19 +235,19 @@ fn init_all_contracts(
     app: &mut App,
 ) -> (Addr, Addr, Addr, Addr, Addr, Addr, InstantiateMsg, u64, u64) {
     let owner = Addr::unchecked(OWNER);
-    let astro_token_instance = instantiate_astro_token(app, owner.clone());
+    let cntrn_token_instance = instantiate_astro_token(app, owner.clone());
 
     // Instantiate LP Pair &  Airdrop / Lockdrop Contracts
     let (pair_instance, lp_token_instance, lp_token_code_id, pair_code_id) =
-        instantiate_pair(app, owner.clone(), astro_token_instance.clone());
+        instantiate_pair(app, owner.clone(), cntrn_token_instance.clone());
     let (airdrop_instance, lockdrop_instance) =
-        instantiate_airdrop_lockdrop_contracts(app, owner.clone(), astro_token_instance.clone());
+        instantiate_airdrop_lockdrop_contracts(app, owner.clone(), cntrn_token_instance.clone());
 
     // Instantiate Auction Contract
     let (auction_instance, auction_instantiate_msg) = instantiate_auction_contract(
         app,
         owner.clone(),
-        astro_token_instance.clone(),
+        cntrn_token_instance.clone(),
         airdrop_instance.clone(),
         lockdrop_instance.clone(),
         pair_instance.clone(),
@@ -283,7 +284,7 @@ fn init_all_contracts(
 
     (
         auction_instance,
-        astro_token_instance,
+        cntrn_token_instance,
         airdrop_instance,
         lockdrop_instance,
         pair_instance,
@@ -321,7 +322,7 @@ fn instantiate_pair(
     let msg = astroport::pair::InstantiateMsg {
         asset_infos: [
             astroport::asset::AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
             },
             astroport::asset::AssetInfo::Token {
                 contract_addr: astro_token_instance,
@@ -409,8 +410,8 @@ fn instantiate_airdrop_lockdrop_contracts(
         )
         .unwrap();
 
-    // mint ASTRO for to Owner
-    mint_some_astro(
+    // mint cNTRN for to Owner
+    mint_some_cntrn(
         app,
         Addr::unchecked(owner.clone()),
         astro_token_instance.clone(),
@@ -448,7 +449,7 @@ fn instantiate_airdrop_lockdrop_contracts(
         )
         .unwrap();
 
-    mint_some_astro(
+    mint_some_cntrn(
         app,
         owner.clone(),
         astro_token_instance.clone(),
@@ -587,7 +588,7 @@ fn instantiate_generator_and_vesting(
         )
         .unwrap();
 
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         owner.clone(),
         astro_token_instance.clone(),
@@ -697,7 +698,7 @@ fn instantiate_generator_and_vesting(
         None,
         [
             AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
             },
             AssetInfo::Token {
                 contract_addr: astro_token_instance.clone(),
@@ -718,11 +719,11 @@ fn instantiate_generator_and_vesting(
     (generator_instance, vesting_instance)
 }
 
-// Mints some ASTRO to "to" recipient
-fn mint_some_astro(
+// Mints some cNTRN to "to" recipient
+fn mint_some_cntrn(
     app: &mut App,
     owner: Addr,
-    astro_token_instance: Addr,
+    cntrn_token_instance: Addr,
     amount: Uint128,
     to: String,
 ) {
@@ -731,19 +732,19 @@ fn mint_some_astro(
         amount: amount,
     };
     let res = app
-        .execute_contract(owner.clone(), astro_token_instance.clone(), &msg, &[])
+        .execute_contract(owner.clone(), cntrn_token_instance.clone(), &msg, &[])
         .unwrap();
     assert_eq!(res.events[1].attributes[1], attr("action", "mint"));
     assert_eq!(res.events[1].attributes[2], attr("to", to));
     assert_eq!(res.events[1].attributes[3], attr("amount", amount));
 }
 
-// Makes ASTRO & UST deposits into Auction contract
-fn make_astro_ust_deposits(
+// Makes cNTRN & NATIVE deposits into Auction contract
+fn make_cntrn_native_deposits(
     mut app: &mut App,
     auction_instance: Addr,
     auction_init_msg: InstantiateMsg,
-    astro_token_instance: Addr,
+    cntrn_token_instance: Addr,
 ) -> (Addr, Addr, Addr) {
     let user1_address = Addr::unchecked("user1");
     let user2_address = Addr::unchecked("user2");
@@ -755,10 +756,10 @@ fn make_astro_ust_deposits(
         b.time = Timestamp::from_seconds(1_000_01)
     });
 
-    // ######    SUCCESS :: ASTRO Successfully deposited     ######
+    // ######    SUCCESS :: cNTRN Successfully deposited     ######
     app.execute_contract(
         Addr::unchecked(auction_init_msg.lockdrop_contract_address.clone()),
-        astro_token_instance.clone(),
+        cntrn_token_instance.clone(),
         &Cw20ExecuteMsg::Send {
             contract: auction_instance.clone().to_string(),
             amount: Uint128::new(100000000),
@@ -773,7 +774,7 @@ fn make_astro_ust_deposits(
 
     app.execute_contract(
         Addr::unchecked(auction_init_msg.lockdrop_contract_address.clone()),
-        astro_token_instance.clone(),
+        cntrn_token_instance.clone(),
         &Cw20ExecuteMsg::Send {
             contract: auction_instance.clone().to_string(),
             amount: Uint128::new(65435340),
@@ -788,7 +789,7 @@ fn make_astro_ust_deposits(
 
     app.execute_contract(
         Addr::unchecked(auction_init_msg.lockdrop_contract_address.clone()),
-        astro_token_instance.clone(),
+        cntrn_token_instance.clone(),
         &Cw20ExecuteMsg::Send {
             contract: auction_instance.clone().to_string(),
             amount: Uint128::new(76754654),
@@ -807,7 +808,7 @@ fn make_astro_ust_deposits(
         &Addr::unchecked(OWNER),
         &user1_address,
         vec![Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::new(20000000u128),
         }],
     );
@@ -817,7 +818,7 @@ fn make_astro_ust_deposits(
         &Addr::unchecked(OWNER),
         &user2_address,
         vec![Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::new(5435435u128),
         }],
     );
@@ -827,13 +828,15 @@ fn make_astro_ust_deposits(
         &Addr::unchecked(OWNER),
         &user3_address,
         vec![Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::new(43534534u128),
         }],
     );
 
     // deposit UST Msg
-    let deposit_ust_msg = &ExecuteMsg::DepositUst_delete {};
+    let deposit_ust_msg = &ExecuteMsg::Deposit {
+        cntrn_amount: Uint128::zero(),
+    };
 
     // ######    SUCCESS :: UST Successfully deposited     ######
     app.execute_contract(
@@ -841,7 +844,7 @@ fn make_astro_ust_deposits(
         auction_instance.clone(),
         &deposit_ust_msg,
         &[Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::from(432423u128),
         }],
     )
@@ -852,7 +855,7 @@ fn make_astro_ust_deposits(
         auction_instance.clone(),
         &deposit_ust_msg,
         &[Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::from(454353u128),
         }],
     )
@@ -863,7 +866,7 @@ fn make_astro_ust_deposits(
         auction_instance.clone(),
         &deposit_ust_msg,
         &[Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::from(5643543u128),
         }],
     )
@@ -879,7 +882,7 @@ fn proper_initialization_only_auction_astro() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -888,7 +891,7 @@ fn proper_initialization_only_auction_astro() {
             },
         ],
     );
-    let (_, _, auction_instance, _, auction_init_msg) = init_auction_astro_contracts(&mut app);
+    let (_, _, auction_instance, _, auction_init_msg) = init_auction_cntrn_contracts(&mut app);
 
     let resp: Config = app
         .wrap()
@@ -897,7 +900,10 @@ fn proper_initialization_only_auction_astro() {
 
     // Check config
     assert_eq!(Addr::unchecked(auction_init_msg.owner.unwrap()), resp.owner);
-    assert_eq!(auction_init_msg.cntrn_contract, resp.astro_token_address);
+    assert_eq!(
+        auction_init_msg.cntrn_token_contract,
+        resp.cntrn_token_address
+    );
     assert_eq!(
         auction_init_msg.airdrop_contract_address,
         resp.airdrop_contract_address
@@ -931,7 +937,7 @@ fn proper_initialization_all_contracts() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -949,7 +955,10 @@ fn proper_initialization_all_contracts() {
 
     // Check config
     assert_eq!(auction_init_msg.owner, Some(resp.owner.to_string()));
-    assert_eq!(auction_init_msg.cntrn_contract, resp.astro_token_address);
+    assert_eq!(
+        auction_init_msg.cntrn_token_contract,
+        resp.cntrn_token_address
+    );
     assert_eq!(
         auction_init_msg.airdrop_contract_address,
         resp.airdrop_contract_address
@@ -983,7 +992,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -993,10 +1002,10 @@ fn test_delegate_astro_tokens_from_airdrop() {
         ],
     );
     let (airdrop_instance, _, auction_instance, astro_token_instance, auction_init_msg) =
-        init_auction_astro_contracts(&mut app);
+        init_auction_cntrn_contracts(&mut app);
 
     // mint ASTRO for to Airdrop Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -1005,7 +1014,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
     );
 
     // mint ASTRO for to Wrong Airdrop Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.unwrap()),
         astro_token_instance.clone(),
@@ -1107,7 +1116,6 @@ fn test_delegate_astro_tokens_from_airdrop() {
     assert_eq!(Uint128::from(0u64), user_resp.native_delegated);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
-    assert_eq!(None, user_resp.auction_incentive_amount);
 
     // ######    SUCCESS :: ASTRO Successfully deposited again   ######
     app.execute_contract(
@@ -1144,7 +1152,6 @@ fn test_delegate_astro_tokens_from_airdrop() {
     assert_eq!(Uint128::from(0u64), user_resp.native_delegated);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
-    assert_eq!(None, user_resp.auction_incentive_amount);
 
     // ######    ERROR :: Deposit window closed     ######
 
@@ -1174,7 +1181,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -1184,10 +1191,10 @@ fn test_delegate_astro_tokens_from_lockdrop() {
         ],
     );
     let (_, lockdrop_instance, auction_instance, astro_token_instance, auction_init_msg) =
-        init_auction_astro_contracts(&mut app);
+        init_auction_cntrn_contracts(&mut app);
 
     // mint ASTRO for to Lockdrop Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -1196,7 +1203,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
     );
 
     // mint ASTRO for to Wrong Lockdrop Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.unwrap()),
         astro_token_instance.clone(),
@@ -1353,7 +1360,7 @@ fn test_update_config() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -1362,7 +1369,7 @@ fn test_update_config() {
             },
         ],
     );
-    let (_, _, auction_instance, _, auction_init_msg) = init_auction_astro_contracts(&mut app);
+    let (_, _, auction_instance, _, auction_init_msg) = init_auction_cntrn_contracts(&mut app);
 
     let update_msg = UpdateConfigMsg {
         owner: Some("new_owner".to_string()),
@@ -1416,7 +1423,7 @@ fn test_deposit_ust() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -1425,7 +1432,7 @@ fn test_deposit_ust() {
             },
         ],
     );
-    let (_, _, auction_instance, _, _) = init_auction_astro_contracts(&mut app);
+    let (_, _, auction_instance, _, _) = init_auction_cntrn_contracts(&mut app);
     let user_address = Addr::unchecked("user");
 
     // Set user balances
@@ -1434,15 +1441,17 @@ fn test_deposit_ust() {
         &owner,
         &user_address,
         vec![Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::new(20_000_000u128),
         }],
     );
 
-    // deposit UST Msg
-    let deposit_ust_msg = &ExecuteMsg::DepositUst_delete {};
+    // deposit NATIVE Msg
+    let deposit_ust_msg = &ExecuteMsg::Deposit {
+        cntrn_amount: Uint128::zero(),
+    };
     let coins = [Coin {
-        denom: "uusd".to_string(),
+        denom: "usdc".to_string(),
         amount: Uint128::from(10000u128),
     }];
 
@@ -1473,7 +1482,7 @@ fn test_deposit_ust() {
             auction_instance.clone(),
             &deposit_ust_msg,
             &[Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::from(0u128),
             }],
         )
@@ -1515,7 +1524,6 @@ fn test_deposit_ust() {
     assert_eq!(Uint128::from(10000u64), user_resp.native_delegated);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
-    assert_eq!(None, user_resp.auction_incentive_amount);
 
     // ######    SUCCESS :: UST Successfully deposited again     ######
     app.execute_contract(
@@ -1572,7 +1580,7 @@ fn test_withdraw_ust() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -1581,7 +1589,7 @@ fn test_withdraw_ust() {
             },
         ],
     );
-    let (_, _, auction_instance, _, _) = init_auction_astro_contracts(&mut app);
+    let (_, _, auction_instance, _, _) = init_auction_cntrn_contracts(&mut app);
     let user1_address = Addr::unchecked("user1");
     let user2_address = Addr::unchecked("user2");
     let user3_address = Addr::unchecked("user3");
@@ -1592,7 +1600,7 @@ fn test_withdraw_ust() {
         &owner,
         &user1_address,
         vec![Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::new(20_000_000u128),
         }],
     );
@@ -1602,7 +1610,7 @@ fn test_withdraw_ust() {
         &owner,
         &user2_address,
         vec![Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::new(20_000_000u128),
         }],
     );
@@ -1612,15 +1620,17 @@ fn test_withdraw_ust() {
         &owner,
         &user3_address,
         vec![Coin {
-            denom: "uusd".to_string(),
+            denom: "usdc".to_string(),
             amount: Uint128::new(20_000_000u128),
         }],
     );
 
-    // deposit UST Msg
-    let deposit_ust_msg = &ExecuteMsg::DepositUst_delete {};
+    // deposit NATIVE Msg
+    let deposit_ust_msg = &ExecuteMsg::Deposit {
+        cntrn_amount: Uint128::zero(),
+    };
     let coins = [Coin {
-        denom: "uusd".to_string(),
+        denom: "usdc".to_string(),
         amount: Uint128::from(10000u128),
     }];
 
@@ -1653,12 +1663,13 @@ fn test_withdraw_ust() {
     )
     .unwrap();
 
-    // ######    SUCCESS :: UST Successfully withdrawn (when withdrawals allowed)     ######
+    // ######    SUCCESS :: cNTRN & NATIVE Successfully withdrawn (when withdrawals allowed)     ######
     app.execute_contract(
         user1_address.clone(),
         auction_instance.clone(),
         &ExecuteMsg::Withdraw {
             amount_opposite: Uint128::from(10000u64),
+            amount_cntrn: Uint128::from(1000u64),
         },
         &[],
     )
@@ -1704,6 +1715,7 @@ fn test_withdraw_ust() {
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
                 amount_opposite: Uint128::from(10000u64),
+                amount_cntrn: Uint128::from(10000u64),
             },
             &[],
         )
@@ -1720,6 +1732,7 @@ fn test_withdraw_ust() {
         auction_instance.clone(),
         &ExecuteMsg::Withdraw {
             amount_opposite: Uint128::from(5000u64),
+            amount_cntrn: Uint128::from(5000u64),
         },
         &[],
     )
@@ -1751,6 +1764,7 @@ fn test_withdraw_ust() {
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
                 amount_opposite: Uint128::from(10u64),
+                amount_cntrn: Uint128::from(10u64),
             },
             &[],
         )
@@ -1774,6 +1788,7 @@ fn test_withdraw_ust() {
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
                 amount_opposite: Uint128::from(10000u64),
+                amount_cntrn: Uint128::from(10000u64),
             },
             &[],
         )
@@ -1783,13 +1798,14 @@ fn test_withdraw_ust() {
         "Generic error: Amount exceeds maximum allowed withdrawal limit of 0.497998"
     );
 
-    // ######    SUCCESS :: Withdraw some UST successfully   ######
+    // ######    SUCCESS :: Withdraw some NATIVE successfully   ######
 
     app.execute_contract(
         user2_address.clone(),
         auction_instance.clone(),
         &ExecuteMsg::Withdraw {
             amount_opposite: Uint128::from(2000u64),
+            amount_cntrn: Uint128::from(2000u64),
         },
         &[],
     )
@@ -1821,6 +1837,7 @@ fn test_withdraw_ust() {
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
                 amount_opposite: Uint128::from(10u64),
+                amount_cntrn: Uint128::from(10u64),
             },
             &[],
         )
@@ -1842,6 +1859,7 @@ fn test_withdraw_ust() {
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
                 amount_opposite: Uint128::from(10u64),
+                amount_cntrn: Uint128::from(10u64),
             },
             &[],
         )
@@ -1859,7 +1877,7 @@ fn test_add_liquidity_to_astroport_pool() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -1881,7 +1899,7 @@ fn test_add_liquidity_to_astroport_pool() {
     ) = init_all_contracts(&mut app);
 
     // mint ASTRO to Lockdrop Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -1889,7 +1907,7 @@ fn test_add_liquidity_to_astroport_pool() {
         auction_init_msg.lockdrop_contract_address.to_string(),
     );
 
-    let (user1_address, user2_address, user3_address) = make_astro_ust_deposits(
+    let (user1_address, user2_address, user3_address) = make_cntrn_native_deposits(
         &mut app,
         auction_instance.clone(),
         auction_init_msg.clone(),
@@ -1930,7 +1948,7 @@ fn test_add_liquidity_to_astroport_pool() {
     });
 
     // mint ASTRO to owner
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -2041,10 +2059,6 @@ fn test_add_liquidity_to_astroport_pool() {
         Some(Uint128::from(367554u64)),
         user1info_resp.withdrawable_lp_shares
     );
-    assert_eq!(
-        Some(Uint128::from(23955835814u64)),
-        user1info_resp.auction_incentive_amount
-    );
     assert!(user1info_resp.generator_cntrn_debt.is_zero());
 
     // Auction :: Check user-2 state
@@ -2064,10 +2078,6 @@ fn test_add_liquidity_to_astroport_pool() {
         Some(Uint128::from(260645u64)),
         user2info_resp.withdrawable_lp_shares
     );
-    assert_eq!(
-        Some(Uint128::from(16987888347u64)),
-        user2info_resp.auction_incentive_amount
-    );
 
     // Auction :: Check user-3 state
     let user3info_resp: astroport_periphery::auction::UserInfoResponse = app
@@ -2085,10 +2095,6 @@ fn test_add_liquidity_to_astroport_pool() {
     assert_eq!(
         Some(Uint128::from(906100u64)),
         user3info_resp.withdrawable_lp_shares
-    );
-    assert_eq!(
-        Some(Uint128::from(59056273323u64)),
-        user3info_resp.auction_incentive_amount
     );
 
     // ######    ERROR :: Liquidity already added   ######
@@ -2114,7 +2120,7 @@ fn test_stake_lp_tokens() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -2138,7 +2144,7 @@ fn test_stake_lp_tokens() {
     let owner = Addr::unchecked(auction_init_msg.owner.clone().unwrap());
 
     // mint ASTRO to Lockdrop Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -2146,7 +2152,7 @@ fn test_stake_lp_tokens() {
         auction_init_msg.lockdrop_contract_address.to_string(),
     );
 
-    let (user1_address, user2_address, user3_address) = make_astro_ust_deposits(
+    let (user1_address, user2_address, user3_address) = make_cntrn_native_deposits(
         &mut app,
         auction_instance.clone(),
         auction_init_msg.clone(),
@@ -2280,10 +2286,6 @@ fn test_stake_lp_tokens() {
         Some(Uint128::from(367554u64)),
         user1info_resp.withdrawable_lp_shares
     );
-    assert_eq!(
-        Some(Uint128::from(23955835814u64)),
-        user1info_resp.auction_incentive_amount
-    );
 
     // Auction :: Check user-2 state
     let user2info_resp: astroport_periphery::auction::UserInfoResponse = app
@@ -2303,10 +2305,6 @@ fn test_stake_lp_tokens() {
         Some(Uint128::from(260645u64)),
         user2info_resp.withdrawable_lp_shares
     );
-    assert_eq!(
-        Some(Uint128::from(16987888347u64)),
-        user2info_resp.auction_incentive_amount
-    );
 
     // Auction :: Check user-3 state
     let user3info_resp: astroport_periphery::auction::UserInfoResponse = app
@@ -2325,10 +2323,6 @@ fn test_stake_lp_tokens() {
     assert_eq!(
         Some(Uint128::from(906100u64)),
         user3info_resp.withdrawable_lp_shares
-    );
-    assert_eq!(
-        Some(Uint128::from(59056273323u64)),
-        user3info_resp.auction_incentive_amount
     );
 
     // ######    ERROR :: Already staked   ######
@@ -2354,7 +2348,7 @@ fn test_claim_rewards() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000u128),
             },
             Coin {
@@ -2382,7 +2376,7 @@ fn test_claim_rewards() {
     };
 
     // mint ASTRO to Lockdrop Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -2391,7 +2385,7 @@ fn test_claim_rewards() {
     );
 
     // mint ASTRO to owner
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -2399,7 +2393,7 @@ fn test_claim_rewards() {
         owner.to_string(),
     );
 
-    let (user1_address, user2_address, user3_address) = make_astro_ust_deposits(
+    let (user1_address, user2_address, user3_address) = make_cntrn_native_deposits(
         &mut app,
         auction_instance.clone(),
         auction_init_msg.clone(),
@@ -2702,7 +2696,7 @@ fn test_withdraw_unlocked_lp_shares() {
         owner.clone(),
         vec![
             Coin {
-                denom: "uusd".to_string(),
+                denom: "usdc".to_string(),
                 amount: Uint128::new(100_000_000_000_000u128),
             },
             Coin {
@@ -2730,7 +2724,7 @@ fn test_withdraw_unlocked_lp_shares() {
     };
 
     // mint ASTRO to Lockdrop Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -2739,7 +2733,7 @@ fn test_withdraw_unlocked_lp_shares() {
     );
 
     // mint ASTRO to Auction Contract
-    mint_some_astro(
+    mint_some_cntrn(
         &mut app,
         Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
         astro_token_instance.clone(),
@@ -2747,7 +2741,7 @@ fn test_withdraw_unlocked_lp_shares() {
         auction_instance.to_string(),
     );
 
-    let (user1_address, user2_address, user3_address) = make_astro_ust_deposits(
+    let (user1_address, user2_address, user3_address) = make_cntrn_native_deposits(
         &mut app,
         auction_instance.clone(),
         auction_init_msg.clone(),

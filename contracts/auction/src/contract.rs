@@ -69,7 +69,6 @@ pub fn instantiate(
         )?,
         pool_info: None,
         generator_contract: None,
-        cntrn_incentive_amount: None,
         lp_tokens_vesting_duration: msg.lp_tokens_vesting_duration,
         init_timestamp: msg.init_timestamp,
         deposit_window: msg.deposit_window,
@@ -723,22 +722,7 @@ pub fn execute_claim_rewards_and_withdraw_lp_shares(
         // Calculate user's LP shares & cNTRN incentives (if possible)
         if user_info.lp_shares.is_none() {
             update_user_lp_shares(&state, lp_balance, &mut user_info)?;
-            update_user_cntrn_incentives(
-                config.cntrn_incentive_amount,
-                user_info.lp_shares,
-                lp_balance,
-                &mut user_info,
-            )?;
-            USERS.save(deps.storage, &user_address, &user_info)?;
-        }
-        // If user's cNTRN incentives are not set, but the total cNTRN incentives have been set
-        if config.cntrn_incentive_amount.is_some() && user_info.auction_incentive_amount.is_none() {
-            update_user_cntrn_incentives(
-                config.cntrn_incentive_amount,
-                user_info.lp_shares,
-                lp_balance,
-                &mut user_info,
-            )?;
+
             USERS.save(deps.storage, &user_address, &user_info)?;
         }
 
@@ -864,31 +848,6 @@ fn update_user_lp_shares(
     )) * lp_balance;
     user_info.lp_shares = Some(user_lp_share);
 
-    Ok(())
-}
-
-/// Calculates user's cNTRN incentives for auction participation
-/// Formula, == User's auction incentives (cNTRN) = (User's total LP shares / Total LP shares minted) * Total cNTRN auction incentives
-/// ## Params
-/// * **total_cntrn_incentives** is an optional object of type [`Uint128`].
-///
-/// * **user_lp_share** is an optional object of type [`Uint128`].
-///
-/// * **lp_balance** is an object of type [`Uint128`].
-///
-/// * **user_info** is an object of type [`UserInfo`].
-fn update_user_cntrn_incentives(
-    total_cntrn_incentives: Option<Uint128>,
-    user_lp_share: Option<Uint128>,
-    lp_balance: Uint128,
-    mut user_info: &mut UserInfo,
-) -> StdResult<()> {
-    if let Some(total_cntrn_incentives) = total_cntrn_incentives {
-        if let Some(user_lp_share) = user_lp_share {
-            user_info.auction_incentive_amount =
-                Some(Decimal::from_ratio(user_lp_share, lp_balance) * total_cntrn_incentives);
-        }
-    }
     Ok(())
 }
 
@@ -1201,8 +1160,6 @@ fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<User
         lp_shares: user_info.lp_shares,
         claimed_lp_shares: user_info.claimed_lp_shares,
         withdrawable_lp_shares: None,
-        auction_incentive_amount: user_info.auction_incentive_amount,
-        cntrn_incentive_transferred: user_info.cntrn_incentive_transferred,
         generator_cntrn_debt: user_info.generator_cntrn_debt,
         claimable_generator_cntrn: Uint128::zero(),
         user_gen_cntrn_per_share: user_info.user_gen_cntrn_per_share,
@@ -1220,18 +1177,6 @@ fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<User
             if user_info.lp_shares.is_none() {
                 update_user_lp_shares(&state, lp_balance, &mut user_info)?;
                 user_info_response.lp_shares = user_info.lp_shares;
-            }
-            // If user's cNTRN incentives are not set, but the total cNTRN incentives have been set
-            if config.cntrn_incentive_amount.is_some()
-                && user_info.auction_incentive_amount.is_none()
-            {
-                update_user_cntrn_incentives(
-                    config.cntrn_incentive_amount,
-                    user_info.lp_shares,
-                    lp_balance,
-                    &mut user_info,
-                )?;
-                user_info_response.auction_incentive_amount = user_info.auction_incentive_amount;
             }
             let neutron_lp_amount = user_info.lp_shares.unwrap() - user_info.claimed_lp_shares;
             // If LP tokens are staked and user has a > 0 LP share balance, we calculate user's claimable cNTRN staking rewards
@@ -1277,49 +1222,5 @@ fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<User
         }
     }
 
-    if user_info_response.auction_incentive_amount.is_none() {
-        user_info_response.auction_incentive_amount =
-            calculate_auction_reward_for_user(&state, &user_info, config.cntrn_incentive_amount);
-    }
-
     Ok(user_info_response)
-}
-/// Calculates cNTRN tokens receivable by a user for participating (providing NATIVE & cNTRN) in the bootstraping phase of the CW20-NATIVE Pool
-/// ## Params
-/// * **state** is an object of type [`State`].
-///
-/// * **user_info** is an object of type [`UserInfo`].
-///
-/// * **total_cntrn_rewards** is an optional object of type [`Uint128`].
-fn calculate_auction_reward_for_user(
-    state: &State,
-    user_info: &UserInfo,
-    total_cntrn_rewards: Option<Uint128>,
-) -> Option<Uint128> {
-    if !user_info.cntrn_delegated.is_zero() || !user_info.opposite_delegated.is_zero() {
-        if let Some(total_cntrn_rewards) = total_cntrn_rewards {
-            let mut user_cntrn_incentives = Uint128::zero();
-
-            // cNTRN incentives from cNTRN delegated
-            if state.total_cntrn_deposited > Uint128::zero() {
-                let cntrn_incentives_from_cntrn = Decimal::from_ratio(
-                    user_info.cntrn_delegated,
-                    state.total_cntrn_deposited * Uint128::new(2),
-                ) * total_cntrn_rewards;
-                user_cntrn_incentives += cntrn_incentives_from_cntrn;
-            }
-
-            // cNTRN incentives from NATIVE delegated
-            if state.total_opposite_deposited > Uint128::zero() {
-                let cntrn_incentives_from_native = Decimal::from_ratio(
-                    user_info.opposite_delegated,
-                    state.total_opposite_deposited * Uint128::new(2),
-                ) * total_cntrn_rewards;
-                user_cntrn_incentives += cntrn_incentives_from_native;
-            }
-            return Some(user_cntrn_incentives);
-        }
-    }
-
-    None
 }
