@@ -51,7 +51,7 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum Cw20HookMsg {
     DelegateAstroTokens { user_address: String },
-    IncreaseAstroIncentives {},
+    IncreaseNTRNIncentives {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

@@ -22,11 +22,6 @@ pub const USER_INFO: Map<&Addr, UserInfo> = Map::new("users");
 pub const LOCKUP_INFO: Map<(&Addr, &Addr, U64Key), LockupInfoV2> = Map::new("lockup_position");
 /// Old LOCKUP_INFO storage interface for backward compatibility
 pub const OLD_LOCKUP_INFO: Map<(&Addr, &Addr, U64Key), LockupInfoV1> = Map::new("lockup_position");
-/// Total received asset reward by lockdrop contract per lp token share
-pub const TOTAL_ASSET_REWARD_INDEX: Map<&Addr, Decimal256> = Map::new("total_asset_reward_index");
-/// Last used total asset reward index for user claim ( lp_addr -> user -> duration )
-pub const USERS_ASSET_REWARD_INDEX: Map<(&Addr, &Addr, U64Key), Decimal256> =
-    Map::new("users_asset_reward_index");
 
 pub trait CompatibleLoader<K, R> {
     fn compatible_load(&self, deps: Deps, key: K, generator: &Option<Addr>) -> StdResult<R>;
@@ -80,8 +75,8 @@ impl CompatibleLoader<(&Addr, &Addr, U64Key), LockupInfoV2>
                 lp_units_locked: old_lockup_info.lp_units_locked,
                 astroport_lp_transferred: old_lockup_info.astroport_lp_transferred,
                 withdrawal_flag: old_lockup_info.withdrawal_flag,
-                astro_rewards: old_lockup_info.astro_rewards,
-                generator_astro_debt: old_lockup_info.generator_astro_debt,
+                ntrn_rewards: old_lockup_info.ntrn_rewards,
+                generator_ntrn_debt: old_lockup_info.generator_ntrn_debt,
                 generator_proxy_debt,
                 unlock_timestamp: old_lockup_info.unlock_timestamp,
             };

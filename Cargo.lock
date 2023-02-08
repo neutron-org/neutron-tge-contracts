@@ -50,7 +50,6 @@ dependencies = [
  "astroport-airdrop",
  "astroport-factory",
  "astroport-generator",
- "astroport-lockdrop",
  "astroport-pair",
  "astroport-periphery",
  "astroport-token",
@@ -63,6 +62,7 @@ dependencies = [
  "cw-storage-plus",
  "cw2",
  "cw20 0.13.4",
+ "neutron-lockdrop",
  "schemars",
  "serde",
 ]
@@ -126,41 +126,6 @@ dependencies = [
  "cw20 0.13.4",
  "schemars",
  "serde",
-]
-
-[[package]]
-name = "astroport-lockdrop"
-version = "1.2.0"
-dependencies = [
- "astroport",
- "astroport-airdrop",
- "astroport-auction",
- "astroport-factory",
- "astroport-generator",
- "astroport-generator-proxy-to-mirror",
- "astroport-governance",
- "astroport-pair",
- "astroport-pair-stable",
- "astroport-periphery",
- "astroport-staking",
- "astroport-token",
- "astroport-vesting",
- "astroport-whitelist",
- "astroport-xastro-token",
- "cosmwasm-schema",
- "cosmwasm-std 1.0.0",
- "cw-multi-test",
- "cw-storage-plus",
- "cw2",
- "cw20 0.13.4",
- "cw20-base",
- "schemars",
- "serde",
- "terraswap 2.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "terraswap-factory",
- "terraswap-pair",
- "terraswap-token",
- "voting-escrow",
 ]
 
 [[package]]
@@ -1047,6 +1012,41 @@ dependencies = [
  "schemars",
  "serde",
  "terraswap 2.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "neutron-lockdrop"
+version = "1.2.0"
+dependencies = [
+ "astroport",
+ "astroport-airdrop",
+ "astroport-auction",
+ "astroport-factory",
+ "astroport-generator",
+ "astroport-generator-proxy-to-mirror",
+ "astroport-governance",
+ "astroport-pair",
+ "astroport-pair-stable",
+ "astroport-periphery",
+ "astroport-staking",
+ "astroport-token",
+ "astroport-vesting",
+ "astroport-whitelist",
+ "astroport-xastro-token",
+ "cosmwasm-schema",
+ "cosmwasm-std 1.0.0",
+ "cw-multi-test",
+ "cw-storage-plus",
+ "cw2",
+ "cw20 0.13.4",
+ "cw20-base",
+ "schemars",
+ "serde",
+ "terraswap 2.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "terraswap-factory",
+ "terraswap-pair",
+ "terraswap-token",
+ "voting-escrow",
 ]
 
 [[package]]

@@ -172,7 +172,7 @@ pub fn receive_cw20(
                 Err(StdError::generic_err("Unauthorized"))
             }
         }
-        Cw20HookMsg::IncreaseAstroIncentives {} => {
+        Cw20HookMsg::IncreaseNTRNIncentives {} => {
             handle_increasing_astro_incentives(deps, cw20_msg.amount)
         }
     }

@@ -1,5 +1,5 @@
 [package]
-name = "astroport-lockdrop"
+name = "neutron-lockdrop"
 version = "1.2.0"
 authors = ["_astromartian"]
 edition = "2021"

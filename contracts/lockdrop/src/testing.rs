@@ -22,6 +22,7 @@ fn update_owner() {
         weekly_multiplier: 1u64,
         weekly_divider: 12u64,
         max_positions_per_user: 14,
+        credit_contract: "credit_contract".to_string(),
     };
 
     // We can just call .unwrap() to assert this was a success
