@@ -1,6 +1,6 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Binary, Timestamp, Uint128};
-use cw_utils::Expiration;
+use cosmwasm_std::{/*Addr, Binary,*/ Timestamp, Uint128};
+// use cw_utils::Expiration;
 
 #[cw_serde]
 pub struct InstantiateMsg {

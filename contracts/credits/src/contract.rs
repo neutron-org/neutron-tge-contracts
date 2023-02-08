@@ -7,9 +7,8 @@ use cw20_base::contract as cw20_base;
 use ::cw20_base::ContractError as Cw20ContractError;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, MigrateMsg, InstantiateMsg, QueryMsg};
-use crate::state::{CONFIG, Config};
-
+use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use crate::state::{Config, CONFIG};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:credits";
@@ -42,7 +41,9 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, Cw20ContractError> {
     match msg {
-        ExecuteMsg::Transfer { recipient, amount} => execute_transfer(deps, env, info, recipient, amount),
+        ExecuteMsg::Transfer { recipient, amount } => {
+            execute_transfer(deps, env, info, recipient, amount)
+        }
     }
 }
 
@@ -52,9 +53,18 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response
     Ok(Response::default())
 }
 
-pub fn execute_transfer(deps: DepsMut, env: Env, info: MessageInfo, recipient: String, amount: Uint128) -> Result<Response, Cw20ContractError> {
+pub fn execute_transfer(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    recipient: String,
+    amount: Uint128,
+) -> Result<Response, Cw20ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender != config.airdrop_address && info.sender != config.sale_address && info.sender != config.lockdrop_address {
+    if info.sender != config.airdrop_address
+        && info.sender != config.sale_address
+        && info.sender != config.lockdrop_address
+    {
         return Err(Cw20ContractError::Unauthorized {});
     }
 
