@@ -1,11 +1,11 @@
+use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128};
+use cosmwasm_std::{
+    BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
+};
 use cw2::set_contract_version;
-// TODO: use correct crate - local or remote?
-use ::cw20_base::ContractError as Cw20ContractError;
-use cw20_base::contract::create_accounts;
-use cw20_base::state::{MinterData, TOKEN_INFO, TokenInfo};
+use cw20_base::state::{MinterData, TokenInfo, TOKEN_INFO};
 use cw_utils::Expiration;
 
 use crate::error::ContractError;
@@ -16,6 +16,11 @@ use crate::state::{Config, CONFIG};
 const CONTRACT_NAME: &str = "crates.io:credits";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+const TOKEN_NAME: &str = "CNTRN";
+const TOKEN_SYMBOL: &str = "cntrn";
+const TOKEN_DECIMALS: u8 = 8; // TODO: correct?
+const DEPOSITED_SYMBOL: &str = "untrn";
+
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
@@ -23,7 +28,6 @@ pub fn instantiate(
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    // TODO: call instantiate on cw20 contract
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let config = Config {
@@ -35,29 +39,18 @@ pub fn instantiate(
     };
     CONFIG.save(deps.storage, &config)?;
 
-    // create initial accounts
-    let total_supply = Uint128::zero();
-
-    if let Some(limit) = msg.get_cap() {
-        if total_supply > limit {
-            return Err(StdError::generic_err("Initial supply greater than cap").into());
-        }
-    }
-
-    let mint = Some(MinterData {
-        minter: config.dao_address,
-        cap: None,
-    });
-
     // store token info
-    let data = TokenInfo {
-        name: msg.name,
-        symbol: msg.symbol,
-        decimals: msg.decimals,
-        total_supply,
-        mint,
+    let info = TokenInfo {
+        name: TOKEN_NAME.to_string(),
+        symbol: TOKEN_SYMBOL.to_string(),
+        decimals: TOKEN_DECIMALS,
+        total_supply: Uint128::zero(),
+        mint: Some(MinterData {
+            minter: config.dao_address,
+            cap: None,
+        }),
     };
-    TOKEN_INFO.save(deps.storage, &data)?;
+    TOKEN_INFO.save(deps.storage, &info)?;
 
     Ok(Response::new())
 }
@@ -73,7 +66,7 @@ pub fn execute(
         ExecuteMsg::Transfer { recipient, amount } => {
             execute_transfer(deps, env, info, recipient, amount)
         }
-        ExecuteMsg::Burn { amount } => execute_burn(deps, env, info, amount),
+        ExecuteMsg::Burn {} => execute_burn(deps, env, info),
         ExecuteMsg::IncreaseAllowance {
             spender,
             amount,
@@ -89,7 +82,7 @@ pub fn execute(
             recipient,
             amount,
         } => execute_transfer_from(deps, env, info, owner, recipient, amount),
-        ExecuteMsg::Mint { } => execute_mint(deps, env, info),
+        ExecuteMsg::Mint {} => execute_mint(deps, env, info),
     }
 }
 
@@ -113,7 +106,7 @@ pub fn execute_transfer(
     {
         return Err(Cw20ContractError::Unauthorized {});
     }
-    // todo: check
+
     ::cw20_base::contract::execute_transfer(deps, env, info, recipient, amount)
 }
 
@@ -121,11 +114,30 @@ pub fn execute_burn(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    // TODO: just burn everything, no amount required?
-    amount: Uint128,
 ) -> Result<Response, Cw20ContractError> {
-    // TODO: implement
-    ::cw20_base::contract::execute_burn(deps, env, info, amount)
+    let config = CONFIG.load(deps.storage)?;
+
+    if env.block.time < config.when_claimable {
+        return Err(Cw20ContractError::Std(StdError::generic_err(format!(
+            "cannot claim until {}",
+            config.when_claimable
+        ))));
+    }
+
+    let sender = info.sender.clone();
+
+    // burn all balance
+    let balance = cw20_base::state::BALANCES
+        .may_load(deps.storage, &sender)?
+        .unwrap_or_default();
+
+    let burn_response = ::cw20_base::contract::execute_burn(deps, env, info, balance)?;
+    let send = BankMsg::Send {
+        to_address: sender.to_string(),
+        amount: vec![Coin::new(balance.u128(), DEPOSITED_SYMBOL)],
+    };
+
+    Ok(burn_response.add_message(send))
 }
 
 pub fn execute_increase_allowance(
@@ -136,7 +148,6 @@ pub fn execute_increase_allowance(
     amount: Uint128,
     expires: Option<Expiration>,
 ) -> Result<Response, Cw20ContractError> {
-    // TODO: check
     ::cw20_base::allowances::execute_increase_allowance(deps, env, info, spender, amount, expires)
 }
 
@@ -148,7 +159,6 @@ pub fn execute_decrease_allowance(
     amount: Uint128,
     expires: Option<Expiration>,
 ) -> Result<Response, Cw20ContractError> {
-    // TODO: check
     ::cw20_base::allowances::execute_decrease_allowance(deps, env, info, spender, amount, expires)
 }
 
@@ -164,7 +174,7 @@ pub fn execute_transfer_from(
     if info.sender != config.lockdrop_address {
         return Err(Cw20ContractError::Unauthorized {});
     }
-    // todo: check
+
     ::cw20_base::allowances::execute_transfer_from(deps, env, info, owner, recipient, amount)
 }
 
@@ -173,15 +183,18 @@ pub fn execute_mint(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-    if info.sender != config.dao_address {
-        return Err(Cw20ContractError::Unauthorized {});
-    }
-
     // mint in 1:1 proportion to locked untrn funds
-    let ntrn_amount = try_find_ntrns(info.clone().funds)?;
+    let untrn_amount = try_find_untrns(info.clone().funds)?;
 
-    ::cw20_base::contract::execute_mint(deps, env, info, config.dao_address.to_string(), ntrn_amount)
+    let config = CONFIG.load(deps.storage)?;
+
+    ::cw20_base::contract::execute_mint(
+        deps,
+        env,
+        info,
+        config.dao_address.to_string(),
+        untrn_amount,
+    )
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -189,15 +202,18 @@ pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
     unimplemented!()
 }
 
-#[cfg(test)]
-mod tests {}
-
-fn try_find_ntrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
-    let token = funds.first().ok_or_else(|| Cw20ContractError::Std(StdError::generic_err("no untrn's supplied to lock")))?;
-    // TODO: if we supply untrn's then we mint in uCntrns???
-    if &token.denom != "untrn" {
-        return Err(Cw20ContractError::Std(StdError::generic_err("no untrn's supplied to lock")));
+fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
+    let token = funds.first().ok_or_else(|| {
+        Cw20ContractError::Std(StdError::generic_err("no untrn's supplied to lock"))
+    })?;
+    if token.denom != DEPOSITED_SYMBOL {
+        return Err(Cw20ContractError::Std(StdError::generic_err(
+            "no untrn's supplied to lock",
+        )));
     }
 
     Ok(token.amount)
 }
+
+#[cfg(test)]
+mod tests {}

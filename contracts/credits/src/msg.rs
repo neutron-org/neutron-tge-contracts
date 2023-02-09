@@ -20,8 +20,8 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     /// Transfer is a base message to move tokens to another account without triggering actions
     Transfer { recipient: String, amount: Uint128 },
-    /// Burn is a base message to destroy tokens forever
-    Burn { amount: Uint128 },
+    /// Burn is a base message to destroy CNTRN's forever and send NTRN tokens in 1:1 proportion
+    Burn {},
     /// Only with "approval" extension. Allows spender to access an additional amount tokens
     /// from the owner's (env.sender) account. If expires is Some(), overwrites current allowance
     /// expiration with this one.
@@ -48,7 +48,7 @@ pub enum ExecuteMsg {
     /// If authorized (only dao can call),
     /// locks the NTRN tokens and mints CNTRN tokens in 1:1 amount
     /// and adds to the dao balance.
-    Mint { },
+    Mint {},
 }
 
 #[cw_serde]
