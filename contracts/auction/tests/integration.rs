@@ -274,7 +274,7 @@ fn init_all_contracts(
             new_config: astroport_periphery::lockdrop::UpdateConfigMsg {
                 auction_contract_address: Some(auction_instance.to_string()),
                 generator_address: None,
-                astro_token_address: None,
+                ntrnpool_token_address: None,
             },
         },
         &[],
@@ -473,7 +473,7 @@ fn instantiate_airdrop_lockdrop_contracts(
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::UpdateConfig {
             new_config: astroport_periphery::lockdrop::UpdateConfigMsg {
-                astro_token_address: Some(astro_token_instance.clone().into_string()),
+                ntrnpool_token_address: Some(astro_token_instance.clone().into_string()),
                 auction_contract_address: None,
                 generator_address: None,
             },

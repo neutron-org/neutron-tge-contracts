@@ -8,15 +8,20 @@ use astroport_periphery::{
         UpdateConfigMsg, UserInfoResponse,
     },
 };
-use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
 use cosmwasm_std::{
-    attr, to_binary, Addr, Coin, Decimal, Timestamp, Uint128, Uint256 as CUint256, Uint64,
+    attr, coins, to_binary, Addr, Coin, Decimal, Timestamp, Uint128, Uint256 as CUint256, Uint64,
+};
+use cosmwasm_std::{
+    from_slice,
+    testing::{mock_env, MockApi, MockQuerier, MockStorage},
+    BalanceResponse, BankQuery, Empty,
 };
 
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use astroport_periphery::lockdrop::{Config, PoolInfo};
 use cw20::{Cw20ExecuteMsg, Cw20QueryMsg};
-use cw_multi_test::{App, AppBuilder, BankKeeper, ContractWrapper, Executor};
+use cw_multi_test::{App, AppBuilder, BankKeeper, ContractWrapper, Executor, Module};
+use neutron_lockdrop::contract::UNTRN_DENOM;
 
 fn mock_app() -> App {
     let mut env = mock_env();
@@ -31,6 +36,22 @@ fn mock_app() -> App {
         .with_bank(bank)
         .with_storage(storage)
         .build(|_, _, _| {})
+}
+
+fn query_balance_untrn(app: &App, address: String) -> Coin {
+    let req = BankQuery::Balance {
+        address,
+        denom: UNTRN_DENOM.to_string(),
+    };
+    let querier: MockQuerier<Empty> = MockQuerier::new(&[]);
+    app.read_module(|router, api, storage| {
+        let raw = router
+            .bank
+            .query(api, storage, &querier, &app.block_info(), req)
+            .unwrap();
+        let res: BalanceResponse = from_slice(&raw).unwrap();
+        res.amount
+    })
 }
 
 // Instantiate ASTRO Token Contract
@@ -565,7 +586,6 @@ fn instantiate_all_contracts(
     .unwrap();
 
     let update_msg = UpdateConfigMsg {
-        astro_token_address: Some(astro_token.to_string()),
         auction_contract_address: Some(auction_contract.to_string()),
         generator_address: Some(generator_address.to_string()),
     };
@@ -586,18 +606,6 @@ fn instantiate_all_contracts(
         lockdrop_instance.clone(),
         &ExecuteMsg::UpdateConfig {
             new_config: update_msg.clone(),
-        },
-        &[],
-    )
-    .unwrap();
-
-    app.execute_contract(
-        owner.clone(),
-        astro_token.clone(),
-        &Cw20ExecuteMsg::Send {
-            amount: Uint128::from(1000000000u64),
-            contract: lockdrop_instance.to_string(),
-            msg: to_binary(&Cw20HookMsg::IncreaseNTRNIncentives {}).unwrap(),
         },
         &[],
     )
@@ -953,7 +961,6 @@ fn proper_initialization_lockdrop() {
         lockdrop_instantiate_msg.owner.unwrap().to_string(),
         resp.owner
     );
-    assert_eq!(None, resp.ntrn_token);
     assert_eq!(None, resp.auction_contract);
     assert_eq!(None, resp.generator);
     assert_eq!(lockdrop_instantiate_msg.init_timestamp, resp.init_timestamp);
@@ -1048,7 +1055,6 @@ fn test_update_config() {
     );
 
     let update_msg = UpdateConfigMsg {
-        astro_token_address: Some(astro_token.to_string()),
         auction_contract_address: Some(auction_contract.to_string()),
         generator_address: Some(generator_address.to_string()),
     };
@@ -1078,27 +1084,11 @@ fn test_update_config() {
     )
     .unwrap();
 
-    app.execute_contract(
-        owner.clone(),
-        astro_token.clone(),
-        &Cw20ExecuteMsg::Send {
-            amount: Uint128::from(1000000000u64),
-            contract: lockdrop_instance.to_string(),
-            msg: to_binary(&Cw20HookMsg::IncreaseNTRNIncentives {}).unwrap(),
-        },
-        &[],
-    )
-    .unwrap();
-
     let resp: Config = app
         .wrap()
         .query_wasm_smart(&lockdrop_instance, &QueryMsg::Config {})
         .unwrap();
 
-    assert_eq!(
-        update_msg.clone().astro_token_address.unwrap(),
-        resp.ntrn_token.unwrap()
-    );
     assert_eq!(
         update_msg.clone().generator_address.unwrap(),
         resp.generator.unwrap()
@@ -2520,13 +2510,34 @@ fn test_stake_lp_tokens() {
 }
 
 // TODO: enable when make a deal with pool
-// #[test]
+#[test]
 fn test_claim_rewards() {
     let mut app = mock_app();
     let owner = Addr::unchecked("contract_owner");
 
     let (_, lockdrop_instance, astroport_factory_instance, _, update_msg) =
         instantiate_all_contracts(&mut app, owner.clone());
+
+    // Set UST user balances
+    app.init_modules(|router, _, storage| {
+        router
+            .bank
+            .init_balance(
+                storage,
+                &Addr::unchecked(owner.clone()),
+                vec![
+                    Coin::new(1_000_000_000_000, "untrn"),
+                ],
+            )
+            .unwrap();
+    });
+    app.execute_contract(
+        owner.clone(),
+        lockdrop_instance.clone(),
+        &ExecuteMsg::IncreaseNTRNIncentives {},
+        &coins(1_000_000_000, UNTRN_DENOM),
+    )
+    .unwrap();
 
     let cw20_contract = Box::new(ContractWrapper::new_with_empty(
         astroport_token::contract::execute,
@@ -2643,18 +2654,6 @@ fn test_claim_rewards() {
         .unwrap();
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
 
-    // DEPOSIT UST INTO AUCTION
-    app.execute_contract(
-        Addr::unchecked(user_address.clone()),
-        Addr::unchecked("auction_contract".to_string()),
-        &astroport_periphery::auction::ExecuteMsg::DepositUst {},
-        &[Coin {
-            denom: "uusd".to_string(),
-            amount: Uint128::from(432423u128),
-        }],
-    )
-    .unwrap();
-
     // ######    ERROR :: Reward claim not allowed    ######
 
     let err = app
@@ -2679,15 +2678,6 @@ fn test_claim_rewards() {
         b.height += 17280;
         b.time = Timestamp::from_seconds(EPOCH_START + 10750001)
     });
-
-    // INITIALIZE ASTRO-UST POOL TO ENABLE CLAIMS
-    app.execute_contract(
-        Addr::unchecked(owner.to_string()),
-        Addr::unchecked("auction_contract".to_string()),
-        &astroport_periphery::auction::ExecuteMsg::InitPool { slippage: None },
-        &[],
-    )
-    .unwrap();
 
     // ######    ERROR :: Invalid Lockup    ######
 
@@ -2740,15 +2730,7 @@ fn test_claim_rewards() {
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
 
-    let user1_astro_balance_before: cw20::BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
-            &Cw20QueryMsg::Balance {
-                address: user_address.clone(),
-            },
-        )
-        .unwrap();
+    let user1_astro_balance_before = query_balance_untrn(&app, user_address.clone());
 
     app.execute_contract(
         Addr::unchecked(user_address.clone()),
@@ -2791,19 +2773,13 @@ fn test_claim_rewards() {
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
 
-    let user1_astro_balance_after: cw20::BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
-            &Cw20QueryMsg::Balance {
-                address: user_address.clone(),
-            },
-        )
-        .unwrap();
+    let user1_astro_balance_after = query_balance_untrn(&app, user_address.clone());
 
-    let astro_reward_claimed =
-        user1_astro_balance_after.balance - user1_astro_balance_before.balance;
-
+    let astro_reward_claimed = user1_astro_balance_after.amount - user1_astro_balance_before.amount;
+    assert_eq!(
+        astro_reward_claimed,
+        user_info.total_astro_rewards + Uint128::from(172800000000u64)
+    );
     // ######    SHOULD SUCCESSFULLY CLAIM REWARDS :: user-2  ######
 
     // Query user
@@ -2817,15 +2793,7 @@ fn test_claim_rewards() {
         )
         .unwrap();
 
-    let user2_astro_balance_before: cw20::BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
-            &Cw20QueryMsg::Balance {
-                address: user2_address.clone(),
-            },
-        )
-        .unwrap();
+    let user2_astro_balance_before = query_balance_untrn(&app, user2_address.clone());
 
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(false, user_info.astro_transferred);
@@ -2887,18 +2855,9 @@ fn test_claim_rewards() {
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
 
-    let user2_astro_balance_after: cw20::BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
-            &Cw20QueryMsg::Balance {
-                address: user2_address.clone(),
-            },
-        )
-        .unwrap();
+    let user2_astro_balance_after = query_balance_untrn(&app, user2_address.clone());
 
-    let astro_reward_claimed =
-        user2_astro_balance_after.balance - user2_astro_balance_before.balance;
+    let astro_reward_claimed = user2_astro_balance_after.amount - user2_astro_balance_before.amount;
 }
 
 // TODO: enable when make a deal with pool
@@ -3088,15 +3047,15 @@ fn test_claim_rewards_and_unlock() {
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
 
-    let user1_astro_balance_before: cw20::BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
-            &Cw20QueryMsg::Balance {
-                address: user_address.clone(),
-            },
-        )
-        .unwrap();
+    // let user1_astro_balance_before: cw20::BalanceResponse = app
+    //     .wrap()
+    //     .query_wasm_smart(
+    //         &update_msg.ntrnpool_token_address.clone().unwrap(),
+    //         &Cw20QueryMsg::Balance {
+    //             address: user_address.clone(),
+    //         },
+    //     )
+    //     .unwrap();
 
     let user1_astro_lp_balance_before: cw20::BalanceResponse = app
         .wrap()
@@ -3134,15 +3093,15 @@ fn test_claim_rewards_and_unlock() {
 
     assert_eq!(true, user_info.astro_transferred);
 
-    let user1_astro_balance_after: cw20::BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
-            &Cw20QueryMsg::Balance {
-                address: user_address.clone(),
-            },
-        )
-        .unwrap();
+    // let user1_astro_balance_after: cw20::BalanceResponse = app
+    //     .wrap()
+    //     .query_wasm_smart(
+    //         &update_msg.ntrnpool_token_address.clone().unwrap(),
+    //         &Cw20QueryMsg::Balance {
+    //             address: user_address.clone(),
+    //         },
+    //     )
+    //     .unwrap();
 
     let user1_astro_lp_balance_after: cw20::BalanceResponse = app
         .wrap()
@@ -3154,8 +3113,8 @@ fn test_claim_rewards_and_unlock() {
         )
         .unwrap();
 
-    let astro_reward_claimed =
-        user1_astro_balance_after.balance - user1_astro_balance_before.balance;
+    // let astro_reward_claimed =
+    //     user1_astro_balance_after.balance - user1_astro_balance_before.balance;
     let lp_tokens_withdrawn =
         user1_astro_lp_balance_after.balance - user1_astro_lp_balance_before.balance;
 
@@ -3174,15 +3133,15 @@ fn test_claim_rewards_and_unlock() {
         )
         .unwrap();
 
-    let user2_astro_balance_before: cw20::BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
-            &Cw20QueryMsg::Balance {
-                address: user2_address.clone(),
-            },
-        )
-        .unwrap();
+    // let user2_astro_balance_before: cw20::BalanceResponse = app
+    //     .wrap()
+    //     .query_wasm_smart(
+    //         &update_msg.ntrnpool_token_address.clone().unwrap(),
+    //         &Cw20QueryMsg::Balance {
+    //             address: user2_address.clone(),
+    //         },
+    //     )
+    //     .unwrap();
 
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(false, user_info.astro_transferred);
@@ -3238,15 +3197,15 @@ fn test_claim_rewards_and_unlock() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(true, user_info.astro_transferred);
 
-    let user2_astro_balance_after: cw20::BalanceResponse = app
-        .wrap()
-        .query_wasm_smart(
-            &update_msg.astro_token_address.clone().unwrap(),
-            &Cw20QueryMsg::Balance {
-                address: user2_address.clone(),
-            },
-        )
-        .unwrap();
+    // let user2_astro_balance_after: cw20::BalanceResponse = app
+    //     .wrap()
+    //     .query_wasm_smart(
+    //         &update_msg.ntrnpool_token_address.clone().unwrap(),
+    //         &Cw20QueryMsg::Balance {
+    //             address: user2_address.clone(),
+    //         },
+    //     )
+    //     .unwrap();
 
     let user2_astro_lp_balance_after: cw20::BalanceResponse = app
         .wrap()
@@ -3258,8 +3217,8 @@ fn test_claim_rewards_and_unlock() {
         )
         .unwrap();
 
-    let astro_reward_claimed =
-        user2_astro_balance_after.balance - user2_astro_balance_before.balance;
+    // let astro_reward_claimed =
+    //     user2_astro_balance_after.balance - user2_astro_balance_before.balance;
 
     let lp_tokens_withdrawn =
         user2_astro_lp_balance_after.balance - user2_astro_lp_balance_before.balance;

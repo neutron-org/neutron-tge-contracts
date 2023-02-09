@@ -9,9 +9,9 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, entry_point, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Decimal256,
-    Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult, Storage, SubMsg,
-    Uint128, Uint256, WasmMsg,
+    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
+    Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
+    Storage, SubMsg, Uint128, Uint256, WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
@@ -35,6 +35,8 @@ use crate::state::{
 };
 
 const SECONDS_PER_WEEK: u64 = 86400 * 7;
+
+pub const UNTRN_DENOM: &str = "untrn";
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "neutron_lockdrop";
@@ -94,7 +96,6 @@ pub fn instantiate(
             .map(|v| addr_validate_to_lower(deps.api, &v))
             .transpose()?
             .unwrap_or(info.sender),
-        ntrn_token: None,
         credit_contract: addr_validate_to_lower(deps.api, &msg.credit_contract)?,
         auction_contract: None,
         generator: None,
@@ -144,7 +145,7 @@ pub fn instantiate(
 ///
 /// * **ExecuteMsg::StakeLpTokens { terraswap_lp_token }** Facilitates staking of Astroport LP tokens for a particular LP pool with the generator contract.
 ///
-/// * **ExecuteMsg::EnableClaims {}** Enables ASTRO Claims by users.
+/// * **ExecuteMsg::EnableClaims {}** Enables NTRN Claims by users.
 ///
 /// * **ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
 ///             terraswap_lp_token,
@@ -161,7 +162,6 @@ pub fn instantiate(
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     match msg {
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
-
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
         ExecuteMsg::InitializePool {
             terraswap_lp_token,
@@ -198,7 +198,6 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
-
             propose_new_owner(
                 deps,
                 info,
@@ -212,7 +211,6 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
-
             drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL).map_err(|e| e)
         }
         ExecuteMsg::ClaimOwnership {} => {
@@ -221,11 +219,11 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
                     v.owner = new_owner;
                     Ok(v)
                 })?;
-
                 Ok(())
             })
             .map_err(|e| e)
         }
+        ExecuteMsg::IncreaseNTRNIncentives {} => handle_increasing_ntrn_incentives(deps, env, info),
     }
 }
 
@@ -260,9 +258,6 @@ pub fn receive_cw20(
         Cw20HookMsg::IncreaseLockup { duration } => {
             handle_increase_lockup(deps, env, info, user_address, duration, amount)
         }
-        Cw20HookMsg::IncreaseNTRNIncentives {} => {
-            handle_increasing_ntrn_incentives(deps, env, info, amount)
-        }
     }
 }
 
@@ -291,13 +286,13 @@ fn _handle_callback(
     match msg {
         CallbackMsg::UpdatePoolOnDualRewardsClaim {
             terraswap_lp_token,
-            prev_astro_balance,
+            prev_ntrn_balance,
             prev_proxy_reward_balances,
         } => update_pool_on_dual_rewards_claim(
             deps,
             env,
             terraswap_lp_token,
-            prev_astro_balance,
+            prev_ntrn_balance,
             prev_proxy_reward_balances,
         ),
         CallbackMsg::WithdrawUserLockupRewardsCallback {
@@ -344,7 +339,7 @@ fn _handle_callback(
 ///
 /// * **QueryMsg::Pool { terraswap_lp_token }** Returns info regarding a certain supported LP token pool.
 ///
-/// * **QueryMsg::UserInfo { address }** Returns info regarding a user (total ASTRO rewards, list of lockup positions).
+/// * **QueryMsg::UserInfo { address }** Returns info regarding a user (total NTRN rewards, list of lockup positions).
 ///
 /// * **QueryMsg::UserInfoWithLockupsList { address }** Returns info regarding a user with lockups.
 ///
@@ -385,86 +380,14 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 /// Used for contract migration. Returns a default object of type [`Response`].
 /// ## Params
-/// * **deps** is an object of type [`DepsMut`].
+/// * **_deps** is an object of type [`DepsMut`].
 ///
 /// * **_env** is an object of type [`Env`].
 ///
 /// * **_msg** is an object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
-    let contract_version = get_contract_version(deps.storage)?;
-
-    let config = CONFIG.load(deps.storage)?;
-    let generator = config
-        .generator
-        .as_ref()
-        .ok_or_else(|| StdError::generic_err("Generator should be set!"))?;
-
-    match contract_version.contract.as_ref() {
-        "astroport_lockdrop" => match contract_version.version.as_ref() {
-            "1.0.1" => {
-                let pools = ASSET_POOLS_V101
-                    .range(deps.storage, None, None, Order::Ascending)
-                    .collect::<StdResult<Vec<_>>>()?;
-                for (key, pool) in pools {
-                    let generator_proxy_per_share = migrate_generator_proxy_per_share_to_v120(
-                        &deps,
-                        pool.generator_proxy_per_share,
-                        generator,
-                        pool.migration_info.clone(),
-                    )?;
-
-                    let new_pool_info = PoolInfo {
-                        terraswap_pool: pool.terraswap_pool,
-                        terraswap_amount_in_lockups: pool.terraswap_amount_in_lockups,
-                        migration_info: pool.migration_info,
-                        incentives_share: pool.incentives_share,
-                        weighted_amount: pool.weighted_amount,
-                        generator_ntrn_per_share: pool.generator_astro_per_share,
-                        generator_proxy_per_share,
-                        is_staked: pool.is_staked,
-                    };
-                    ASSET_POOLS.save(deps.storage, &key, &new_pool_info)?
-                }
-            }
-            "1.1.0" | "1.1.1" => {
-                let pools = ASSET_POOLS_V111
-                    .range(deps.storage, None, None, Order::Ascending)
-                    .collect::<StdResult<Vec<_>>>()?;
-                for (key, pool) in pools {
-                    let generator_proxy_per_share = migrate_generator_proxy_per_share_to_v120(
-                        &deps,
-                        pool.generator_proxy_per_share,
-                        generator,
-                        pool.migration_info.clone(),
-                    )?;
-
-                    let new_pool_info = PoolInfo {
-                        terraswap_pool: pool.terraswap_pool,
-                        terraswap_amount_in_lockups: pool.terraswap_amount_in_lockups,
-                        migration_info: pool.migration_info,
-                        incentives_share: pool.incentives_share,
-                        weighted_amount: pool.weighted_amount,
-                        generator_ntrn_per_share: pool.generator_astro_per_share,
-                        generator_proxy_per_share,
-                        is_staked: pool.is_staked,
-                    };
-                    ASSET_POOLS.save(deps.storage, &key, &new_pool_info)?
-                }
-            }
-            _ => return Err(StdError::generic_err("Migration error")),
-        },
-        _ => return Err(StdError::generic_err("Migration error")),
-    };
-
-    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
-    Ok(Response::new().add_attributes(vec![
-        ("previous_contract_name", &contract_version.contract),
-        ("previous_contract_version", &contract_version.version),
-        ("current_contract_name", &CONTRACT_NAME.to_string()),
-        ("current_contract_version", &CONTRACT_VERSION.to_string()),
-    ]))
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+    Ok(Response::default())
 }
 
 /// Admin function to update Configuration parameters. Returns a default object of type [`Response`].
@@ -486,15 +409,6 @@ pub fn handle_update_config(
     if info.sender != config.owner {
         return Err(StdError::generic_err("Unauthorized"));
     }
-
-    if let Some(astro_addr) = new_config.astro_token_address {
-        if config.ntrn_token.is_some() {
-            return Err(StdError::generic_err("ASTRO token already set"));
-        }
-
-        config.ntrn_token = Some(addr_validate_to_lower(deps.api, &astro_addr)?);
-        attributes.push(attr("new_astro_token", astro_addr))
-    };
 
     if let Some(auction) = new_config.auction_contract_address {
         match config.auction_contract {
@@ -540,24 +454,12 @@ pub fn handle_update_config(
 /// * **env** is an object of type [`Env`].
 ///
 /// * **info** is an object of type [`MessageInfo`].
-///
-/// * **amount** is an object of type [`Uint128`]. Number of ASTRO tokens which are to be added to current incentives
 pub fn handle_increasing_ntrn_incentives(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    amount: Uint128,
 ) -> Result<Response, StdError> {
     let mut config = CONFIG.load(deps.storage)?;
-
-    if &info.sender
-        != config
-            .ntrn_token
-            .as_ref()
-            .ok_or_else(|| StdError::generic_err("Astro token should be set!"))?
-    {
-        return Err(StdError::generic_err("Only astro tokens are received!"));
-    }
 
     if env.block.time.seconds()
         >= config.init_timestamp + config.deposit_window + config.withdrawal_window
@@ -565,6 +467,14 @@ pub fn handle_increasing_ntrn_incentives(
         return Err(StdError::generic_err("ASTRO is already being distributed"));
     };
 
+    let incentive = info.funds.iter().find(|c| c.denom == UNTRN_DENOM);
+    let amount = if let Some(coin) = incentive {
+        coin.amount
+    } else {
+        return Err(StdError::GenericErr {
+            msg: format!("{} is not found", UNTRN_DENOM),
+        });
+    };
     // Anyone can increase astro incentives
     config.lockdrop_incentives = config.lockdrop_incentives.checked_add(amount)?;
 
@@ -1212,7 +1122,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
                 cosmos_msgs.push(
                     CallbackMsg::UpdatePoolOnDualRewardsClaim {
                         terraswap_lp_token: terraswap_lp_token.clone(),
-                        prev_astro_balance: astro_balance,
+                        prev_ntrn_balance: astro_balance,
                         prev_proxy_reward_balances,
                     }
                     .to_cosmos_msg(&env)?,
@@ -1244,14 +1154,14 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
 ///
 /// * **terraswap_lp_token** is an object of type [`String`]. Pool identifier to identify the LP pool whose rewards have been claimed.
 ///
-/// * **prev_astro_balance** is an object of type [`Uint128`]. Contract's ASTRO token balance before claim.
+/// * **prev_ntrn_balance** is an object of type [`Uint128`]. Contract's NTRN token balance before claim.
 ///
 /// * **prev_proxy_reward_balances** is a vector of type [`Asset`]. Contract's Generator Proxy reward token balance before claim.
 pub fn update_pool_on_dual_rewards_claim(
     deps: DepsMut,
     env: Env,
     terraswap_lp_token: Addr,
-    prev_astro_balance: Uint128,
+    prev_ntrn_balance: Uint128,
     prev_proxy_reward_balances: Vec<Asset>,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
@@ -1292,7 +1202,7 @@ pub fn update_pool_on_dual_rewards_claim(
                 address: env.contract.address.to_string(),
             },
         )?;
-        base_reward_received = res.balance - prev_astro_balance;
+        base_reward_received = res.balance - prev_ntrn_balance;
         Decimal::from_ratio(base_reward_received, lp_balance)
     };
 
@@ -1507,27 +1417,21 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     }
 
     // Transfers claimable one time ASTRO rewards to the user that the user gets for all his lock
-    if let Some(astro_token) = &config.ntrn_token {
-        if !user_info.ntrn_transferred {
-            // Calculating how much Astro user can claim (from total one time reward)
-            let total_claimable_astro_rewards = user_info.total_ntrn_rewards;
-            if total_claimable_astro_rewards > Uint128::zero() {
-                cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: astro_token.to_string(),
-                    funds: vec![],
-                    msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                        recipient: user_address.to_string(),
-                        amount: total_claimable_astro_rewards,
-                    })?,
-                }));
-            }
-            user_info.ntrn_transferred = true;
-            attributes.push(attr(
-                "total_claimable_astro_reward",
-                total_claimable_astro_rewards,
-            ));
-            USER_INFO.save(deps.storage, &user_address, &user_info)?;
+    if !user_info.ntrn_transferred {
+        // Calculating how much Astro user can claim (from total one time reward)
+        let total_claimable_astro_rewards = user_info.total_ntrn_rewards;
+        if total_claimable_astro_rewards > Uint128::zero() {
+            cosmos_msgs.push(CosmosMsg::Bank(BankMsg::Send {
+                to_address: user_address.to_string(),
+                amount: coins(total_claimable_astro_rewards.u128(), UNTRN_DENOM),
+            }))
         }
+        user_info.ntrn_transferred = true;
+        attributes.push(attr(
+            "total_claimable_astro_reward",
+            total_claimable_astro_rewards,
+        ));
+        USER_INFO.save(deps.storage, &user_address, &user_info)?;
     }
 
     Ok(Response::new()

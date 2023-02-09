@@ -35,8 +35,6 @@ pub struct InstantiateMsg {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct UpdateConfigMsg {
-    /// Astroport token address
-    pub astro_token_address: Option<String>,
     /// Bootstrap Auction contract address
     pub auction_contract_address: Option<String>,
     /// Generator (Staking for dual rewards) contract address
@@ -48,6 +46,7 @@ pub struct UpdateConfigMsg {
 pub enum ExecuteMsg {
     // Receive hook used to accept LP Token deposits
     Receive(Cw20ReceiveMsg),
+    IncreaseNTRNIncentives {},
     // ADMIN Function ::: To update configuration
     UpdateConfig {
         new_config: UpdateConfigMsg,
@@ -99,10 +98,7 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum Cw20HookMsg {
     /// Open a new user position or add to an existing position (Cw20ReceiveMsg)
-    IncreaseLockup {
-        duration: u64,
-    },
-    IncreaseNTRNIncentives {},
+    IncreaseLockup { duration: u64 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -110,7 +106,7 @@ pub enum Cw20HookMsg {
 pub enum CallbackMsg {
     UpdatePoolOnDualRewardsClaim {
         terraswap_lp_token: Addr,
-        prev_astro_balance: Uint128,
+        prev_ntrn_balance: Uint128,
         prev_proxy_reward_balances: Vec<Asset>,
     },
     WithdrawUserLockupRewardsCallback {
@@ -173,8 +169,6 @@ pub struct MigrationInfo {
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
-    /// ASTRO Token address
-    pub ntrn_token: Option<Addr>,
     /// Credit contract address
     pub credit_contract: Addr,
     /// Bootstrap Auction contract address
@@ -195,7 +189,7 @@ pub struct Config {
     pub weekly_multiplier: u64,
     /// Lockdrop Reward divider
     pub weekly_divider: u64,
-    /// Total ASTRO lockdrop incentives to be distributed among the users
+    /// Total NTRN lockdrop incentives to be distributed among the users
     pub lockdrop_incentives: Uint128,
     /// Max lockup positions a user can have
     pub max_positions_per_user: u32,
