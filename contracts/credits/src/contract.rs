@@ -2,9 +2,9 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128};
 use cw2::set_contract_version;
-use cw20_base::contract as cw20_base;
 // TODO: use correct crate - local or remote?
 use ::cw20_base::ContractError as Cw20ContractError;
+use cw_utils::Expiration;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
@@ -44,6 +44,24 @@ pub fn execute(
         ExecuteMsg::Transfer { recipient, amount } => {
             execute_transfer(deps, env, info, recipient, amount)
         }
+        ExecuteMsg::Burn { amount } => execute_burn(deps, env, info, amount),
+        ExecuteMsg::IncreaseAllowance {
+            spender,
+            amount,
+            expires,
+        } => execute_increase_allowance(deps, env, info, spender, amount, expires),
+        ExecuteMsg::DecreaseAllowance {
+            spender,
+            amount,
+            expires,
+        } => execute_decrease_allowance(deps, env, info, spender, amount, expires),
+        ExecuteMsg::TransferFrom {
+            owner,
+            recipient,
+            amount,
+        } => execute_transfer_from(deps, env, info, owner, recipient, amount),
+        ExecuteMsg::BurnFrom { owner, amount } => execute_burn_from(deps, env, info, owner, amount),
+        ExecuteMsg::Mint { recipient, amount } => execute_mint(deps, env, info, recipient, amount),
     }
 }
 
@@ -68,7 +86,76 @@ pub fn execute_transfer(
         return Err(Cw20ContractError::Unauthorized {});
     }
 
-    cw20_base::execute_transfer(deps, env, info, recipient, amount)
+    ::cw20_base::contract::execute_transfer(deps, env, info, recipient, amount)
+}
+
+pub fn execute_burn(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    // TODO: just burn everything, no amount required?
+    amount: Uint128,
+) -> Result<Response, Cw20ContractError> {
+    // TODO: implement
+    ::cw20_base::contract::execute_burn(deps, env, info, amount)
+}
+
+pub fn execute_increase_allowance(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    spender: String,
+    amount: Uint128,
+    expires: Option<Expiration>,
+) -> Result<Response, Cw20ContractError> {
+    // TODO: implement
+    ::cw20_base::allowances::execute_increase_allowance(deps, env, info, spender, amount, expires)
+}
+
+pub fn execute_decrease_allowance(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    spender: String,
+    amount: Uint128,
+    expires: Option<Expiration>,
+) -> Result<Response, Cw20ContractError> {
+    // TODO: implement
+    ::cw20_base::allowances::execute_decrease_allowance(deps, env, info, spender, amount, expires)
+}
+
+pub fn execute_transfer_from(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    owner: String,
+    recipient: String,
+    amount: Uint128,
+) -> Result<Response, Cw20ContractError> {
+    // TODO: implement
+    ::cw20_base::allowances::execute_transfer_from(deps, env, info, owner, recipient, amount)
+}
+
+pub fn execute_burn_from(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    owner: String,
+    amount: Uint128,
+) -> Result<Response, Cw20ContractError> {
+    // TODO: implement
+    ::cw20_base::allowances::execute_burn_from(deps, env, info, owner, amount)
+}
+
+pub fn execute_mint(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    owner: String,
+    amount: Uint128,
+) -> Result<Response, Cw20ContractError> {
+    // TODO: implement
+    ::cw20_base::contract::execute_mint(deps, env, info, owner, amount)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
