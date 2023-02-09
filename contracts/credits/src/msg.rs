@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{/*Addr, Binary,*/ Timestamp, Uint128};
+use cosmwasm_std::{Addr, Timestamp, Uint128};
 use cw_utils::Expiration;
 
 #[cw_serde]
@@ -53,7 +53,62 @@ pub enum ExecuteMsg {
 
 #[cw_serde]
 #[derive(QueryResponses)]
-pub enum QueryMsg {}
+pub enum QueryMsg {
+    /// Returns the current balance of the given address, 0 if unset.
+    #[returns(cw20::BalanceResponse)]
+    Balance { address: String },
+    /// Returns metadata on the contract - name, decimals, supply, etc.
+    #[returns(cw20::TokenInfoResponse)]
+    TokenInfo {},
+    /// Only with "mintable" extension.
+    /// Returns who can mint and the hard cap on maximum tokens after minting.
+    #[returns(cw20::MinterResponse)]
+    Minter {},
+    /// Only with "allowance" extension.
+    /// Returns how much spender can use from owner account, 0 if unset.
+    #[returns(cw20::AllowanceResponse)]
+    Allowance { owner: String, spender: String },
+    /// Only with "enumerable" extension (and "allowances")
+    /// Returns all allowances this owner has approved. Supports pagination.
+    #[returns(cw20::AllAllowancesResponse)]
+    AllAllowances {
+        owner: String,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    /// Only with "enumerable" extension (and "allowances")
+    /// Returns all allowances this spender has been granted. Supports pagination.
+    #[returns(cw20::AllSpenderAllowancesResponse)]
+    AllSpenderAllowances {
+        spender: String,
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    /// Only with "enumerable" extension
+    /// Returns all accounts that have balances. Supports pagination.
+    #[returns(cw20::AllAccountsResponse)]
+    AllAccounts {
+        start_after: Option<String>,
+        limit: Option<u32>,
+    },
+    /// Returns current config of Credits contract
+    #[returns(ConfigResponse)]
+    Config {},
+}
 
 #[cw_serde]
 pub struct MigrateMsg {}
+
+#[cw_serde]
+pub struct ConfigResponse {
+    /// Date when you can execute `burn` method to burn CNTRN and get NTRN tokens
+    pub when_claimable: Timestamp,
+    /// DAO contract address
+    pub dao_address: Addr,
+    /// Airdrop contract address
+    pub airdrop_address: Addr,
+    /// Sale contract address
+    pub sale_address: Addr,
+    /// Lockdrop contract address,
+    pub lockdrop_address: Addr,
+}

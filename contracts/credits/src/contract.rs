@@ -2,14 +2,15 @@ use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
+    to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    StdResult, Uint128,
 };
 use cw2::set_contract_version;
-use cw20_base::state::{MinterData, TokenInfo, TOKEN_INFO};
+use cw20_base::state as Cw20State;
 use cw_utils::Expiration;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use crate::msg::{ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use crate::state::{Config, CONFIG};
 
 // version info for migration info
@@ -40,17 +41,17 @@ pub fn instantiate(
     CONFIG.save(deps.storage, &config)?;
 
     // store token info
-    let info = TokenInfo {
+    let info = Cw20State::TokenInfo {
         name: TOKEN_NAME.to_string(),
         symbol: TOKEN_SYMBOL.to_string(),
         decimals: TOKEN_DECIMALS,
         total_supply: Uint128::zero(),
-        mint: Some(MinterData {
+        mint: Some(Cw20State::MinterData {
             minter: config.dao_address,
             cap: None,
         }),
     };
-    TOKEN_INFO.save(deps.storage, &info)?;
+    Cw20State::TOKEN_INFO.save(deps.storage, &info)?;
 
     Ok(Response::new())
 }
@@ -198,8 +199,52 @@ pub fn execute_mint(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(_deps: Deps, _env: Env, _msg: QueryMsg) -> StdResult<Binary> {
-    unimplemented!()
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    match msg {
+        QueryMsg::Balance { address } => {
+            to_binary(&::cw20_base::contract::query_balance(deps, address)?)
+        }
+        QueryMsg::TokenInfo {} => to_binary(&::cw20_base::contract::query_token_info(deps)?),
+        QueryMsg::Minter {} => to_binary(&::cw20_base::contract::query_minter(deps)?),
+        QueryMsg::Allowance { owner, spender } => to_binary(
+            &::cw20_base::allowances::query_allowance(deps, owner, spender)?,
+        ),
+        QueryMsg::AllAllowances {
+            owner,
+            start_after,
+            limit,
+        } => to_binary(&::cw20_base::enumerable::query_owner_allowances(
+            deps,
+            owner,
+            start_after,
+            limit,
+        )?),
+        QueryMsg::AllSpenderAllowances {
+            spender,
+            start_after,
+            limit,
+        } => to_binary(&::cw20_base::enumerable::query_spender_allowances(
+            deps,
+            spender,
+            start_after,
+            limit,
+        )?),
+        QueryMsg::AllAccounts { start_after, limit } => to_binary(
+            &::cw20_base::enumerable::query_all_accounts(deps, start_after, limit)?,
+        ),
+        QueryMsg::Config {} => to_binary(&query_config(deps)?),
+    }
+}
+
+fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
+    let config = CONFIG.load(deps.storage)?;
+    Ok(ConfigResponse {
+        when_claimable: config.when_claimable,
+        dao_address: config.dao_address,
+        airdrop_address: config.airdrop_address,
+        sale_address: config.sale_address,
+        lockdrop_address: config.lockdrop_address,
+    })
 }
 
 fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
