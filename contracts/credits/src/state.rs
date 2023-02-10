@@ -9,11 +9,11 @@ pub struct Config {
     /// DAO contract address
     pub dao_address: Addr,
     /// Airdrop contract address
-    pub airdrop_address: Addr,
+    pub airdrop_address: Option<Addr>,
     /// Sale contract address
-    pub sale_address: Addr,
+    pub sale_address: Option<Addr>,
     /// Lockdrop contract address,
-    pub lockdrop_address: Addr,
+    pub lockdrop_address: Option<Addr>,
 }
 
 pub const CONFIG: Item<Config> = Item::new("config");

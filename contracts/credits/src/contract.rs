@@ -31,13 +31,23 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    let config = Config {
+    let mut config = Config {
         when_claimable: msg.when_claimable,
         dao_address: deps.api.addr_validate(&msg.dao_address)?,
-        airdrop_address: deps.api.addr_validate(&msg.airdrop_address)?,
-        sale_address: deps.api.addr_validate(&msg.sale_contract_address)?,
-        lockdrop_address: deps.api.addr_validate(&msg.lockdrop_address)?,
+        airdrop_address: None,
+        sale_address: None,
+        lockdrop_address: None,
     };
+
+    if let Some(addr) = msg.airdrop_address {
+        config.airdrop_address = Some(deps.api.addr_validate(&addr)?);
+    }
+    if let Some(addr) = msg.sale_address {
+        config.sale_address = Some(deps.api.addr_validate(&addr)?);
+    }
+    if let Some(addr) = msg.lockdrop_address {
+        config.lockdrop_address = Some(deps.api.addr_validate(&addr)?);
+    }
     CONFIG.save(deps.storage, &config)?;
 
     // store token info
@@ -64,6 +74,18 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, Cw20ContractError> {
     match msg {
+        ExecuteMsg::UpdateConfig {
+            airdrop_address,
+            lockdrop_address,
+            sale_address,
+        } => execute_update_config(
+            deps,
+            env,
+            info,
+            airdrop_address,
+            lockdrop_address,
+            sale_address,
+        ),
         ExecuteMsg::Transfer { recipient, amount } => {
             execute_transfer(deps, env, info, recipient, amount)
         }
@@ -94,6 +116,26 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response
     Ok(Response::default())
 }
 
+pub fn execute_update_config(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    airdrop_address: String,
+    lockdrop_address: String,
+    sale_address: String,
+) -> Result<Response, Cw20ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+    if info.sender != config.dao_address {
+        return Err(Cw20ContractError::Unauthorized {});
+    }
+
+    config.airdrop_address = Some(deps.api.addr_validate(&airdrop_address)?);
+    config.lockdrop_address = Some(deps.api.addr_validate(&lockdrop_address)?);
+    config.sale_address = Some(deps.api.addr_validate(&sale_address)?);
+
+    Ok(Response::default())
+}
+
 pub fn execute_transfer(
     deps: DepsMut,
     env: Env,
@@ -102,9 +144,19 @@ pub fn execute_transfer(
     amount: Uint128,
 ) -> Result<Response, Cw20ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender != config.airdrop_address
-        && info.sender != config.sale_address
-        && info.sender != config.lockdrop_address
+
+    if info.sender
+        != config
+            .airdrop_address
+            .ok_or_else(|| StdError::generic_err("uninitialized"))?
+        && info.sender
+            != config
+                .sale_address
+                .ok_or_else(|| StdError::generic_err("uninitialized"))?
+        && info.sender
+            != config
+                .lockdrop_address
+                .ok_or_else(|| StdError::generic_err("uninitialized"))?
     {
         return Err(Cw20ContractError::Unauthorized {});
     }
@@ -142,7 +194,11 @@ pub fn execute_burn(
     let config = CONFIG.load(deps.storage)?;
     let sender = info.sender.clone();
 
-    if sender != config.lockdrop_address {
+    if sender
+        != config
+            .lockdrop_address
+            .ok_or_else(|| StdError::generic_err("uninitialized"))?
+    {
         return Err(Cw20ContractError::Unauthorized {});
     }
 
@@ -180,7 +236,11 @@ pub fn execute_transfer_from(
     amount: Uint128,
 ) -> Result<Response, Cw20ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender != config.lockdrop_address {
+    if info.sender
+        != config
+            .lockdrop_address
+            .ok_or_else(|| StdError::generic_err("uninitialized"))?
+    {
         return Err(Cw20ContractError::Unauthorized {});
     }
 
@@ -256,7 +316,7 @@ fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
     })?;
     if token.denom != DEPOSITED_SYMBOL {
         return Err(Cw20ContractError::Std(StdError::generic_err(
-            "no untrn's supplied to lock",
+            "no untrns supplied to lock",
         )));
     }
 

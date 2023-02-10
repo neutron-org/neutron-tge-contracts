@@ -9,15 +9,21 @@ pub struct InstantiateMsg {
     /// DAO contract address
     pub dao_address: String,
     /// Airdrop contract address
-    pub airdrop_address: String,
+    pub airdrop_address: Option<String>,
     /// Sale contract address
-    pub sale_contract_address: String,
+    pub sale_address: Option<String>,
     /// Lockdrop contract address,
-    pub lockdrop_address: String,
+    pub lockdrop_address: Option<String>,
 }
 
 #[cw_serde]
 pub enum ExecuteMsg {
+    /// UpdateConfig is a message to initialize all addresses because there are circle deps between contracts
+    UpdateConfig {
+        airdrop_address: String,
+        sale_address: String,
+        lockdrop_address: String,
+    },
     /// Transfer is a base message to move tokens to another account without triggering actions
     Transfer { recipient: String, amount: Uint128 },
     // TODO: rename
@@ -109,9 +115,9 @@ pub struct ConfigResponse {
     /// DAO contract address
     pub dao_address: Addr,
     /// Airdrop contract address
-    pub airdrop_address: Addr,
+    pub airdrop_address: Option<Addr>,
     /// Sale contract address
-    pub sale_address: Addr,
+    pub sale_address: Option<Addr>,
     /// Lockdrop contract address,
-    pub lockdrop_address: Addr,
+    pub lockdrop_address: Option<Addr>,
 }
