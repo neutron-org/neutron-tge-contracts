@@ -344,4 +344,118 @@ fn burn_and_send(
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::contract::instantiate;
+    use crate::msg::InstantiateMsg;
+    use cosmwasm_std::testing::{mock_env, mock_info};
+    use cosmwasm_std::{DepsMut, Env, MessageInfo, Timestamp};
+
+    fn do_instantiate(
+        mut deps: DepsMut,
+        when_claimable: Timestamp,
+        dao_address: String,
+        airdrop_address: Option<String>,
+        sale_address: Option<String>,
+        lockdrop_address: Option<String>,
+    ) -> (MessageInfo, Env) {
+        let instantiate_msg = InstantiateMsg {
+            when_claimable,
+            dao_address,
+            airdrop_address,
+            sale_address,
+            lockdrop_address,
+        };
+        let info = mock_info("creator", &[]);
+        let env = mock_env();
+        let res = instantiate(deps.branch(), env.clone(), info.clone(), instantiate_msg).unwrap();
+        assert_eq!(0, res.messages.len());
+
+        (info, env)
+    }
+
+    mod instantiate {
+        use super::*;
+        use crate::contract::{query_config, TOKEN_DECIMALS, TOKEN_NAME, TOKEN_SYMBOL};
+        use cosmwasm_std::testing::mock_dependencies;
+        use cosmwasm_std::{Addr, Uint128};
+        use cw20_base::contract::{query_minter, query_token_info};
+        use cw20_base::enumerable::query_all_accounts;
+
+        #[test]
+        fn basic() {
+            let mut deps = mock_dependencies();
+            let timestamp = Timestamp::default();
+            let (_info, _env) = do_instantiate(
+                deps.as_mut(),
+                timestamp,
+                "dao_address".to_string(),
+                Some("airdrop_address".to_string()),
+                Some("sale_address".to_string()),
+                Some("lockdrop_address".to_string()),
+            );
+            let config = query_config(deps.as_ref()).unwrap();
+            assert_eq!(config.when_claimable, timestamp);
+            assert_eq!(config.dao_address, "dao_address".to_string());
+            assert_eq!(
+                config.lockdrop_address,
+                Some(Addr::unchecked("lockdrop_address".to_string()))
+            );
+            assert_eq!(
+                config.airdrop_address,
+                Some(Addr::unchecked("airdrop_address".to_string()))
+            );
+            assert_eq!(
+                config.sale_address,
+                Some(Addr::unchecked("sale_address".to_string()))
+            );
+
+            // no accounts since we don't mint anything
+            assert_eq!(
+                query_all_accounts(deps.as_ref(), None, None)
+                    .unwrap()
+                    .accounts
+                    .len(),
+                0
+            );
+            // minter is dao account
+            assert_eq!(
+                query_minter(deps.as_ref()).unwrap().unwrap().minter,
+                "dao_address".to_string()
+            );
+
+            // Write TOKEN_INFO
+            let token_info = query_token_info(deps.as_ref()).unwrap();
+            assert_eq!(token_info.decimals, TOKEN_DECIMALS);
+            assert_eq!(token_info.name, TOKEN_NAME);
+            assert_eq!(token_info.symbol, TOKEN_SYMBOL);
+            assert_eq!(token_info.total_supply, Uint128::zero());
+        }
+
+        #[test]
+        fn works_without_initial_addresses() {
+            let mut deps = mock_dependencies();
+            let timestamp = Timestamp::default();
+            let (_info, _env) = do_instantiate(
+                deps.as_mut(),
+                timestamp,
+                "dao_address".to_string(),
+                None,
+                None,
+                None,
+            );
+            let config = query_config(deps.as_ref()).unwrap();
+            assert_eq!(config.when_claimable, timestamp);
+            assert_eq!(config.dao_address, "dao_address".to_string());
+            assert_eq!(config.lockdrop_address, None);
+            assert_eq!(config.airdrop_address, None);
+            assert_eq!(config.sale_address, None);
+        }
+    }
+
+    mod transfer {
+        // use super::*;
+
+        #[test]
+        fn basic() {}
+    }
+}
