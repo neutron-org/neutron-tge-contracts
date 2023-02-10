@@ -188,14 +188,9 @@ pub fn execute_mint(
     let untrn_amount = try_find_untrns(info.clone().funds)?;
 
     let config = CONFIG.load(deps.storage)?;
+    let recipient = config.dao_address.to_string();
 
-    ::cw20_base::contract::execute_mint(
-        deps,
-        env,
-        info,
-        config.dao_address.to_string(),
-        untrn_amount,
-    )
+    ::cw20_base::contract::execute_mint(deps, env, info, recipient, untrn_amount)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
