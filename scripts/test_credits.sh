@@ -84,3 +84,36 @@ RES=$(${NEUTROND_BIN} query wasm contract-state smart ${CREDITS_CONTRACT_ADDRESS
     --output json \
     --node ${NODE})
 echo "$RES" | jq
+
+echo "Burn 100"
+RES=$(${NEUTROND_BIN} tx wasm execute $CREDITS_CONTRACT_ADDRESS \
+    '{"burn":{"amount": "100"}}' \
+    --from ${TEST_ADDR}  -y \
+    --chain-id ${CHAINID} \
+    --output json \
+    --broadcast-mode=block \
+    --gas-prices ${GAS_PRICES} \
+    --gas 1000000 \
+    --keyring-backend test \
+    --home ${KEYS_HOME} \
+    --node ${NODE})
+echo $RES | jq
+TX_HASH=$(echo $RES | jq -r '.txhash')
+
+echo "Query balance (should be -100 from previous balance)"
+QUERY_MSG="{\"balance\":{\"address\": \"${TEST_ADDR}\"}}"
+RES=$(${NEUTROND_BIN} query wasm contract-state smart ${CREDITS_CONTRACT_ADDRESS} \
+    "${QUERY_MSG}" \
+    --chain-id "$NEUTRON_CHAIN_ID" \
+    --output json \
+    --node ${NODE})
+echo "$RES" | jq
+
+echo "Query transfers (should be equal 100 transfer from ${CREDITS_CONTRACT_ADDRESS} to ${TEST_ADDR}"
+RES=$(neutrond query tx \
+    ${TX_HASH} \
+    --chain-id "$NEUTRON_CHAIN_ID" \
+    --output json \
+    --node ${NODE})
+
+echo $RES | jq -r '.logs[0].events' |  jq -r '.[] | select(.type=="transfer")'
