@@ -2,7 +2,7 @@ use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
     StdResult, Uint128,
 };
 use cw2::set_contract_version;
@@ -67,7 +67,8 @@ pub fn execute(
         ExecuteMsg::Transfer { recipient, amount } => {
             execute_transfer(deps, env, info, recipient, amount)
         }
-        ExecuteMsg::Burn {} => execute_burn(deps, env, info),
+        ExecuteMsg::BurnAll {} => execute_burn_all(deps, env, info),
+        ExecuteMsg::Burn { amount } => execute_burn(deps, env, info, amount),
         ExecuteMsg::IncreaseAllowance {
             spender,
             amount,
@@ -111,34 +112,41 @@ pub fn execute_transfer(
     ::cw20_base::contract::execute_transfer(deps, env, info, recipient, amount)
 }
 
-pub fn execute_burn(
+pub fn execute_burn_all(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
     let config = CONFIG.load(deps.storage)?;
+    let sender = info.sender.clone();
 
-    if env.block.time < config.when_claimable {
+    if too_early(&env, &config) {
         return Err(Cw20ContractError::Std(StdError::generic_err(format!(
             "cannot claim until {}",
             config.when_claimable
         ))));
     }
-
-    let sender = info.sender.clone();
-
-    // burn all balance
     let balance = cw20_base::state::BALANCES
         .may_load(deps.storage, &sender)?
         .unwrap_or_default();
 
-    let burn_response = ::cw20_base::contract::execute_burn(deps, env, info, balance)?;
-    let send = BankMsg::Send {
-        to_address: sender.to_string(),
-        amount: vec![Coin::new(balance.u128(), DEPOSITED_SYMBOL)],
-    };
+    burn_and_send(deps, env, info, sender, balance)
+}
 
-    Ok(burn_response.add_message(send))
+pub fn execute_burn(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    amount: Uint128, // used only for airdrop address
+) -> Result<Response, Cw20ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    let sender = info.sender.clone();
+
+    if sender != config.lockdrop_address {
+        return Err(Cw20ContractError::Unauthorized {});
+    }
+
+    burn_and_send(deps, env, info, sender, amount)
 }
 
 pub fn execute_increase_allowance(
@@ -253,6 +261,26 @@ fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
     }
 
     Ok(token.amount)
+}
+
+fn too_early(env: &Env, config: &Config) -> bool {
+    env.block.time < config.when_claimable
+}
+
+fn burn_and_send(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    sender: Addr,
+    amount: Uint128,
+) -> Result<Response, Cw20ContractError> {
+    let burn_response = ::cw20_base::contract::execute_burn(deps, env, info, amount)?;
+    let send = BankMsg::Send {
+        to_address: sender.to_string(),
+        amount: vec![Coin::new(amount.u128(), DEPOSITED_SYMBOL)],
+    };
+
+    Ok(burn_response.add_message(send))
 }
 
 #[cfg(test)]

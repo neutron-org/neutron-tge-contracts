@@ -20,8 +20,11 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     /// Transfer is a base message to move tokens to another account without triggering actions
     Transfer { recipient: String, amount: Uint128 },
-    /// Burn is a base message to destroy CNTRN's forever and send NTRN tokens in 1:1 proportion
-    Burn {},
+    // TODO: rename
+    /// BurnAll is a message that burns all CNTRN tokens on the sender and sends NTRN tokens in 1:1 proportion
+    BurnAll {},
+    /// Burn is a message only for `config.lockdrop` account to destroy certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion
+    Burn { amount: Uint128 },
     /// Only with "approval" extension. Allows spender to access an additional amount tokens
     /// from the owner's (env.sender) account. If expires is Some(), overwrites current allowance
     /// expiration with this one.
