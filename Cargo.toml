@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/*"]
+members = ["contracts/token-sale", "contracts/astroport/*"]
 
 [profile.release]
 rpath = false

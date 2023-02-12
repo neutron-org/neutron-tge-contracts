@@ -41,4 +41,4 @@ sim = { git = "https://github.com/astroport-fi/astroport-sims.git", rev = "68699
 astroport-token = {path = "../token"}
 cw-multi-test = "0.15"
 astroport-factory = {path = "../factory"}
-derivative = "0.3"
+derivative = "2.2.0"
