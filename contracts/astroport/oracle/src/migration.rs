@@ -16,4 +16,3 @@ pub struct PriceCumulativeLastV100 {
     /// The last timestamp block in pool
     pub block_timestamp_last: u64,
 }
-

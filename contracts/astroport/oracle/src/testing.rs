@@ -53,6 +53,7 @@ fn oracle_overflow() {
     let instantiate_msg = InstantiateMsg {
         factory_contract: factory.to_string(),
         asset_infos: vec![astro_asset_info, usdc_asset_info],
+        period: 1,
     };
 
     // Set cumulative price to 192738282u128

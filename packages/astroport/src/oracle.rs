@@ -19,7 +19,7 @@ pub enum ExecuteMsg {
     /// Update/accumulate prices
     Update {},
     /// Update period
-    UpdatePeriod { new_period: u64},
+    UpdatePeriod { new_period: u64 },
 }
 
 /// This structure describes the query messages available in the contract.
@@ -40,7 +40,7 @@ pub enum QueryMsg {
         token: AssetInfo,
         /// The amount of tokens for which to compute the token price
         height: Uint64,
-    }
+    },
 }
 
 /// This structure describes a migration message.

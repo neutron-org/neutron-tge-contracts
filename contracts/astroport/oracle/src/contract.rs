@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use crate::error::ContractError;
 use crate::querier::{query_cumulative_prices, query_prices};
 use crate::state::{Config, PriceCumulativeLast, CONFIG, PRICE_LAST};
@@ -6,14 +5,17 @@ use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext};
 use astroport::oracle::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::{query_pair_info, query_token_precision};
-use cosmwasm_std::{entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128, Uint256, Uint64};
+use cosmwasm_std::{
+    entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
+    StdError, StdResult, Uint128, Uint256, Uint64,
+};
 use cw2::{get_contract_version, set_contract_version};
+use std::str::FromStr;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "astroport-oracle";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-
 
 /// Creates a new contract with the specified parameters in the [`InstantiateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -69,11 +71,11 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Update {} => update(deps, env),
-        ExecuteMsg::UpdatePeriod {new_period} => update_period(deps, env,new_period),
+        ExecuteMsg::UpdatePeriod { new_period } => update_period(deps, env, new_period),
     }
 }
 
-pub fn update_period(deps: DepsMut, env: Env, new_period: u64)-> Result<Response, ContractError> {
+pub fn update_period(deps: DepsMut, env: Env, new_period: u64) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     Ok(Response::default())
 }
@@ -125,7 +127,9 @@ pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Consult { token, amount } => to_binary(&consult(deps, token, amount)?),
-        QueryMsg::TWAPAtHeight {token, height} => to_binary(&twap_at_height(deps, token, height)?)
+        QueryMsg::TWAPAtHeight { token, height } => {
+            to_binary(&twap_at_height(deps, token, height)?)
+        }
     }
 }
 
@@ -196,7 +200,10 @@ fn twap_at_height(
 ) -> Result<Vec<(AssetInfo, Uint256)>, StdError> {
     let config = CONFIG.load(deps.storage)?;
     // TODO: what if there is no data for given height and we're receive last value (possibly an exploit)?
-    let price_last = PRICE_LAST.may_load_at_height(deps.storage, u64::from(height)).unwrap().unwrap();
+    let price_last = PRICE_LAST
+        .may_load_at_height(deps.storage, u64::from(height))
+        .unwrap()
+        .unwrap();
     let mut average_prices = vec![];
     for (from, to, value) in price_last.average_prices {
         if from.equal(&token) {
@@ -225,12 +232,9 @@ fn twap_at_height(
                     },
                     Some(asset.clone()),
                 )?
-                    .return_amount;
+                .return_amount;
 
-                Ok((
-                    asset.clone(),
-                    Uint256::from(price),
-                ))
+                Ok((asset.clone(), Uint256::from(price)))
             } else {
                 let price_precision = Uint256::from(10_u128.pow(TWAP_PRECISION.into()));
                 Ok((
@@ -241,5 +245,3 @@ fn twap_at_height(
         })
         .collect::<Result<Vec<(AssetInfo, Uint256)>, StdError>>()
 }
-
-

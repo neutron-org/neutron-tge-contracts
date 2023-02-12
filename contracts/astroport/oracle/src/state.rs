@@ -8,7 +8,8 @@ use cw_storage_plus::{Item, SnapshotItem, Strategy};
 pub const CONFIG: Item<Config> = Item::new("config");
 /// Stores the latest cumulative and average prices at the given key
 /// TODO: proper checkpoints
-pub const PRICE_LAST: SnapshotItem<PriceCumulativeLast> = SnapshotItem::new("price_last", "", "", Strategy::EveryBlock);
+pub const PRICE_LAST: SnapshotItem<PriceCumulativeLast> =
+    SnapshotItem::new("price_last", "", "", Strategy::EveryBlock);
 
 /// This structure stores the latest cumulative and average token prices for the target pool
 #[cw_serde]

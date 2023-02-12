@@ -1,9 +1,12 @@
 pub mod contract;
-pub mod error;
-mod migration;
-mod querier;
+pub mod math;
 pub mod state;
 
+pub mod error;
+
+mod migration;
+mod response;
+mod utils;
 
 #[cfg(test)]
 mod testing;

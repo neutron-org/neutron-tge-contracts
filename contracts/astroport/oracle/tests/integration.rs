@@ -591,7 +591,7 @@ fn consult() {
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
         asset_infos: asset_infos.clone(),
-        period: 86400
+        period: 86400,
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -729,7 +729,7 @@ fn consult_pair_stable() {
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
         asset_infos: asset_infos.clone(),
-        period: 86400
+        period: 86400,
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -924,7 +924,7 @@ fn consult2() {
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
         asset_infos: asset_infos.clone(),
-        period: 86400
+        period: 86400,
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -1139,7 +1139,7 @@ fn consult_zero_price() {
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
         asset_infos: asset_infos.clone(),
-        period: 86400
+        period: 86400,
     };
     let oracle_instance = router
         .instantiate_contract(
