@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use crate::error::ContractError;
 use crate::querier::{query_cumulative_prices, query_prices};
 use crate::state::{Config, PriceCumulativeLast, CONFIG, PRICE_LAST};
@@ -124,7 +125,7 @@ pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Consult { token, amount } => to_binary(&consult(deps, token, amount)?),
-        QueryMsg::TWAPAtHeight {token, height} => to_binary(&twap_at_height(deps, token, height))
+        QueryMsg::TWAPAtHeight {token, height} => to_binary(&twap_at_height(deps, token, height)?)
     }
 }
 
@@ -191,7 +192,7 @@ fn consult(
 fn twap_at_height(
     deps: Deps,
     token: AssetInfo,
-    height: Uint128,
+    height: Uint64,
 ) -> Result<Vec<(AssetInfo, Uint256)>, StdError> {
     let config = CONFIG.load(deps.storage)?;
     // TODO: what if there is no data for given height and we're receive last value (possibly an exploit)?
@@ -223,7 +224,8 @@ fn twap_at_height(
                         amount: one,
                     },
                     Some(asset.clone()),
-                )?;
+                )?
+                    .return_amount;
 
                 Ok((
                     asset.clone(),
