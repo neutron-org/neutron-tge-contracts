@@ -1,17 +1,19 @@
 use anyhow::Result;
 use cosmwasm_std::{
-    attr, to_binary, Addr, BlockInfo, Coin, Decimal, QueryRequest, StdResult, Uint128, WasmQuery,
+    attr, to_binary, Addr, BlockInfo, Coin, Decimal, Decimal256, QueryRequest, StdResult, Uint128,
+    Uint64, WasmQuery,
 };
 use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, AppResponse, ContractWrapper, Executor};
 use itertools::Itertools;
+use std::str::FromStr;
 
 use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 
 use astroport::factory::{PairConfig, PairType};
 
-use astroport::oracle::QueryMsg::Consult;
+use astroport::oracle::QueryMsg::{Consult, TWAPAtHeight};
 use astroport::oracle::{ExecuteMsg, InstantiateMsg};
 use astroport::pair::StablePoolParams;
 
@@ -658,6 +660,158 @@ fn consult() {
 }
 
 #[test]
+fn twap_at_height() {
+    let mut router = mock_app(None, None);
+    let owner = Addr::unchecked("owner");
+    let user = Addr::unchecked("user0000");
+    let (astro_token_instance, factory_instance, oracle_code_id) =
+        instantiate_contracts(&mut router, owner.clone());
+
+    let usdc_token_instance = instantiate_token(
+        &mut router,
+        owner.clone(),
+        "Usdc token".to_string(),
+        "USDC".to_string(),
+    );
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: usdc_token_instance.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: astro_token_instance.clone(),
+        },
+    ];
+
+    let assets = vec![
+        Asset {
+            info: asset_infos[0].clone(),
+            amount: Uint128::from(100_000_u128),
+        },
+        Asset {
+            info: asset_infos[1].clone(),
+            amount: Uint128::from(100_000_u128),
+        },
+    ];
+
+    let pair_info = create_pair(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        &factory_instance,
+        assets.clone(),
+    );
+    provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        &pair_info,
+        assets.clone(),
+    )
+    .unwrap();
+
+    router.update_block(next_day);
+    let pair_info: PairInfo = router
+        .wrap()
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: factory_instance.clone().to_string(),
+            msg: to_binary(&astroport::factory::QueryMsg::Pair {
+                asset_infos: asset_infos.clone(),
+            })
+            .unwrap(),
+        }))
+        .unwrap();
+
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        pair_info.contract_addr.clone(),
+        vec![
+            (astro_token_instance.clone(), Uint128::from(50_000_u128)),
+            (usdc_token_instance.clone(), Uint128::from(50_000_u128)),
+        ],
+    );
+    router.update_block(next_day);
+
+    let msg = InstantiateMsg {
+        factory_contract: factory_instance.to_string(),
+        asset_infos: asset_infos.clone(),
+        period: 86400,
+    };
+    let oracle_instance = router
+        .instantiate_contract(
+            oracle_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("ORACLE"),
+            None,
+        )
+        .unwrap();
+
+    let e = router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(e.root_cause().to_string(), "Period not elapsed",);
+    router.update_block(next_day);
+
+    // Change pair liquidity
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user,
+        pair_info.contract_addr,
+        vec![
+            (astro_token_instance.clone(), Uint128::from(10_000_u128)),
+            (usdc_token_instance.clone(), Uint128::from(10_000_u128)),
+        ],
+    );
+    router.update_block(next_day);
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap();
+
+    for (addr, price, block) in [
+        (
+            astro_token_instance.clone(),
+            Decimal256::from_str("0.137931").unwrap(),
+            router.block_info().height,
+        ),
+        (
+            usdc_token_instance.clone(),
+            Decimal256::from_str("0.137931").unwrap(),
+            router.block_info().height,
+        ),
+    ] {
+        let msg = TWAPAtHeight {
+            token: AssetInfo::Token {
+                contract_addr: addr,
+            },
+            height: Uint64::from(block),
+        };
+        let res: Vec<(AssetInfo, Decimal256)> = router
+            .wrap()
+            .query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: oracle_instance.to_string(),
+                msg: to_binary(&msg).unwrap(),
+            }))
+            .unwrap();
+        assert_eq!(res[0].1, price);
+    }
+}
+
+#[test]
 fn consult_pair_stable() {
     let mut router = mock_app(None, None);
     let owner = Addr::unchecked("owner");
@@ -791,6 +945,150 @@ fn consult_pair_stable() {
             amount,
         };
         let res: Vec<(AssetInfo, Uint128)> = router
+            .wrap()
+            .query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: oracle_instance.to_string(),
+                msg: to_binary(&msg).unwrap(),
+            }))
+            .unwrap();
+        assert_eq!(res[0].1, amount);
+    }
+}
+
+#[test]
+fn twap_at_height_pair_stable() {
+    let mut router = mock_app(None, None);
+    let owner = Addr::unchecked("owner");
+    let user = Addr::unchecked("user0000");
+    let (astro_token_instance, factory_instance, oracle_code_id) =
+        instantiate_contracts(&mut router, owner.clone());
+
+    let usdc_token_instance = instantiate_token(
+        &mut router,
+        owner.clone(),
+        "Usdc token".to_string(),
+        "USDC".to_string(),
+    );
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: usdc_token_instance.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: astro_token_instance.clone(),
+        },
+    ];
+    create_pair_stable(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        &factory_instance,
+        vec![
+            Asset {
+                info: asset_infos[0].clone(),
+                amount: Uint128::from(100_000_000000u128),
+            },
+            Asset {
+                info: asset_infos[1].clone(),
+                amount: Uint128::from(100_000_000000u128),
+            },
+        ],
+    );
+    router.update_block(next_day);
+    let pair_info: PairInfo = router
+        .wrap()
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: factory_instance.clone().to_string(),
+            msg: to_binary(&astroport::factory::QueryMsg::Pair {
+                asset_infos: asset_infos.clone(),
+            })
+            .unwrap(),
+        }))
+        .unwrap();
+
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        pair_info.contract_addr.clone(),
+        vec![
+            (
+                astro_token_instance.clone(),
+                Uint128::from(500_000_000000u128),
+            ),
+            (
+                usdc_token_instance.clone(),
+                Uint128::from(500_000_000000u128),
+            ),
+        ],
+    );
+    router.update_block(next_day);
+
+    let msg = InstantiateMsg {
+        factory_contract: factory_instance.to_string(),
+        asset_infos: asset_infos.clone(),
+        period: 86400,
+    };
+    let oracle_instance = router
+        .instantiate_contract(
+            oracle_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("ORACLE"),
+            None,
+        )
+        .unwrap();
+
+    let e = router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(e.root_cause().to_string(), "Period not elapsed",);
+    router.update_block(next_day);
+
+    // Change pair liquidity
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user,
+        pair_info.contract_addr,
+        vec![
+            (
+                astro_token_instance.clone(),
+                Uint128::from(100_000_000000u128),
+            ),
+            (
+                usdc_token_instance.clone(),
+                Uint128::from(100_000_000000u128),
+            ),
+        ],
+    );
+    router.update_block(next_day);
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap();
+
+    for (addr, amount) in [
+        (astro_token_instance.clone(), Decimal256::one()),
+        (usdc_token_instance.clone(), Decimal256::one()),
+    ] {
+        let msg = TWAPAtHeight {
+            token: AssetInfo::Token {
+                contract_addr: addr,
+            },
+            height: Uint64::from(router.block_info().height),
+        };
+        let res: Vec<(AssetInfo, Decimal256)> = router
             .wrap()
             .query(&QueryRequest::Wasm(WasmQuery::Smart {
                 contract_addr: oracle_instance.to_string(),
@@ -1618,6 +1916,418 @@ fn consult_multiple_assets() {
             amount,
         };
         let res: Vec<(AssetInfo, Uint128)> = router
+            .wrap()
+            .query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: oracle_instance.to_string(),
+                msg: to_binary(&msg).unwrap(),
+            }))
+            .unwrap();
+        assert_eq!(res, amount_exp);
+    }
+}
+
+#[test]
+fn twap_at_height_multiple_assets() {
+    let mut router = mock_app(None, None);
+    let owner = Addr::unchecked("owner");
+    let user = Addr::unchecked("user0000");
+    let first_tracked_block: u64;
+    let mut second_tracked_block: u64 = 0;
+    let mut third_tracked_block: u64 = 0;
+    let (astro_token_instance, factory_instance, oracle_code_id) =
+        instantiate_contracts(&mut router, owner.clone());
+
+    let usdc_token_instance = instantiate_token(
+        &mut router,
+        owner.clone(),
+        "Usdc token".to_string(),
+        "USDC".to_string(),
+    );
+
+    let usdt_token_instance = instantiate_token(
+        &mut router,
+        owner.clone(),
+        "Usdt token".to_string(),
+        "USDT".to_string(),
+    );
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: usdc_token_instance.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: astro_token_instance.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: usdt_token_instance.clone(),
+        },
+    ];
+    create_pair_stable(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        &factory_instance,
+        vec![
+            Asset {
+                info: asset_infos[0].clone(),
+                amount: Uint128::from(500_000_000000u128),
+            },
+            Asset {
+                info: asset_infos[1].clone(),
+                amount: Uint128::from(400_000_000000u128),
+            },
+            Asset {
+                info: asset_infos[2].clone(),
+                amount: Uint128::from(300_000_000000u128),
+            },
+        ],
+    );
+    router.update_block(next_day);
+    let pair_info: PairInfo = router
+        .wrap()
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: factory_instance.clone().to_string(),
+            msg: to_binary(&astroport::factory::QueryMsg::Pair {
+                asset_infos: asset_infos.clone(),
+            })
+            .unwrap(),
+        }))
+        .unwrap();
+
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        pair_info.contract_addr.clone(),
+        vec![
+            (
+                usdc_token_instance.clone(),
+                Uint128::from(500_000_000000u128),
+            ),
+            (
+                astro_token_instance.clone(),
+                Uint128::from(400_000_000000u128),
+            ),
+            (
+                usdt_token_instance.clone(),
+                Uint128::from(300_000_000000u128),
+            ),
+        ],
+    );
+    router.update_block(next_day);
+
+    let msg = InstantiateMsg {
+        factory_contract: factory_instance.to_string(),
+        asset_infos: asset_infos.clone(),
+        period: 86400,
+    };
+    let oracle_instance = router
+        .instantiate_contract(
+            oracle_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("ORACLE"),
+            None,
+        )
+        .unwrap();
+
+    let e = router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(e.root_cause().to_string(), "Period not elapsed");
+    router.update_block(next_day);
+
+    first_tracked_block = router.block_info().height;
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap();
+    assert_eq!(router.block_info().height, first_tracked_block);
+
+    // Change pair liquidity
+    for (amount1, amount2, amount3) in [
+        (
+            Uint128::from(500_000_000000u128),
+            Uint128::from(400_000_000000u128),
+            Uint128::from(300_000_000000u128),
+        ),
+        (
+            Uint128::from(500_000_000000u128),
+            Uint128::from(400_000_000000u128),
+            Uint128::from(300_000_000000u128),
+        ),
+    ] {
+        change_provide_liquidity(
+            &mut router,
+            owner.clone(),
+            user.clone(),
+            pair_info.contract_addr.clone(),
+            vec![
+                (usdc_token_instance.clone(), amount1),
+                (astro_token_instance.clone(), amount2),
+                (usdt_token_instance.clone(), amount3),
+            ],
+        );
+        router.update_block(next_day);
+        second_tracked_block = router.block_info().height;
+        router
+            .execute_contract(
+                owner.clone(),
+                oracle_instance.clone(),
+                &ExecuteMsg::Update {},
+                &[],
+            )
+            .unwrap();
+    }
+
+    // Change pair liquidity
+    for (amount1, amount2, amount3) in [
+        (
+            Uint128::from(100_000_000000u128),
+            Uint128::from(95_000_000000u128),
+            Uint128::from(100_000_000000u128),
+        ),
+        (
+            Uint128::from(100_000_000000u128),
+            Uint128::from(95_000_000000u128),
+            Uint128::from(100_000_000000u128),
+        ),
+        (
+            Uint128::from(100_000_000000u128),
+            Uint128::from(95_000_000000u128),
+            Uint128::from(100_000_000000u128),
+        ),
+    ] {
+        change_provide_liquidity(
+            &mut router,
+            owner.clone(),
+            user.clone(),
+            pair_info.contract_addr.clone(),
+            vec![
+                (usdc_token_instance.clone(), amount1),
+                (astro_token_instance.clone(), amount2),
+                (usdt_token_instance.clone(), amount3),
+            ],
+        );
+        router.update_block(next_day);
+        router
+            .execute_contract(
+                owner.clone(),
+                oracle_instance.clone(),
+                &ExecuteMsg::Update {},
+                &[],
+            )
+            .unwrap();
+        third_tracked_block = router.block_info().height;
+    }
+    for (addr, amount_exp) in [
+        (
+            usdc_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: astro_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.998123").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdt_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.995465").unwrap(),
+                ),
+            ],
+        ),
+        (
+            astro_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdc_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.001881").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdt_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.997337").unwrap(),
+                ),
+            ],
+        ),
+        (
+            usdt_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdc_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.004556").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: astro_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.002671").unwrap(),
+                ),
+            ],
+        ),
+    ] {
+        let msg = TWAPAtHeight {
+            token: AssetInfo::Token {
+                contract_addr: addr.clone(),
+            },
+            height: Uint64::from(first_tracked_block),
+        };
+        let res: Vec<(AssetInfo, Decimal256)> = router
+            .wrap()
+            .query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: oracle_instance.to_string(),
+                msg: to_binary(&msg).unwrap(),
+            }))
+            .unwrap();
+        assert_eq!(res, amount_exp);
+    }
+
+    for (addr, amount_exp) in [
+        (
+            usdc_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: astro_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.997892").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdt_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.994397").unwrap(),
+                ),
+            ],
+        ),
+        (
+            astro_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdc_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.002114").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdt_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.996498").unwrap(),
+                ),
+            ],
+        ),
+        (
+            usdt_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdc_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.005637").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: astro_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.003516").unwrap(),
+                ),
+            ],
+        ),
+    ] {
+        let msg = TWAPAtHeight {
+            token: AssetInfo::Token {
+                contract_addr: addr.clone(),
+            },
+            height: Uint64::from(second_tracked_block),
+        };
+        let res: Vec<(AssetInfo, Decimal256)> = router
+            .wrap()
+            .query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: oracle_instance.to_string(),
+                msg: to_binary(&msg).unwrap(),
+            }))
+            .unwrap();
+        assert_eq!(res, amount_exp);
+    }
+
+    for (addr, amount_exp) in [
+        (
+            usdc_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: astro_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.998055").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdt_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.995160").unwrap(),
+                ),
+            ],
+        ),
+        (
+            astro_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdc_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.001950").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdt_token_instance.clone(),
+                    },
+                    Decimal256::from_str("0.997100").unwrap(),
+                ),
+            ],
+        ),
+        (
+            usdt_token_instance.clone(),
+            vec![
+                (
+                    AssetInfo::Token {
+                        contract_addr: usdc_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.004864").unwrap(),
+                ),
+                (
+                    AssetInfo::Token {
+                        contract_addr: astro_token_instance.clone(),
+                    },
+                    Decimal256::from_str("1.002909").unwrap(),
+                ),
+            ],
+        ),
+    ] {
+        let msg = TWAPAtHeight {
+            token: AssetInfo::Token {
+                contract_addr: addr.clone(),
+            },
+            height: Uint64::from(third_tracked_block),
+        };
+        let res: Vec<(AssetInfo, Decimal256)> = router
             .wrap()
             .query(&QueryRequest::Wasm(WasmQuery::Smart {
                 contract_addr: oracle_instance.to_string(),

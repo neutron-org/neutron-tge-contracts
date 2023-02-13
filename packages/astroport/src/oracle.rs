@@ -1,15 +1,16 @@
 use crate::asset::AssetInfo;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Uint128, Uint256, Uint64};
+use cosmwasm_std::{Decimal256, Uint128, Uint256, Uint64};
 
 /// This structure stores general parameters for the contract.
+/// Modified by us
 #[cw_serde]
 pub struct InstantiateMsg {
     /// The factory contract address
     pub factory_contract: String,
     /// The assets that have a pool for which this contract provides price feeds
     pub asset_infos: Vec<AssetInfo>,
-    ///
+    /// TODO: clarify
     pub period: u64,
 }
 
@@ -34,7 +35,7 @@ pub enum QueryMsg {
         /// The amount of tokens for which to compute the token price
         amount: Uint128,
     },
-    #[returns(Vec<(AssetInfo, Uint256)>)]
+    #[returns(Vec<(AssetInfo, Decimal256)>)]
     TWAPAtHeight {
         /// The asset for which to compute a new TWAP value
         token: AssetInfo,

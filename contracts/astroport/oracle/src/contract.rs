@@ -2,6 +2,7 @@ use crate::error::ContractError;
 use crate::querier::{query_cumulative_prices, query_prices};
 use crate::state::{Config, PriceCumulativeLast, CONFIG, PRICE_LAST};
 use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext};
+use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::oracle::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::{query_pair_info, query_token_precision};
@@ -9,8 +10,8 @@ use cosmwasm_std::{
     entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
     StdError, StdResult, Uint128, Uint256, Uint64,
 };
-use cw2::{get_contract_version, set_contract_version};
-use std::str::FromStr;
+use cw2::set_contract_version;
+use std::ops::Div;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "astroport-oracle";
@@ -66,18 +67,32 @@ pub fn instantiate(
 pub fn execute(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Update {} => update(deps, env),
-        ExecuteMsg::UpdatePeriod { new_period } => update_period(deps, env, new_period),
+        ExecuteMsg::UpdatePeriod { new_period } => update_period(deps, env, info, new_period),
     }
 }
 
-pub fn update_period(deps: DepsMut, env: Env, new_period: u64) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-    Ok(Response::default())
+pub fn update_period(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    new_period: u64,
+) -> Result<Response, ContractError> {
+    let mut config: Config = CONFIG.load(deps.storage)?;
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    config.period = new_period;
+    CONFIG.save(deps.storage, &config)?;
+
+    Ok(Response::new()
+        .add_attribute("action", "update_config")
+        .add_attribute("new_period", config.period.to_string()))
 }
 
 /// Updates the local TWAP values for the tokens in the target Astroport pool.
@@ -197,7 +212,7 @@ fn twap_at_height(
     deps: Deps,
     token: AssetInfo,
     height: Uint64,
-) -> Result<Vec<(AssetInfo, Uint256)>, StdError> {
+) -> Result<Vec<(AssetInfo, Decimal256)>, StdError> {
     let config = CONFIG.load(deps.storage)?;
     // TODO: what if there is no data for given height and we're receive last value (possibly an exploit)?
     let price_last = PRICE_LAST
@@ -233,15 +248,15 @@ fn twap_at_height(
                     Some(asset.clone()),
                 )?
                 .return_amount;
-
-                Ok((asset.clone(), Uint256::from(price)))
-            } else {
-                let price_precision = Uint256::from(10_u128.pow(TWAP_PRECISION.into()));
                 Ok((
                     asset.clone(),
-                    (*price_average / price_precision).to_uint256(),
+                    Decimal256::from_integer(Uint256::from(price))
+                        .div(Decimal256::from(one.to_decimal())),
                 ))
+            } else {
+                let price_precision = Uint256::from(10_u128.pow(TWAP_PRECISION.into()));
+                Ok((asset.clone(), *price_average / price_precision))
             }
         })
-        .collect::<Result<Vec<(AssetInfo, Uint256)>, StdError>>()
+        .collect::<Result<Vec<(AssetInfo, Decimal256)>, StdError>>()
 }
