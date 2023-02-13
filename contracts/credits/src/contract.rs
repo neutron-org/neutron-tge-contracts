@@ -2,16 +2,18 @@ use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
-    StdResult, Uint128,
+    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response,
+    StdError, StdResult, Timestamp, Uint128,
 };
 use cw2::set_contract_version;
 use cw20_base::state as Cw20State;
 use cw_utils::Expiration;
 
 use crate::error::ContractError;
-use crate::msg::{ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
-use crate::state::{Config, CONFIG};
+use crate::msg::{
+    ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, VestingsResponse,
+};
+use crate::state::{Config, VestingItem, CONFIG, VESTINGS};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:credits";
@@ -32,7 +34,6 @@ pub fn instantiate(
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let mut config = Config {
-        when_claimable: msg.when_claimable,
         dao_address: deps.api.addr_validate(&msg.dao_address)?,
         airdrop_address: None,
         sale_address: None,
@@ -86,6 +87,20 @@ pub fn execute(
             lockdrop_address,
             sale_address,
         ),
+        ExecuteMsg::AddVesting {
+            address,
+            amount,
+            start_timestamp,
+            end_timestamp,
+        } => execute_add_vesting(
+            deps,
+            env,
+            info,
+            address,
+            amount,
+            start_timestamp,
+            end_timestamp,
+        ),
         ExecuteMsg::Transfer { recipient, amount } => {
             execute_transfer(deps, env, info, recipient, amount)
         }
@@ -136,6 +151,54 @@ pub fn execute_update_config(
     Ok(Response::default())
 }
 
+pub fn execute_add_vesting(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    address: String,
+    amount: Uint128,
+    start_timestamp: Timestamp,
+    end_timestamp: Timestamp,
+) -> Result<Response, Cw20ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    if info.sender
+        != config
+            .airdrop_address
+            .ok_or_else(|| StdError::generic_err("uninitialized"))?
+        && info.sender
+            != config
+                .sale_address
+                .ok_or_else(|| StdError::generic_err("uninitialized"))?
+    {
+        return Err(Cw20ContractError::Unauthorized {});
+    }
+
+    let vested_to = deps.api.addr_validate(&address)?;
+
+    VESTINGS.update(
+        deps.storage,
+        (&vested_to, end_timestamp.nanos()),
+        |o: Option<VestingItem>| -> Result<VestingItem, Cw20ContractError> {
+            match o {
+                Some(vesting_item) => Ok({
+                    VestingItem {
+                        start_timestamp: vesting_item.start_timestamp,
+                        end_timestamp: vesting_item.end_timestamp,
+                        amount: vesting_item.amount + amount,
+                    }
+                }),
+                None => Ok(VestingItem {
+                    start_timestamp,
+                    end_timestamp,
+                    amount,
+                }),
+            }
+        },
+    )?;
+
+    Ok(Response::default())
+}
+
 pub fn execute_transfer(
     deps: DepsMut,
     env: Env,
@@ -169,20 +232,35 @@ pub fn execute_burn_all(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-    let sender = info.sender.clone();
+    // adds up only claimable vestings
+    let add_claimable = |item: StdResult<(u64, VestingItem)>| {
+        if let Ok((_, vesting_item)) = item {
+            // Can claim only after vesting time has passed
+            // TODO: check
+            if env.block.time > vesting_item.end_timestamp {
+                vesting_item.amount
+            } else {
+                Uint128::zero()
+            }
+        } else {
+            Uint128::zero()
+        }
+    };
 
-    if too_early(&env, &config) {
-        return Err(Cw20ContractError::Std(StdError::generic_err(format!(
-            "cannot claim until {}",
-            config.when_claimable
-        ))));
+    let owner = info.sender.clone();
+    let total_to_burn: Uint128 = VESTINGS
+        .prefix(&owner)
+        .range(deps.storage, None, None, Order::Ascending)
+        .map(add_claimable)
+        .sum();
+
+    if total_to_burn.is_zero() {
+        return Err(Cw20ContractError::Std(StdError::generic_err(
+            "cannot claim yet",
+        )));
     }
-    let balance = cw20_base::state::BALANCES
-        .may_load(deps.storage, &sender)?
-        .unwrap_or_default();
 
-    burn_and_send(deps, env, info, sender, balance)
+    burn_and_send(deps, env, info, owner, total_to_burn)
 }
 
 pub fn execute_burn(
@@ -264,6 +342,7 @@ pub fn execute_mint(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
+        QueryMsg::Vestings { address } => to_binary(&query_vestings(deps, address)?),
         QueryMsg::Balance { address } => {
             to_binary(&::cw20_base::contract::query_balance(deps, address)?)
         }
@@ -302,11 +381,21 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
-        when_claimable: config.when_claimable,
         dao_address: config.dao_address,
         airdrop_address: config.airdrop_address,
         sale_address: config.sale_address,
         lockdrop_address: config.lockdrop_address,
+    })
+}
+
+fn query_vestings(deps: Deps, address: String) -> StdResult<VestingsResponse> {
+    let owner = deps.api.addr_validate(&address)?;
+    let vestings: StdResult<Vec<(_, VestingItem)>> = VESTINGS
+        .prefix(&owner)
+        .range(deps.storage, None, None, Order::Ascending)
+        .collect();
+    Ok(VestingsResponse {
+        vestings: vestings?.into_iter().map(|(_, v)| v).collect(),
     })
 }
 
@@ -321,10 +410,6 @@ fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
     }
 
     Ok(token.amount)
-}
-
-fn too_early(env: &Env, config: &Config) -> bool {
-    env.block.time < config.when_claimable
 }
 
 fn burn_and_send(
@@ -348,18 +433,16 @@ mod tests {
     use crate::contract::instantiate;
     use crate::msg::InstantiateMsg;
     use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{DepsMut, Env, MessageInfo, Timestamp};
+    use cosmwasm_std::{DepsMut, Env, MessageInfo};
 
     fn do_instantiate(
         mut deps: DepsMut,
-        when_claimable: Timestamp,
         dao_address: String,
         airdrop_address: Option<String>,
         sale_address: Option<String>,
         lockdrop_address: Option<String>,
     ) -> (MessageInfo, Env) {
         let instantiate_msg = InstantiateMsg {
-            when_claimable,
             dao_address,
             airdrop_address,
             sale_address,
@@ -384,17 +467,14 @@ mod tests {
         #[test]
         fn basic() {
             let mut deps = mock_dependencies();
-            let timestamp = Timestamp::default();
             let (_info, _env) = do_instantiate(
                 deps.as_mut(),
-                timestamp,
                 "dao_address".to_string(),
                 Some("airdrop_address".to_string()),
                 Some("sale_address".to_string()),
                 Some("lockdrop_address".to_string()),
             );
             let config = query_config(deps.as_ref()).unwrap();
-            assert_eq!(config.when_claimable, timestamp);
             assert_eq!(config.dao_address, "dao_address".to_string());
             assert_eq!(
                 config.lockdrop_address,
@@ -434,17 +514,9 @@ mod tests {
         #[test]
         fn works_without_initial_addresses() {
             let mut deps = mock_dependencies();
-            let timestamp = Timestamp::default();
-            let (_info, _env) = do_instantiate(
-                deps.as_mut(),
-                timestamp,
-                "dao_address".to_string(),
-                None,
-                None,
-                None,
-            );
+            let (_info, _env) =
+                do_instantiate(deps.as_mut(), "dao_address".to_string(), None, None, None);
             let config = query_config(deps.as_ref()).unwrap();
-            assert_eq!(config.when_claimable, timestamp);
             assert_eq!(config.dao_address, "dao_address".to_string());
             assert_eq!(config.lockdrop_address, None);
             assert_eq!(config.airdrop_address, None);
@@ -452,10 +524,22 @@ mod tests {
         }
     }
 
+    mod update_config {}
+
+    mod add_vesting {}
+
     mod transfer {
         // use super::*;
 
         #[test]
         fn basic() {}
     }
+
+    mod burn_all {}
+
+    mod burn {}
+
+    mod transfer_from {}
+
+    mod mint {}
 }

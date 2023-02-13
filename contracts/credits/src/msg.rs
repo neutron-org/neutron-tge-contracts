@@ -1,11 +1,10 @@
+use crate::state::VestingItem;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Timestamp, Uint128};
 use cw_utils::Expiration;
 
 #[cw_serde]
 pub struct InstantiateMsg {
-    /// Date when you can execute `burn` method to burn CNTRN and get NTRN tokens
-    pub when_claimable: Timestamp,
     /// DAO contract address
     pub dao_address: String,
     /// Airdrop contract address
@@ -23,6 +22,14 @@ pub enum ExecuteMsg {
         airdrop_address: String,
         sale_address: String,
         lockdrop_address: String,
+    },
+    // AddVesting is a message that allows address to claim particular amount of NTRNs at particular time.
+    // Can store multiple vestings with different claimable dates for the same address.
+    AddVesting {
+        address: String,
+        amount: Uint128,
+        start_timestamp: Timestamp,
+        end_timestamp: Timestamp,
     },
     /// Transfer is a base message to move tokens to another account without triggering actions
     Transfer { recipient: String, amount: Uint128 },
@@ -63,6 +70,9 @@ pub enum ExecuteMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
+    /// Returns the current vestings of the given address.
+    #[returns(VestingsResponse)]
+    Vestings { address: String },
     /// Returns the current balance of the given address, 0 if unset.
     #[returns(cw20::BalanceResponse)]
     Balance { address: String },
@@ -110,8 +120,6 @@ pub struct MigrateMsg {}
 
 #[cw_serde]
 pub struct ConfigResponse {
-    /// Date when you can execute `burn` method to burn CNTRN and get NTRN tokens
-    pub when_claimable: Timestamp,
     /// DAO contract address
     pub dao_address: Addr,
     /// Airdrop contract address
@@ -120,4 +128,9 @@ pub struct ConfigResponse {
     pub sale_address: Option<Addr>,
     /// Lockdrop contract address,
     pub lockdrop_address: Option<Addr>,
+}
+
+#[cw_serde]
+pub struct VestingsResponse {
+    pub vestings: Vec<VestingItem>,
 }
