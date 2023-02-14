@@ -8,8 +8,6 @@ pub struct Config {
     pub dao_address: Addr,
     /// Airdrop contract address
     pub airdrop_address: Option<Addr>,
-    /// Sale contract address
-    pub sale_address: Option<Addr>,
     /// Lockdrop contract address,
     pub lockdrop_address: Option<Addr>,
 }

@@ -9,8 +9,6 @@ pub struct InstantiateMsg {
     pub dao_address: String,
     /// Airdrop contract address
     pub airdrop_address: Option<String>,
-    /// Sale contract address
-    pub sale_address: Option<String>,
     /// Lockdrop contract address,
     pub lockdrop_address: Option<String>,
 }
@@ -20,7 +18,6 @@ pub enum ExecuteMsg {
     /// UpdateConfig is a message to initialize all addresses because there are circle deps between contracts
     UpdateConfig {
         airdrop_address: String,
-        sale_address: String,
         lockdrop_address: String,
     },
     // AddVesting is a message that allows address to claim particular amount of NTRNs at particular time.
@@ -37,6 +34,7 @@ pub enum ExecuteMsg {
     /// BurnAll is a message that burns all CNTRN tokens on the sender and sends NTRN tokens in 1:1 proportion
     BurnAll {},
     /// Burn is a message only for `config.lockdrop` account to destroy certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion
+    /// Used for giving lockdrop rewards
     Burn { amount: Uint128 },
     /// Only with "approval" extension. Allows spender to access an additional amount tokens
     /// from the owner's (env.sender) account. If expires is Some(), overwrites current allowance
@@ -124,8 +122,6 @@ pub struct ConfigResponse {
     pub dao_address: Addr,
     /// Airdrop contract address
     pub airdrop_address: Option<Addr>,
-    /// Sale contract address
-    pub sale_address: Option<Addr>,
     /// Lockdrop contract address,
     pub lockdrop_address: Option<Addr>,
 }

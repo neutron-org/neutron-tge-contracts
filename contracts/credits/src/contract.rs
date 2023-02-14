@@ -21,7 +21,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const TOKEN_NAME: &str = "CNTRN";
 const TOKEN_SYMBOL: &str = "cntrn";
-const TOKEN_DECIMALS: u8 = 8; // TODO: correct?
+const TOKEN_DECIMALS: u8 = 6; // TODO: correct?
 const DEPOSITED_SYMBOL: &str = "untrn";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -36,15 +36,11 @@ pub fn instantiate(
     let mut config = Config {
         dao_address: deps.api.addr_validate(&msg.dao_address)?,
         airdrop_address: None,
-        sale_address: None,
         lockdrop_address: None,
     };
 
     if let Some(addr) = msg.airdrop_address {
         config.airdrop_address = Some(deps.api.addr_validate(&addr)?);
-    }
-    if let Some(addr) = msg.sale_address {
-        config.sale_address = Some(deps.api.addr_validate(&addr)?);
     }
     if let Some(addr) = msg.lockdrop_address {
         config.lockdrop_address = Some(deps.api.addr_validate(&addr)?);
@@ -78,14 +74,12 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             airdrop_address,
             lockdrop_address,
-            sale_address,
         } => execute_update_config(
             deps,
             env,
             info,
             airdrop_address,
             lockdrop_address,
-            sale_address,
         ),
         ExecuteMsg::AddVesting {
             address,
@@ -137,7 +131,6 @@ pub fn execute_update_config(
     info: MessageInfo,
     airdrop_address: String,
     lockdrop_address: String,
-    sale_address: String,
 ) -> Result<Response, Cw20ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
     if info.sender != config.dao_address {
@@ -146,7 +139,6 @@ pub fn execute_update_config(
 
     config.airdrop_address = Some(deps.api.addr_validate(&airdrop_address)?);
     config.lockdrop_address = Some(deps.api.addr_validate(&lockdrop_address)?);
-    config.sale_address = Some(deps.api.addr_validate(&sale_address)?);
 
     Ok(Response::default())
 }
@@ -165,10 +157,6 @@ pub fn execute_add_vesting(
         != config
             .airdrop_address
             .ok_or_else(|| StdError::generic_err("uninitialized"))?
-        && info.sender
-            != config
-                .sale_address
-                .ok_or_else(|| StdError::generic_err("uninitialized"))?
     {
         return Err(Cw20ContractError::Unauthorized {});
     }
@@ -212,10 +200,6 @@ pub fn execute_transfer(
         != config
             .airdrop_address
             .ok_or_else(|| StdError::generic_err("uninitialized"))?
-        && info.sender
-            != config
-                .sale_address
-                .ok_or_else(|| StdError::generic_err("uninitialized"))?
         && info.sender
             != config
                 .lockdrop_address
@@ -263,11 +247,12 @@ pub fn execute_burn_all(
     burn_and_send(deps, env, info, owner, total_to_burn)
 }
 
+// execute_burn is for rewards from lockdrop only, skips vesting
 pub fn execute_burn(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    amount: Uint128, // used only for airdrop address
+    amount: Uint128,
 ) -> Result<Response, Cw20ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let sender = info.sender.clone();
@@ -383,7 +368,6 @@ fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     Ok(ConfigResponse {
         dao_address: config.dao_address,
         airdrop_address: config.airdrop_address,
-        sale_address: config.sale_address,
         lockdrop_address: config.lockdrop_address,
     })
 }
@@ -439,13 +423,11 @@ mod tests {
         mut deps: DepsMut,
         dao_address: String,
         airdrop_address: Option<String>,
-        sale_address: Option<String>,
         lockdrop_address: Option<String>,
     ) -> (MessageInfo, Env) {
         let instantiate_msg = InstantiateMsg {
             dao_address,
             airdrop_address,
-            sale_address,
             lockdrop_address,
         };
         let info = mock_info("creator", &[]);
@@ -471,7 +453,6 @@ mod tests {
                 deps.as_mut(),
                 "dao_address".to_string(),
                 Some("airdrop_address".to_string()),
-                Some("sale_address".to_string()),
                 Some("lockdrop_address".to_string()),
             );
             let config = query_config(deps.as_ref()).unwrap();
@@ -483,10 +464,6 @@ mod tests {
             assert_eq!(
                 config.airdrop_address,
                 Some(Addr::unchecked("airdrop_address".to_string()))
-            );
-            assert_eq!(
-                config.sale_address,
-                Some(Addr::unchecked("sale_address".to_string()))
             );
 
             // no accounts since we don't mint anything
@@ -520,7 +497,6 @@ mod tests {
             assert_eq!(config.dao_address, "dao_address".to_string());
             assert_eq!(config.lockdrop_address, None);
             assert_eq!(config.airdrop_address, None);
-            assert_eq!(config.sale_address, None);
         }
     }
 
