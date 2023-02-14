@@ -195,7 +195,7 @@ pub fn execute_transfer(
             .ok_or_else(|| StdError::generic_err("uninitialized"))?
         && info.sender
             != config
-                .lockdrop_address
+                .lockdrop_address // TODO: why we have lockdrop_address access here? Since we do not have funds on lockdrop balance
                 .ok_or_else(|| StdError::generic_err("uninitialized"))?
     {
         return Err(Cw20ContractError::Unauthorized {});
@@ -718,7 +718,89 @@ mod tests {
         }
     }
 
-    mod transfer {}
+    mod transfer {
+        use crate::contract::tests::_do_simple_instantiate;
+        use crate::contract::{execute_mint, execute_transfer, DEPOSITED_SYMBOL};
+        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::OverflowOperation::Sub;
+        use cosmwasm_std::{coins, Addr, OverflowError, StdError, Uint128};
+        use cw20_base::state::BALANCES;
+        use cw20_base::ContractError;
+        use cw20_base::ContractError::Std;
+
+        #[test]
+        fn works_from_airdrop_and_lockdrop() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            // mint
+            let dao_info = mock_info("dao_address", &coins(1_000_000_000, DEPOSITED_SYMBOL));
+            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
+            assert!(res.is_ok());
+
+            let airdrop_info = mock_info("airdrop_address", &[]);
+            let res = execute_transfer(
+                deps.as_mut(),
+                env,
+                airdrop_info,
+                "somebody".to_string(),
+                Uint128::new(1_000),
+            );
+            assert!(res.is_ok());
+            let balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("somebody"))
+                .unwrap();
+            assert_eq!(balance, Uint128::new(1_000));
+
+            let airdrop_balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("airdrop_address"))
+                .unwrap();
+            assert_eq!(airdrop_balance, Uint128::new(1_000_000_000 - 1_000));
+            // TODO: add test that lockdrop address has access to transfer (if we need this permission really)
+        }
+
+        #[test]
+        fn fails_when_try_non_existent_funds() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            let airdrop_info = mock_info("airdrop_address", &[]);
+            let res = execute_transfer(
+                deps.as_mut(),
+                env,
+                airdrop_info,
+                "somebody".to_string(),
+                Uint128::new(1_000),
+            );
+            assert_eq!(
+                res,
+                Err(Std(StdError::overflow(OverflowError {
+                    operation: Sub,
+                    operand1: "0".to_string(),
+                    operand2: "1000".to_string()
+                })))
+            );
+        }
+
+        #[test]
+        fn not_authorized_from_others() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            let airdrop_info = mock_info("somebody", &[]);
+            let res = execute_transfer(
+                deps.as_mut(),
+                env,
+                airdrop_info,
+                "somebody".to_string(),
+                Uint128::new(1_000),
+            );
+            assert_eq!(res, Err(ContractError::Unauthorized {}));
+        }
+    }
 
     mod withdraw {
         use crate::contract::tests::{_do_add_vesting, _do_instantiate, _do_simple_instantiate};
