@@ -643,7 +643,9 @@ mod tests {
             execute_add_vesting, execute_mint, execute_transfer, execute_withdraw, DEPOSITED_SYMBOL,
         };
         use cosmwasm_std::testing::{mock_dependencies, mock_info};
-        use cosmwasm_std::{coins, BankMsg, DepsMut, Env, Timestamp, Uint128, Addr};
+        use cosmwasm_std::{coins, BankMsg, DepsMut, Env, Timestamp, Uint128, Addr, StdError};
+        use cosmwasm_std::StdError::NotFound;
+        use cw20_base::ContractError;
         use cw20_base::state::{BALANCES, TOKEN_INFO};
         use crate::state::ALLOCATIONS;
 
@@ -711,10 +713,16 @@ mod tests {
         }
 
         #[test]
-        fn does_not_withdraw_if_no_tokens_vested_yet() {}
+        fn does_not_withdraw_if_no_tokens_vested_yet() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, mut env) = _do_simple_instantiate(deps.as_mut(), None);
 
-        #[test]
-        fn fails_if_nothing_to_burn() {}
+            // check
+            let somebody_info = mock_info("somebody", &[]);
+            let res = execute_withdraw(deps.as_mut(), env, somebody_info);
+            assert_eq!(res, Err(ContractError::Std(StdError::not_found("credits::state::Allocation"))));
+        }
 
         fn _do_add_vesting(
             deps: DepsMut,
