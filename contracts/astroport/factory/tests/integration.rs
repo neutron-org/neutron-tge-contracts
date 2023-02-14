@@ -373,7 +373,7 @@ fn test_pair_migration() {
     )
     .unwrap();
 
-    for pair in pairs.clone() {
+    for pair in pairs {
         let res = app
             .execute_contract(
                 Addr::unchecked("user1"),

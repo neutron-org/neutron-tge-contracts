@@ -10,7 +10,7 @@ pub struct InstantiateMsg {
     pub factory_contract: String,
     /// The assets that have a pool for which this contract provides price feeds
     pub asset_infos: Vec<AssetInfo>,
-    /// TODO: clarify
+    /// Minimal interval between Update{}'s
     pub period: u64,
 }
 

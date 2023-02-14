@@ -57,10 +57,10 @@ fn store_factory_code(app: &mut App) -> u64 {
     app.store_code(factory_contract)
 }
 
-fn instantiate_pair(mut router: &mut App, owner: &Addr) -> Addr {
-    let token_contract_code_id = store_token_code(&mut router);
+fn instantiate_pair(router: &mut App, owner: &Addr) -> Addr {
+    let token_contract_code_id = store_token_code(router);
 
-    let pair_contract_code_id = store_pair_code(&mut router);
+    let pair_contract_code_id = store_pair_code(router);
 
     let msg = InstantiateMsg {
         asset_infos: vec![
@@ -131,7 +131,7 @@ fn test_provide_and_withdraw_liquidity() {
                 },
                 Coin {
                     denom: "uluna".to_string(),
-                    amount: Uint128::new(2_00_000_000u128),
+                    amount: Uint128::new(200_000_000u128),
                 },
                 Coin {
                     denom: "cny".to_string(),
@@ -276,17 +276,17 @@ fn test_provide_and_withdraw_liquidity() {
     };
     // Try to send withdraw liquidity with FOO token
     let err = router
-        .execute_contract(alice_address.clone(), foo_token.clone(), &msg, &[])
+        .execute_contract(alice_address.clone(), foo_token, &msg, &[])
         .unwrap_err();
     assert_eq!(err.root_cause().to_string(), "Unauthorized");
     // Withdraw with LP token is successful
     router
-        .execute_contract(alice_address.clone(), lp_token.clone(), &msg, &[])
+        .execute_contract(alice_address.clone(), lp_token, &msg, &[])
         .unwrap();
 
     let err = router
         .execute_contract(
-            alice_address.clone(),
+            alice_address,
             pair_instance.clone(),
             &ExecuteMsg::Swap {
                 offer_asset: Asset {
@@ -338,16 +338,16 @@ fn provide_liquidity_msg(
                 info: AssetInfo::NativeToken {
                     denom: "uusd".to_string(),
                 },
-                amount: uusd_amount.clone(),
+                amount: uusd_amount,
             },
             Asset {
                 info: AssetInfo::NativeToken {
                     denom: "uluna".to_string(),
                 },
-                amount: uluna_amount.clone(),
+                amount: uluna_amount,
             },
         ],
-        slippage_tolerance: Option::from(slippage_tolerance),
+        slippage_tolerance,
         auto_stake: None,
         receiver,
     };
@@ -355,11 +355,11 @@ fn provide_liquidity_msg(
     let coins = [
         Coin {
             denom: "uluna".to_string(),
-            amount: uluna_amount.clone(),
+            amount: uluna_amount,
         },
         Coin {
             denom: "uusd".to_string(),
-            amount: uusd_amount.clone(),
+            amount: uusd_amount,
         },
     ];
 
@@ -375,18 +375,18 @@ fn test_compatibility_of_tokens_with_different_precision() {
         vec![
             Coin {
                 denom: "uusd".to_string(),
-                amount: Uint128::new(100_000_000_000000u128),
+                amount: Uint128::new(100_000_000_000_000u128),
             },
             Coin {
                 denom: "uluna".to_string(),
-                amount: Uint128::new(100_000_000_000000u128),
+                amount: Uint128::new(100_000_000_000_000u128),
             },
         ],
     );
 
     let token_code_id = store_token_code(&mut app);
 
-    let x_amount = Uint128::new(1000000_00000);
+    let x_amount = Uint128::new(100_000_000_000);
     let y_amount = Uint128::new(1000000_0000000);
     let x_offer = Uint128::new(1_00000);
     let y_expected_return = Uint128::new(1_0000000);
@@ -571,11 +571,11 @@ fn test_compatibility_of_tokens_with_different_precision() {
         receiver: None,
     };
 
-    app.execute_contract(owner.clone(), pair_instance.clone(), &msg, &[])
+    app.execute_contract(owner.clone(), pair_instance, &msg, &[])
         .unwrap();
 
     // try to swap after provide liquidity
-    app.execute_contract(owner.clone(), token_x_instance.clone(), &swap_msg, &[])
+    app.execute_contract(owner, token_x_instance, &swap_msg, &[])
         .unwrap();
 
     let msg = Cw20QueryMsg::Balance {
@@ -602,27 +602,27 @@ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
         vec![
             Coin {
                 denom: "uusd".to_string(),
-                amount: Uint128::new(100_000_000_000000u128),
+                amount: Uint128::new(100_000_000_000_000u128),
             },
             Coin {
                 denom: "uluna".to_string(),
-                amount: Uint128::new(100_000_000_000000u128),
+                amount: Uint128::new(100_000_000_000_000u128),
             },
         ],
     );
 
     // Set Alice's balances
     app.send_tokens(
-        owner.clone(),
+        owner,
         user1.clone(),
         &[
             Coin {
                 denom: "uusd".to_string(),
-                amount: Uint128::new(4000000_000000),
+                amount: Uint128::new(4_000_000_000_000),
             },
             Coin {
                 denom: "uluna".to_string(),
-                amount: Uint128::new(2000000_000000),
+                amount: Uint128::new(2_000_000_000_000),
             },
         ],
     )
@@ -633,8 +633,8 @@ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
 
     // Provide liquidity, accumulators are empty
     let (msg, coins) = provide_liquidity_msg(
-        Uint128::new(1000000_000000),
-        Uint128::new(1000000_000000),
+        Uint128::new(1_000_000_000_000),
+        Uint128::new(1_000_000_000_000),
         None,
         Option::from(Decimal::one()),
     );
@@ -652,8 +652,8 @@ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
 
     // Provide liquidity, accumulators firstly filled with the same prices
     let (msg, coins) = provide_liquidity_msg(
-        Uint128::new(2000000_000000),
-        Uint128::new(1000000_000000),
+        Uint128::new(2_000_000_000_000),
+        Uint128::new(1_000_000_000_000),
         None,
         Some(Decimal::percent(50)),
     );
@@ -723,7 +723,7 @@ fn create_pair_with_same_assets() {
     let resp = router
         .instantiate_contract(
             pair_contract_code_id,
-            owner.clone(),
+            owner,
             &msg,
             &[],
             String::from("PAIR"),
@@ -783,7 +783,7 @@ fn wrong_number_of_assets() {
     let err = router
         .instantiate_contract(
             pair_contract_code_id,
-            owner.clone(),
+            owner,
             &msg,
             &[],
             String::from("PAIR"),

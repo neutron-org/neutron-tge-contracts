@@ -214,7 +214,6 @@ fn twap_at_height(
     height: Uint64,
 ) -> Result<Vec<(AssetInfo, Decimal256)>, StdError> {
     let config = CONFIG.load(deps.storage)?;
-    // TODO: what if there is no data for given height and we're receive last value (possibly an exploit)?
     let price_last = PRICE_LAST
         .may_load_at_height(deps.storage, u64::from(height))
         .unwrap()

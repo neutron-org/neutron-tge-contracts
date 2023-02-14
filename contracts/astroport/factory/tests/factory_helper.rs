@@ -166,12 +166,9 @@ impl FactoryHelper {
             },
         ];
 
-        let res: PairInfo = router.wrap().query_wasm_smart(
-            self.factory.clone(),
-            &QueryMsg::Pair {
-                asset_infos: asset_infos.clone(),
-            },
-        )?;
+        let res: PairInfo = router
+            .wrap()
+            .query_wasm_smart(self.factory.clone(), &QueryMsg::Pair { asset_infos })?;
 
         Ok(res.contract_addr)
     }

@@ -195,9 +195,9 @@ fn swap_different_precisions() {
     let mut helper = Helper::new(&owner, test_coins.clone(), 100u64, None).unwrap();
 
     let assets = vec![
-        helper.assets[&test_coins[0]].with_balance(100_000_0000u128),
-        helper.assets[&test_coins[1]].with_balance(100_000_00000u128),
-        helper.assets[&test_coins[2]].with_balance(100_000_000000u128),
+        helper.assets[&test_coins[0]].with_balance(1_000_000_000_u128),
+        helper.assets[&test_coins[1]].with_balance(10_000_000_000_u128),
+        helper.assets[&test_coins[2]].with_balance(100_000_000_000u128),
     ];
     helper.provide_liquidity(&owner, &assets).unwrap();
 
@@ -244,14 +244,14 @@ fn check_swaps() {
     let mut helper = Helper::new(&owner, test_coins.clone(), 100u64, None).unwrap();
 
     let assets = vec![
-        helper.assets[&test_coins[0]].with_balance(100_000_000000u128),
-        helper.assets[&test_coins[1]].with_balance(100_000_000000u128),
-        helper.assets[&test_coins[2]].with_balance(100_000_000000u128),
+        helper.assets[&test_coins[0]].with_balance(100_000_000_000u128),
+        helper.assets[&test_coins[1]].with_balance(100_000_000_000u128),
+        helper.assets[&test_coins[2]].with_balance(100_000_000_000u128),
     ];
     helper.provide_liquidity(&owner, &assets).unwrap();
 
     let user = Addr::unchecked("user");
-    let offer_asset = helper.assets[&test_coins[0]].with_balance(100_000000u128);
+    let offer_asset = helper.assets[&test_coins[0]].with_balance(100_000_000u128);
     helper.give_me_money(&[offer_asset.clone()], &user);
 
     let err = helper.swap(&user, &offer_asset, None).unwrap_err();
@@ -357,9 +357,9 @@ fn check_withdraw_charges_fees() {
     let mut helper = Helper::new(&owner, test_coins.clone(), 100u64, None).unwrap();
 
     let assets = vec![
-        helper.assets[&test_coins[0]].with_balance(100_000_000_000000u128),
-        helper.assets[&test_coins[1]].with_balance(100_000_000_000000u128),
-        helper.assets[&test_coins[2]].with_balance(100_000_000_000000u128),
+        helper.assets[&test_coins[0]].with_balance(100_000_000_000_000u128),
+        helper.assets[&test_coins[1]].with_balance(100_000_000_000_000u128),
+        helper.assets[&test_coins[2]].with_balance(100_000_000_000_000u128),
     ];
     helper.provide_liquidity(&owner, &assets).unwrap();
 
@@ -441,7 +441,7 @@ fn check_5pool_prices() {
                     .cumulative_prices
                     .iter()
                     .filter(|(from, to, _)| {
-                        from.eq(&helper.assets[&from_coin]) && to.eq(&helper.assets[&to_coin])
+                        from.eq(&helper.assets[from_coin]) && to.eq(&helper.assets[to_coin])
                     })
                     .collect::<Vec<_>>();
                 assert_eq!(price.len(), 1);
@@ -450,18 +450,18 @@ fn check_5pool_prices() {
     };
 
     let assets = vec![
-        helper.assets[&test_coins[0]].with_balance(100_000_000_000000u128),
-        helper.assets[&test_coins[1]].with_balance(100_000_000_000000u128),
-        helper.assets[&test_coins[2]].with_balance(100_000_000_000000u128),
-        helper.assets[&test_coins[3]].with_balance(100_000_000_000000u128),
-        helper.assets[&test_coins[4]].with_balance(100_000_000_000000u128),
+        helper.assets[&test_coins[0]].with_balance(100_000_000_000_000u128),
+        helper.assets[&test_coins[1]].with_balance(100_000_000_000_000u128),
+        helper.assets[&test_coins[2]].with_balance(100_000_000_000_000u128),
+        helper.assets[&test_coins[3]].with_balance(100_000_000_000_000u128),
+        helper.assets[&test_coins[4]].with_balance(100_000_000_000_000u128),
     ];
     helper.provide_liquidity(&owner, &assets).unwrap();
     helper.app.next_block(1000);
     check_prices(&helper);
 
     let user1 = Addr::unchecked("user1");
-    let offer_asset = helper.assets[&test_coins[0]].with_balance(1000_000000u128);
+    let offer_asset = helper.assets[&test_coins[0]].with_balance(1_000_000_000u128);
     helper.give_me_money(&[offer_asset.clone()], &user1);
 
     helper
@@ -487,7 +487,7 @@ fn check_5pool_prices() {
     helper.app.next_block(14 * 86400);
     check_prices(&helper);
 
-    let offer_asset = helper.assets[&test_coins[3]].with_balance(10_000_000000u128);
+    let offer_asset = helper.assets[&test_coins[3]].with_balance(10_000_000_000u128);
     helper.give_me_money(&[offer_asset.clone()], &user1);
     helper
         .swap(

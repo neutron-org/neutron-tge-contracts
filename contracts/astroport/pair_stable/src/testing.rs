@@ -42,7 +42,7 @@ fn store_liquidity_token(deps: DepsMut, msg_id: u64, contract_addr: String) {
         }),
     };
 
-    let _res = reply(deps, mock_env(), reply_msg.clone()).unwrap();
+    let _res = reply(deps, mock_env(), reply_msg).unwrap();
 }
 
 #[test]
@@ -201,7 +201,7 @@ fn provide_liquidity() {
             amount: Uint128::from(100_000000000000000000u128),
         }],
     );
-    let res = execute(deps.as_mut(), env.clone().clone(), info, msg).unwrap();
+    let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
     let transfer_from_msg = res.messages.get(0).expect("no message");
     let mint_min_liquidity_msg = res.messages.get(1).expect("no message");
     let mint_receiver_msg = res.messages.get(2).expect("no message");
@@ -319,7 +319,7 @@ fn provide_liquidity() {
         }],
     );
 
-    let res: Response = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+    let res: Response = execute(deps.as_mut(), env, info, msg).unwrap();
     let transfer_from_msg = res.messages.get(0).expect("no message");
     let mint_msg = res.messages.get(1).expect("no message");
     assert_eq!(
@@ -740,7 +740,7 @@ fn try_native_to_token() {
 
     let simulation_res: SimulationResponse = query_simulation(
         deps.as_ref(),
-        env.clone(),
+        env,
         Asset {
             info: AssetInfo::NativeToken {
                 denom: "uusd".to_string(),
@@ -776,7 +776,7 @@ fn try_native_to_token() {
                 contract_addr: String::from("asset0000"),
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: String::from("addr0000"),
-                    amount: Uint128::from(expected_return_amount),
+                    amount: expected_return_amount,
                 })
                 .unwrap(),
                 funds: vec![],
@@ -912,7 +912,7 @@ fn try_token_to_native() {
 
     let simulation_res: SimulationResponse = query_simulation(
         deps.as_ref(),
-        env.clone(),
+        env,
         Asset {
             amount: offer_amount,
             info: AssetInfo::Token {
@@ -950,8 +950,7 @@ fn try_token_to_native() {
                     denom: "uusd".to_string(),
                     amount: expected_return_amount,
                 }],
-            })
-            .into(),
+            }),
             id: 0,
             gas_limit: None,
             reply_on: ReplyOn::Never,
@@ -1182,7 +1181,7 @@ fn test_accumulate_prices() {
             Case {
                 block_time: 1000,
                 block_time_last: 1000,
-                last0: 1 * price_precision,
+                last0: price_precision,
                 last1: 2 * price_precision,
                 x_amount: 250_000000,
                 y_amount: 500_000000,
@@ -1296,7 +1295,7 @@ proptest! {
 
         let msg = InstantiateMsg {
             factory_addr: String::from("factory"),
-            asset_infos: vec![offer_asset.info.clone(), ask_asset.clone()],
+            asset_infos: vec![offer_asset.info.clone(), ask_asset],
             token_code_id: 10u64,
             init_params: Some(to_binary(&StablePoolParams { amp, owner: None }).unwrap()),
         };
@@ -1344,7 +1343,7 @@ proptest! {
 
         let reverse_result = query_reverse_simulation(
             deps.as_ref(),
-            env.clone(),
+            env,
             native_asset("uluna".to_string(), result.return_amount),
             None,
         )

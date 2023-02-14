@@ -18,13 +18,10 @@ use astroport::oracle::{ExecuteMsg, InstantiateMsg};
 use astroport::pair::StablePoolParams;
 
 fn mock_app(owner: Option<Addr>, coins: Option<Vec<Coin>>) -> App {
-    if owner.is_some() && coins.is_some() {
+    if let (Some(own), Some(coinz)) = ((owner), (coins)) {
         App::new(|router, _, storage| {
             // initialization moved to App construction
-            router
-                .bank
-                .init_balance(storage, &owner.unwrap(), coins.unwrap())
-                .unwrap()
+            router.bank.init_balance(storage, &own, coinz).unwrap()
         })
     } else {
         App::default()
@@ -124,7 +121,7 @@ fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
     let factory_instance = router
         .instantiate_contract(
             factory_code_id,
-            owner.clone(),
+            owner,
             &msg,
             &[],
             String::from("FACTORY"),
@@ -162,17 +159,9 @@ fn instantiate_token(router: &mut App, owner: Addr, name: String, symbol: String
         marketing: None,
     };
 
-    let token_instance = router
-        .instantiate_contract(
-            token_code_id.clone(),
-            owner.clone(),
-            &msg,
-            &[],
-            symbol,
-            None,
-        )
-        .unwrap();
-    token_instance
+    router
+        .instantiate_contract(token_code_id, owner, &msg, &[], symbol, None)
+        .unwrap()
 }
 
 fn mint_some_token(router: &mut App, owner: Addr, token_instance: Addr, to: Addr, amount: Uint128) {
@@ -181,7 +170,7 @@ fn mint_some_token(router: &mut App, owner: Addr, token_instance: Addr, to: Addr
         amount,
     };
     let res = router
-        .execute_contract(owner.clone(), token_instance.clone(), &msg, &[])
+        .execute_contract(owner, token_instance, &msg, &[])
         .unwrap();
     assert_eq!(res.events[1].attributes[1], attr("action", "mint"));
     assert_eq!(res.events[1].attributes[2], attr("to", to.to_string()));
@@ -195,7 +184,7 @@ fn allowance_token(router: &mut App, owner: Addr, spender: Addr, token: Addr, am
         expires: None,
     };
     let res = router
-        .execute_contract(owner.clone(), token.clone(), &msg, &[])
+        .execute_contract(owner.clone(), token, &msg, &[])
         .unwrap();
     assert_eq!(
         res.events[1].attributes[1],
@@ -229,7 +218,7 @@ fn check_balance(router: &mut App, user: Addr, token: Addr, expected_amount: Uin
 }
 
 fn provide_liquidity(
-    mut router: &mut App,
+    router: &mut App,
     owner: Addr,
     user: Addr,
     pair_info: &PairInfo,
@@ -241,11 +230,11 @@ fn provide_liquidity(
         match a.info {
             AssetInfo::Token { contract_addr } => {
                 allowance_token(
-                    &mut router,
+                    router,
                     user.clone(),
                     pair_info.contract_addr.clone(),
                     contract_addr.clone(),
-                    a.amount.clone(),
+                    a.amount,
                 );
             }
             AssetInfo::NativeToken { denom } => {
@@ -268,7 +257,7 @@ fn provide_liquidity(
     }
 
     router.execute_contract(
-        user.clone(),
+        user,
         pair_info.contract_addr.clone(),
         &astroport::pair::ExecuteMsg::ProvideLiquidity {
             assets,
@@ -281,25 +270,21 @@ fn provide_liquidity(
 }
 
 fn create_pair(
-    mut router: &mut App,
+    router: &mut App,
     owner: Addr,
     user: Addr,
     factory_instance: &Addr,
     assets: Vec<Asset>,
 ) -> PairInfo {
     for a in assets.clone() {
-        match a.info {
-            AssetInfo::Token { contract_addr } => {
-                mint_some_token(
-                    &mut router,
-                    owner.clone(),
-                    contract_addr.clone(),
-                    user.clone(),
-                    a.amount,
-                );
-            }
-
-            _ => {}
+        if let AssetInfo::Token { contract_addr } = a.info {
+            mint_some_token(
+                router,
+                owner.clone(),
+                contract_addr.clone(),
+                user.clone(),
+                a.amount,
+            );
         }
     }
 
@@ -308,7 +293,7 @@ fn create_pair(
     // Create pair in factory
     let res = router
         .execute_contract(
-            owner.clone(),
+            owner,
             factory_instance.clone(),
             &astroport::factory::ExecuteMsg::CreatePair {
                 pair_type: PairType::Xyk {},
@@ -322,14 +307,7 @@ fn create_pair(
     assert_eq!(res.events[1].attributes[1], attr("action", "create_pair"));
     assert_eq!(
         res.events[1].attributes[2],
-        attr(
-            "pair",
-            format!(
-                "{}-{}",
-                asset_infos[0].to_string(),
-                asset_infos[1].to_string()
-            ),
-        )
+        attr("pair", format!("{}-{}", asset_infos[0], asset_infos[1]),)
     );
 
     // Get pair
@@ -337,10 +315,7 @@ fn create_pair(
         .wrap()
         .query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: factory_instance.clone().to_string(),
-            msg: to_binary(&astroport::factory::QueryMsg::Pair {
-                asset_infos: asset_infos.clone(),
-            })
-            .unwrap(),
+            msg: to_binary(&astroport::factory::QueryMsg::Pair { asset_infos }).unwrap(),
         }))
         .unwrap();
 
@@ -348,25 +323,21 @@ fn create_pair(
 }
 
 fn create_pair_stable(
-    mut router: &mut App,
+    router: &mut App,
     owner: Addr,
     user: Addr,
     factory_instance: &Addr,
     assets: Vec<Asset>,
 ) -> PairInfo {
     for a in assets.clone() {
-        match a.info {
-            AssetInfo::Token { contract_addr } => {
-                mint_some_token(
-                    &mut router,
-                    owner.clone(),
-                    contract_addr.clone(),
-                    user.clone(),
-                    a.amount,
-                );
-            }
-
-            _ => {}
+        if let AssetInfo::Token { contract_addr } = a.info {
+            mint_some_token(
+                router,
+                owner.clone(),
+                contract_addr.clone(),
+                user.clone(),
+                a.amount,
+            );
         }
     }
 
@@ -403,10 +374,7 @@ fn create_pair_stable(
         .wrap()
         .query(&QueryRequest::Wasm(WasmQuery::Smart {
             contract_addr: factory_instance.clone().to_string(),
-            msg: to_binary(&astroport::factory::QueryMsg::Pair {
-                asset_infos: asset_infos.clone(),
-            })
-            .unwrap(),
+            msg: to_binary(&astroport::factory::QueryMsg::Pair { asset_infos }).unwrap(),
         }))
         .unwrap();
 
@@ -416,11 +384,11 @@ fn create_pair_stable(
         match a.info {
             AssetInfo::Token { contract_addr } => {
                 allowance_token(
-                    &mut router,
+                    router,
                     user.clone(),
                     pair_info.contract_addr.clone(),
                     contract_addr.clone(),
-                    a.amount.clone(),
+                    a.amount,
                 );
             }
             AssetInfo::NativeToken { denom } => {
@@ -444,7 +412,7 @@ fn create_pair_stable(
 
     router
         .execute_contract(
-            user.clone(),
+            user,
             pair_info.contract_addr.clone(),
             &astroport::pair::ExecuteMsg::ProvideLiquidity {
                 assets,
@@ -460,23 +428,17 @@ fn create_pair_stable(
 }
 
 fn change_provide_liquidity(
-    mut router: &mut App,
+    router: &mut App,
     owner: Addr,
     user: Addr,
     pair_contract: Addr,
     assets: Vec<(Addr, Uint128)>,
 ) {
     for (token, amount) in assets.clone() {
-        mint_some_token(
-            &mut router,
-            owner.clone(),
-            token.clone(),
-            user.clone(),
-            amount,
-        );
-        check_balance(&mut router, user.clone(), token.clone(), amount);
+        mint_some_token(router, owner.clone(), token.clone(), user.clone(), amount);
+        check_balance(router, user.clone(), token.clone(), amount);
         allowance_token(
-            &mut router,
+            router,
             user.clone(),
             pair_contract.clone(),
             token.clone(),
@@ -505,7 +467,7 @@ fn change_provide_liquidity(
                 auto_stake: None,
                 receiver: None,
             },
-            &vec![],
+            &[],
         )
         .unwrap();
 }
@@ -557,14 +519,7 @@ fn consult() {
         &factory_instance,
         assets.clone(),
     );
-    provide_liquidity(
-        &mut router,
-        owner.clone(),
-        user.clone(),
-        &pair_info,
-        assets.clone(),
-    )
-    .unwrap();
+    provide_liquidity(&mut router, owner.clone(), user.clone(), &pair_info, assets).unwrap();
 
     router.update_block(next_day);
     let pair_info: PairInfo = router
@@ -592,7 +547,7 @@ fn consult() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: asset_infos.clone(),
+        asset_infos,
         period: 86400,
     };
     let oracle_instance = router
@@ -630,17 +585,12 @@ fn consult() {
     );
     router.update_block(next_day);
     router
-        .execute_contract(
-            owner.clone(),
-            oracle_instance.clone(),
-            &ExecuteMsg::Update {},
-            &[],
-        )
+        .execute_contract(owner, oracle_instance.clone(), &ExecuteMsg::Update {}, &[])
         .unwrap();
 
     for (addr, amount) in [
-        (astro_token_instance.clone(), Uint128::from(1000u128)),
-        (usdc_token_instance.clone(), Uint128::from(100u128)),
+        (astro_token_instance, Uint128::from(1000u128)),
+        (usdc_token_instance, Uint128::from(100u128)),
     ] {
         let msg = Consult {
             token: AssetInfo::Token {
@@ -701,14 +651,7 @@ fn twap_at_height() {
         &factory_instance,
         assets.clone(),
     );
-    provide_liquidity(
-        &mut router,
-        owner.clone(),
-        user.clone(),
-        &pair_info,
-        assets.clone(),
-    )
-    .unwrap();
+    provide_liquidity(&mut router, owner.clone(), user.clone(), &pair_info, assets).unwrap();
 
     router.update_block(next_day);
     let pair_info: PairInfo = router
@@ -736,7 +679,7 @@ fn twap_at_height() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: asset_infos.clone(),
+        asset_infos,
         period: 86400,
     };
     let oracle_instance = router
@@ -774,22 +717,17 @@ fn twap_at_height() {
     );
     router.update_block(next_day);
     router
-        .execute_contract(
-            owner.clone(),
-            oracle_instance.clone(),
-            &ExecuteMsg::Update {},
-            &[],
-        )
+        .execute_contract(owner, oracle_instance.clone(), &ExecuteMsg::Update {}, &[])
         .unwrap();
 
     for (addr, price, block) in [
         (
-            astro_token_instance.clone(),
+            astro_token_instance,
             Decimal256::from_str("0.137931").unwrap(),
             router.block_info().height,
         ),
         (
-            usdc_token_instance.clone(),
+            usdc_token_instance,
             Decimal256::from_str("0.137931").unwrap(),
             router.block_info().height,
         ),
@@ -842,11 +780,11 @@ fn consult_pair_stable() {
         vec![
             Asset {
                 info: asset_infos[0].clone(),
-                amount: Uint128::from(100_000_000000u128),
+                amount: Uint128::from(100_000_000_000u128),
             },
             Asset {
                 info: asset_infos[1].clone(),
-                amount: Uint128::from(100_000_000000u128),
+                amount: Uint128::from(100_000_000_000u128),
             },
         ],
     );
@@ -870,11 +808,11 @@ fn consult_pair_stable() {
         vec![
             (
                 astro_token_instance.clone(),
-                Uint128::from(500_000_000000u128),
+                Uint128::from(500_000_000_000u128),
             ),
             (
                 usdc_token_instance.clone(),
-                Uint128::from(500_000_000000u128),
+                Uint128::from(500_000_000_000u128),
             ),
         ],
     );
@@ -882,7 +820,7 @@ fn consult_pair_stable() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: asset_infos.clone(),
+        asset_infos,
         period: 86400,
     };
     let oracle_instance = router
@@ -916,27 +854,22 @@ fn consult_pair_stable() {
         vec![
             (
                 astro_token_instance.clone(),
-                Uint128::from(100_000_000000u128),
+                Uint128::from(100_000_000_000u128),
             ),
             (
                 usdc_token_instance.clone(),
-                Uint128::from(100_000_000000u128),
+                Uint128::from(100_000_000_000u128),
             ),
         ],
     );
     router.update_block(next_day);
     router
-        .execute_contract(
-            owner.clone(),
-            oracle_instance.clone(),
-            &ExecuteMsg::Update {},
-            &[],
-        )
+        .execute_contract(owner, oracle_instance.clone(), &ExecuteMsg::Update {}, &[])
         .unwrap();
 
     for (addr, amount) in [
-        (astro_token_instance.clone(), Uint128::from(1000u128)),
-        (usdc_token_instance.clone(), Uint128::from(100u128)),
+        (astro_token_instance, Uint128::from(1000u128)),
+        (usdc_token_instance, Uint128::from(100u128)),
     ] {
         let msg = Consult {
             token: AssetInfo::Token {
@@ -986,11 +919,11 @@ fn twap_at_height_pair_stable() {
         vec![
             Asset {
                 info: asset_infos[0].clone(),
-                amount: Uint128::from(100_000_000000u128),
+                amount: Uint128::from(100_000_000_000u128),
             },
             Asset {
                 info: asset_infos[1].clone(),
-                amount: Uint128::from(100_000_000000u128),
+                amount: Uint128::from(100_000_000_000u128),
             },
         ],
     );
@@ -1014,11 +947,11 @@ fn twap_at_height_pair_stable() {
         vec![
             (
                 astro_token_instance.clone(),
-                Uint128::from(500_000_000000u128),
+                Uint128::from(500_000_000_000u128),
             ),
             (
                 usdc_token_instance.clone(),
-                Uint128::from(500_000_000000u128),
+                Uint128::from(500_000_000_000u128),
             ),
         ],
     );
@@ -1026,7 +959,7 @@ fn twap_at_height_pair_stable() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: asset_infos.clone(),
+        asset_infos,
         period: 86400,
     };
     let oracle_instance = router
@@ -1060,27 +993,22 @@ fn twap_at_height_pair_stable() {
         vec![
             (
                 astro_token_instance.clone(),
-                Uint128::from(100_000_000000u128),
+                Uint128::from(100_000_000_000u128),
             ),
             (
                 usdc_token_instance.clone(),
-                Uint128::from(100_000_000000u128),
+                Uint128::from(100_000_000_000u128),
             ),
         ],
     );
     router.update_block(next_day);
     router
-        .execute_contract(
-            owner.clone(),
-            oracle_instance.clone(),
-            &ExecuteMsg::Update {},
-            &[],
-        )
+        .execute_contract(owner, oracle_instance.clone(), &ExecuteMsg::Update {}, &[])
         .unwrap();
 
     for (addr, amount) in [
-        (astro_token_instance.clone(), Decimal256::one()),
-        (usdc_token_instance.clone(), Decimal256::one()),
+        (astro_token_instance, Decimal256::one()),
+        (usdc_token_instance, Decimal256::one()),
     ] {
         let msg = TWAPAtHeight {
             token: AssetInfo::Token {
@@ -1221,7 +1149,7 @@ fn consult2() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: asset_infos.clone(),
+        asset_infos,
         period: 86400,
     };
     let oracle_instance = router
@@ -1334,12 +1262,12 @@ fn consult2() {
     }
     for (addr, amount, amount_exp) in [
         (
-            astro_token_instance.clone(),
+            astro_token_instance,
             Uint128::from(1000u128),
             Uint128::from(854u128),
         ),
         (
-            usdc_token_instance.clone(),
+            usdc_token_instance,
             Uint128::from(1000u128),
             Uint128::from(1170u128),
         ),
@@ -1436,7 +1364,7 @@ fn consult_zero_price() {
     router.update_block(next_day);
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: asset_infos.clone(),
+        asset_infos,
         period: 86400,
     };
     let oracle_instance = router
@@ -1471,12 +1399,12 @@ fn consult_zero_price() {
 
     for (addr, amount_in, amount_out) in [
         (
-            astro_token_instance.clone(),
+            astro_token_instance,
             Uint128::from(100u128),
             Uint128::from(100u128),
         ),
         (
-            usdc_token_instance.clone(),
+            usdc_token_instance,
             Uint128::from(100u128),
             Uint128::from(100u128),
         ),
@@ -1542,7 +1470,7 @@ fn consult_zero_price() {
     provide_liquidity(
         &mut router,
         owner.clone(),
-        user.clone(),
+        user,
         &pair_info,
         vec![
             Asset {
@@ -1560,7 +1488,7 @@ fn consult_zero_price() {
     let oracle_instance = router
         .instantiate_contract(
             oracle_code_id,
-            owner.clone(),
+            owner,
             &InstantiateMsg {
                 factory_contract: factory_instance.to_string(),
                 asset_infos: asset_infos.clone(),
@@ -1627,15 +1555,15 @@ fn consult_multiple_assets() {
         vec![
             Asset {
                 info: asset_infos[0].clone(),
-                amount: Uint128::from(500_000_000000u128),
+                amount: Uint128::from(500_000_000_000u128),
             },
             Asset {
                 info: asset_infos[1].clone(),
-                amount: Uint128::from(400_000_000000u128),
+                amount: Uint128::from(400_000_000_000u128),
             },
             Asset {
                 info: asset_infos[2].clone(),
-                amount: Uint128::from(300_000_000000u128),
+                amount: Uint128::from(300_000_000_000u128),
             },
         ],
     );
@@ -1659,15 +1587,15 @@ fn consult_multiple_assets() {
         vec![
             (
                 usdc_token_instance.clone(),
-                Uint128::from(500_000_000000u128),
+                Uint128::from(500_000_000_000u128),
             ),
             (
                 astro_token_instance.clone(),
-                Uint128::from(400_000_000000u128),
+                Uint128::from(400_000_000_000u128),
             ),
             (
                 usdt_token_instance.clone(),
-                Uint128::from(300_000_000000u128),
+                Uint128::from(300_000_000_000u128),
             ),
         ],
     );
@@ -1675,7 +1603,7 @@ fn consult_multiple_assets() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: asset_infos.clone(),
+        asset_infos,
         period: 86400,
     };
     let oracle_instance = router
@@ -1711,14 +1639,14 @@ fn consult_multiple_assets() {
     // Change pair liquidity
     for (amount1, amount2, amount3) in [
         (
-            Uint128::from(500_000_000000u128),
-            Uint128::from(400_000_000000u128),
-            Uint128::from(300_000_000000u128),
+            Uint128::from(500_000_000_000u128),
+            Uint128::from(400_000_000_000u128),
+            Uint128::from(300_000_000_000u128),
         ),
         (
-            Uint128::from(500_000_000000u128),
-            Uint128::from(400_000_000000u128),
-            Uint128::from(300_000_000000u128),
+            Uint128::from(500_000_000_000u128),
+            Uint128::from(400_000_000_000u128),
+            Uint128::from(300_000_000_000u128),
         ),
     ] {
         change_provide_liquidity(
@@ -1817,19 +1745,19 @@ fn consult_multiple_assets() {
     // Change pair liquidity
     for (amount1, amount2, amount3) in [
         (
-            Uint128::from(100_000_000000u128),
-            Uint128::from(95_000_000000u128),
-            Uint128::from(100_000_000000u128),
+            Uint128::from(100_000_000_000u128),
+            Uint128::from(95_000_000_000u128),
+            Uint128::from(100_000_000_000u128),
         ),
         (
-            Uint128::from(100_000_000000u128),
-            Uint128::from(95_000_000000u128),
-            Uint128::from(100_000_000000u128),
+            Uint128::from(100_000_000_000u128),
+            Uint128::from(95_000_000_000u128),
+            Uint128::from(100_000_000_000u128),
         ),
         (
-            Uint128::from(100_000_000000u128),
-            Uint128::from(95_000_000000u128),
-            Uint128::from(100_000_000000u128),
+            Uint128::from(100_000_000_000u128),
+            Uint128::from(95_000_000_000u128),
+            Uint128::from(100_000_000_000u128),
         ),
     ] {
         change_provide_liquidity(
@@ -1891,18 +1819,18 @@ fn consult_multiple_assets() {
             ],
         ),
         (
-            usdt_token_instance.clone(),
+            usdt_token_instance,
             Uint128::from(1000u128),
             vec![
                 (
                     AssetInfo::Token {
-                        contract_addr: usdc_token_instance.clone(),
+                        contract_addr: usdc_token_instance,
                     },
                     Uint128::from(1004u128),
                 ),
                 (
                     AssetInfo::Token {
-                        contract_addr: astro_token_instance.clone(),
+                        contract_addr: astro_token_instance,
                     },
                     Uint128::from(1002u128),
                 ),
@@ -1931,7 +1859,6 @@ fn twap_at_height_multiple_assets() {
     let mut router = mock_app(None, None);
     let owner = Addr::unchecked("owner");
     let user = Addr::unchecked("user0000");
-    let first_tracked_block: u64;
     let mut second_tracked_block: u64 = 0;
     let mut third_tracked_block: u64 = 0;
     let (astro_token_instance, factory_instance, oracle_code_id) =
@@ -1970,15 +1897,15 @@ fn twap_at_height_multiple_assets() {
         vec![
             Asset {
                 info: asset_infos[0].clone(),
-                amount: Uint128::from(500_000_000000u128),
+                amount: Uint128::from(500_000_000_000u128),
             },
             Asset {
                 info: asset_infos[1].clone(),
-                amount: Uint128::from(400_000_000000u128),
+                amount: Uint128::from(400_000_000_000u128),
             },
             Asset {
                 info: asset_infos[2].clone(),
-                amount: Uint128::from(300_000_000000u128),
+                amount: Uint128::from(300_000_000_000u128),
             },
         ],
     );
@@ -2002,15 +1929,15 @@ fn twap_at_height_multiple_assets() {
         vec![
             (
                 usdc_token_instance.clone(),
-                Uint128::from(500_000_000000u128),
+                Uint128::from(500_000_000_000u128),
             ),
             (
                 astro_token_instance.clone(),
-                Uint128::from(400_000_000000u128),
+                Uint128::from(400_000_000_000u128),
             ),
             (
                 usdt_token_instance.clone(),
-                Uint128::from(300_000_000000u128),
+                Uint128::from(300_000_000_000u128),
             ),
         ],
     );
@@ -2018,7 +1945,7 @@ fn twap_at_height_multiple_assets() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: asset_infos.clone(),
+        asset_infos,
         period: 86400,
     };
     let oracle_instance = router
@@ -2043,7 +1970,7 @@ fn twap_at_height_multiple_assets() {
     assert_eq!(e.root_cause().to_string(), "Period not elapsed");
     router.update_block(next_day);
 
-    first_tracked_block = router.block_info().height;
+    let first_tracked_block = router.block_info().height;
     router
         .execute_contract(
             owner.clone(),
@@ -2057,14 +1984,14 @@ fn twap_at_height_multiple_assets() {
     // Change pair liquidity
     for (amount1, amount2, amount3) in [
         (
-            Uint128::from(500_000_000000u128),
-            Uint128::from(400_000_000000u128),
-            Uint128::from(300_000_000000u128),
+            Uint128::from(500_000_000_000u128),
+            Uint128::from(400_000_000_000u128),
+            Uint128::from(300_000_000_000u128),
         ),
         (
-            Uint128::from(500_000_000000u128),
-            Uint128::from(400_000_000000u128),
-            Uint128::from(300_000_000000u128),
+            Uint128::from(500_000_000_000u128),
+            Uint128::from(400_000_000_000u128),
+            Uint128::from(300_000_000_000u128),
         ),
     ] {
         change_provide_liquidity(
@@ -2093,19 +2020,19 @@ fn twap_at_height_multiple_assets() {
     // Change pair liquidity
     for (amount1, amount2, amount3) in [
         (
-            Uint128::from(100_000_000000u128),
-            Uint128::from(95_000_000000u128),
-            Uint128::from(100_000_000000u128),
+            Uint128::from(100_000_000_000_u128),
+            Uint128::from(95_000_000_000_u128),
+            Uint128::from(100_000_000_000_u128),
         ),
         (
-            Uint128::from(100_000_000000u128),
-            Uint128::from(95_000_000000u128),
-            Uint128::from(100_000_000000u128),
+            Uint128::from(100_000_000_000_u128),
+            Uint128::from(95_000_000_000_u128),
+            Uint128::from(100_000_000_000_u128),
         ),
         (
-            Uint128::from(100_000_000000u128),
-            Uint128::from(95_000_000000u128),
-            Uint128::from(100_000_000000u128),
+            Uint128::from(100_000_000_000_u128),
+            Uint128::from(95_000_000_000_u128),
+            Uint128::from(100_000_000_000_u128),
         ),
     ] {
         change_provide_liquidity(
@@ -2304,17 +2231,17 @@ fn twap_at_height_multiple_assets() {
             ],
         ),
         (
-            usdt_token_instance.clone(),
+            usdt_token_instance,
             vec![
                 (
                     AssetInfo::Token {
-                        contract_addr: usdc_token_instance.clone(),
+                        contract_addr: usdc_token_instance,
                     },
                     Decimal256::from_str("1.004864").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
-                        contract_addr: astro_token_instance.clone(),
+                        contract_addr: astro_token_instance,
                     },
                     Decimal256::from_str("1.002909").unwrap(),
                 ),
