@@ -2,8 +2,8 @@ use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Order, Response,
-    StdError, StdResult, Timestamp, Uint128,
+    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    StdResult, Uint128,
 };
 use cw2::set_contract_version;
 use cw20_base::state as Cw20State;
@@ -11,9 +11,9 @@ use cw_utils::Expiration;
 
 use crate::error::ContractError;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, VestingsResponse,
+    ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, WithdrawableAmountResponse,
 };
-use crate::state::{Config, VestingItem, CONFIG, VESTINGS};
+use crate::state::{Allocation, Config, Schedule, ALLOCATIONS, CONFIG};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:credits";
@@ -23,6 +23,9 @@ const TOKEN_NAME: &str = "CNTRN";
 const TOKEN_SYMBOL: &str = "cntrn";
 const TOKEN_DECIMALS: u8 = 6; // TODO: correct?
 const DEPOSITED_SYMBOL: &str = "untrn";
+
+// Zero cliff for vesting. TODO: change?
+const VESTING_CLIFF: u64 = 0;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -74,31 +77,17 @@ pub fn execute(
         ExecuteMsg::UpdateConfig {
             airdrop_address,
             lockdrop_address,
-        } => execute_update_config(
-            deps,
-            env,
-            info,
-            airdrop_address,
-            lockdrop_address,
-        ),
+        } => execute_update_config(deps, env, info, airdrop_address, lockdrop_address),
         ExecuteMsg::AddVesting {
             address,
             amount,
-            start_timestamp,
-            end_timestamp,
-        } => execute_add_vesting(
-            deps,
-            env,
-            info,
-            address,
-            amount,
-            start_timestamp,
-            end_timestamp,
-        ),
+            start_time,
+            duration,
+        } => execute_add_vesting(deps, env, info, address, amount, start_time, duration),
         ExecuteMsg::Transfer { recipient, amount } => {
             execute_transfer(deps, env, info, recipient, amount)
         }
-        ExecuteMsg::BurnAll {} => execute_burn_all(deps, env, info),
+        ExecuteMsg::Withdraw {} => execute_withdraw(deps, env, info),
         ExecuteMsg::Burn { amount } => execute_burn(deps, env, info, amount),
         ExecuteMsg::IncreaseAllowance {
             spender,
@@ -149,8 +138,8 @@ pub fn execute_add_vesting(
     info: MessageInfo,
     address: String,
     amount: Uint128,
-    start_timestamp: Timestamp,
-    end_timestamp: Timestamp,
+    start_time: u64,
+    duration: u64,
 ) -> Result<Response, Cw20ContractError> {
     let config = CONFIG.load(deps.storage)?;
     if info.sender
@@ -163,22 +152,22 @@ pub fn execute_add_vesting(
 
     let vested_to = deps.api.addr_validate(&address)?;
 
-    VESTINGS.update(
+    ALLOCATIONS.update(
         deps.storage,
-        (&vested_to, end_timestamp.nanos()),
-        |o: Option<VestingItem>| -> Result<VestingItem, Cw20ContractError> {
+        &vested_to,
+        |o: Option<Allocation>| -> Result<Allocation, Cw20ContractError> {
             match o {
-                Some(vesting_item) => Ok({
-                    VestingItem {
-                        start_timestamp: vesting_item.start_timestamp,
-                        end_timestamp: vesting_item.end_timestamp,
-                        amount: vesting_item.amount + amount,
-                    }
-                }),
-                None => Ok(VestingItem {
-                    start_timestamp,
-                    end_timestamp,
-                    amount,
+                Some(_) => Err(Cw20ContractError::Std(StdError::generic_err(
+                    "cannot add vesting two times",
+                ))),
+                None => Ok(Allocation {
+                    allocated_amount: amount,
+                    withdrawn_amount: Uint128::zero(),
+                    schedule: Schedule {
+                        start_time,
+                        cliff: VESTING_CLIFF,
+                        duration,
+                    },
                 }),
             }
         },
@@ -211,40 +200,27 @@ pub fn execute_transfer(
     ::cw20_base::contract::execute_transfer(deps, env, info, recipient, amount)
 }
 
-pub fn execute_burn_all(
+pub fn execute_withdraw(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
-    // adds up only claimable vestings
-    let add_claimable = |item: StdResult<(u64, VestingItem)>| {
-        if let Ok((_, vesting_item)) = item {
-            // Can claim only after vesting time has passed
-            // TODO: check
-            if env.block.time > vesting_item.end_timestamp {
-                vesting_item.amount
-            } else {
-                Uint128::zero()
-            }
-        } else {
-            Uint128::zero()
-        }
-    };
-
     let owner = info.sender.clone();
-    let total_to_burn: Uint128 = VESTINGS
-        .prefix(&owner)
-        .range(deps.storage, None, None, Order::Ascending)
-        .map(add_claimable)
-        .sum();
+    let allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
+    let withdrawable_amount = compute_withdrawable_amount(
+        allocation.allocated_amount,
+        allocation.withdrawn_amount,
+        allocation.schedule,
+        env.block.time.seconds(),
+    )?;
 
-    if total_to_burn.is_zero() {
+    if withdrawable_amount.is_zero() {
         return Err(Cw20ContractError::Std(StdError::generic_err(
-            "cannot claim yet",
+            "nothing to claim yet",
         )));
     }
 
-    burn_and_send(deps, env, info, owner, total_to_burn)
+    burn_and_send(deps, env, info, owner, withdrawable_amount)
 }
 
 // execute_burn is for rewards from lockdrop only, skips vesting
@@ -325,9 +301,11 @@ pub fn execute_mint(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Vestings { address } => to_binary(&query_vestings(deps, address)?),
+        QueryMsg::WithdrawableAmount { address } => {
+            to_binary(&query_withdrawable_amount(deps, env, address)?)
+        }
         QueryMsg::Balance { address } => {
             to_binary(&::cw20_base::contract::query_balance(deps, address)?)
         }
@@ -372,14 +350,20 @@ fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     })
 }
 
-fn query_vestings(deps: Deps, address: String) -> StdResult<VestingsResponse> {
+fn query_withdrawable_amount(
+    deps: Deps,
+    env: Env,
+    address: String,
+) -> StdResult<WithdrawableAmountResponse> {
     let owner = deps.api.addr_validate(&address)?;
-    let vestings: StdResult<Vec<(_, VestingItem)>> = VESTINGS
-        .prefix(&owner)
-        .range(deps.storage, None, None, Order::Ascending)
-        .collect();
-    Ok(VestingsResponse {
-        vestings: vestings?.into_iter().map(|(_, v)| v).collect(),
+    let allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
+    Ok(WithdrawableAmountResponse {
+        amount: compute_withdrawable_amount(
+            allocation.allocated_amount,
+            allocation.withdrawn_amount,
+            allocation.schedule,
+            env.block.time.seconds(),
+        )?,
     })
 }
 
@@ -410,6 +394,35 @@ fn burn_and_send(
     };
 
     Ok(burn_response.add_message(send))
+}
+
+/// Compute the withdrawable based on the current timestamp and the vesting schedule
+///
+/// The withdrawable amount is vesting amount minus the amount already withdrawn.
+fn compute_withdrawable_amount(
+    allocated_amount: Uint128,
+    withdrawn_amount: Uint128,
+    vest_schedule: Schedule,
+    current_time: u64, // in seconds
+) -> StdResult<Uint128> {
+    let f = |schedule: Schedule| {
+        // Before the end of cliff period, no token will be vested/unlocked
+        if current_time < schedule.start_time + schedule.cliff {
+            Uint128::zero()
+            // After the end of cliff, tokens vest/unlock linearly between start time and end time
+        } else if current_time < schedule.start_time + schedule.duration {
+            allocated_amount.multiply_ratio(current_time - schedule.start_time, schedule.duration)
+            // After end time, all tokens are fully vested/unlocked
+        } else {
+            allocated_amount
+        }
+    };
+
+    let vested_amount = f(vest_schedule);
+
+    vested_amount
+        .checked_sub(withdrawn_amount)
+        .map_err(|overflow_err| overflow_err.into())
 }
 
 #[cfg(test)]
@@ -492,7 +505,7 @@ mod tests {
         fn works_without_initial_addresses() {
             let mut deps = mock_dependencies();
             let (_info, _env) =
-                do_instantiate(deps.as_mut(), "dao_address".to_string(), None, None, None);
+                do_instantiate(deps.as_mut(), "dao_address".to_string(), None, None);
             let config = query_config(deps.as_ref()).unwrap();
             assert_eq!(config.dao_address, "dao_address".to_string());
             assert_eq!(config.lockdrop_address, None);

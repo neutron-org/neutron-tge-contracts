@@ -1,6 +1,5 @@
-use crate::state::VestingItem;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Timestamp, Uint128};
+use cosmwasm_std::{Addr, Uint128};
 use cw_utils::Expiration;
 
 #[cw_serde]
@@ -25,14 +24,14 @@ pub enum ExecuteMsg {
     AddVesting {
         address: String,
         amount: Uint128,
-        start_timestamp: Timestamp,
-        end_timestamp: Timestamp,
+        start_time: u64,
+        duration: u64,
     },
     /// Transfer is a base message to move tokens to another account without triggering actions
     Transfer { recipient: String, amount: Uint128 },
     // TODO: rename
-    /// BurnAll is a message that burns all CNTRN tokens on the sender and sends NTRN tokens in 1:1 proportion
-    BurnAll {},
+    /// Withdraw is a message that burns all vested CNTRN tokens on the sender and sends NTRN tokens in 1:1 proportion
+    Withdraw {},
     /// Burn is a message only for `config.lockdrop` account to destroy certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion
     /// Used for giving lockdrop rewards
     Burn { amount: Uint128 },
@@ -69,8 +68,8 @@ pub enum ExecuteMsg {
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns the current vestings of the given address.
-    #[returns(VestingsResponse)]
-    Vestings { address: String },
+    #[returns(WithdrawableAmountResponse)]
+    WithdrawableAmount { address: String },
     /// Returns the current balance of the given address, 0 if unset.
     #[returns(cw20::BalanceResponse)]
     Balance { address: String },
@@ -127,6 +126,6 @@ pub struct ConfigResponse {
 }
 
 #[cw_serde]
-pub struct VestingsResponse {
-    pub vestings: Vec<VestingItem>,
+pub struct WithdrawableAmountResponse {
+    pub amount: Uint128,
 }
