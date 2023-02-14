@@ -3,6 +3,25 @@
 version = 3
 
 [[package]]
+name = "adapter"
+version = "1.0.0"
+dependencies = [
+ "astroport",
+ "astroport-factory",
+ "astroport-token",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-multi-test 0.15.1",
+ "cw-storage-plus 0.15.1",
+ "cw2 0.15.1",
+ "cw20 0.15.1",
+ "integer-sqrt",
+ "proptest",
+ "protobuf",
+ "thiserror",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
