@@ -297,7 +297,7 @@ pub fn execute_mint(
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
     // mint in 1:1 proportion to locked ntrn funds
-    let untrn_amount = try_find_untrns(info.clone().funds)?;
+    let untrn_amount = try_find_untrns(info.funds.clone())?;
 
     let config = CONFIG.load(deps.storage)?;
     let recipient = config.dao_address.to_string();
@@ -381,11 +381,13 @@ fn query_allocation(deps: Deps, address: String) -> StdResult<AllocationResponse
 
 fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
     let token = funds.first().ok_or_else(|| {
-        Cw20ContractError::Std(StdError::generic_err("no untrn's supplied to lock"))
+        Cw20ContractError::Std(StdError::generic_err(format!(
+            "no untrn funds supplied to lock: {funds:?}"
+        )))
     })?;
     if token.denom != DEPOSITED_SYMBOL {
         return Err(Cw20ContractError::Std(StdError::generic_err(
-            "no untrns supplied to lock",
+            "need untrn supply to lock",
         )));
     }
 
@@ -442,20 +444,31 @@ mod tests {
     use crate::contract::instantiate;
     use crate::msg::InstantiateMsg;
     use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{DepsMut, Env, MessageInfo};
+    use cosmwasm_std::{Coin, DepsMut, Env, MessageInfo};
+
+    fn simple_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env) {
+        do_instantiate(
+            deps,
+            "dao_address".to_string(),
+            Some("airdrop_address".to_string()),
+            Some("lockdrop_address".to_string()),
+            funds,
+        )
+    }
 
     fn do_instantiate(
         mut deps: DepsMut,
         dao_address: String,
         airdrop_address: Option<String>,
         lockdrop_address: Option<String>,
+        funds: Option<Vec<Coin>>,
     ) -> (MessageInfo, Env) {
         let instantiate_msg = InstantiateMsg {
             dao_address,
             airdrop_address,
             lockdrop_address,
         };
-        let info = mock_info("creator", &[]);
+        let info = mock_info("creator", &funds.unwrap_or_default());
         let env = mock_env();
         let res = instantiate(deps.branch(), env.clone(), info.clone(), instantiate_msg).unwrap();
         assert_eq!(0, res.messages.len());
@@ -479,6 +492,7 @@ mod tests {
                 "dao_address".to_string(),
                 Some("airdrop_address".to_string()),
                 Some("lockdrop_address".to_string()),
+                None,
             );
             let config = query_config(deps.as_ref()).unwrap();
             assert_eq!(config.dao_address, "dao_address".to_string());
@@ -517,7 +531,7 @@ mod tests {
         fn works_without_initial_addresses() {
             let mut deps = mock_dependencies();
             let (_info, _env) =
-                do_instantiate(deps.as_mut(), "dao_address".to_string(), None, None);
+                do_instantiate(deps.as_mut(), "dao_address".to_string(), None, None, None);
             let config = query_config(deps.as_ref()).unwrap();
             assert_eq!(config.dao_address, "dao_address".to_string());
             assert_eq!(config.lockdrop_address, None);
@@ -542,7 +556,50 @@ mod tests {
 
     mod transfer_from {}
 
-    mod mint {}
+    mod mint {
+        use crate::contract::tests::simple_instantiate;
+        use crate::contract::{execute_mint, DEPOSITED_SYMBOL};
+        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::{Coin, StdError};
+        use cw20_base::ContractError;
+
+        #[test]
+        fn does_not_work_without_funds_sent() {
+            let mut deps = mock_dependencies();
+            let (_info, env) = simple_instantiate(deps.as_mut(), None);
+            let dao_info = mock_info("dao_address", &[]);
+
+            let res = execute_mint(deps.as_mut(), env, dao_info);
+            assert_eq!(
+                res,
+                Err(ContractError::Std(StdError::generic_err(
+                    "no untrn funds supplied to lock: []"
+                )))
+            );
+        }
+
+        #[test]
+        fn non_dao_cannot_mint() {
+            let mut deps = mock_dependencies();
+            let (_info, env) = simple_instantiate(deps.as_mut(), None);
+
+            let funds = vec![Coin::new(500, DEPOSITED_SYMBOL)];
+            let non_dao_info = mock_info("non dao", &funds);
+            let res = execute_mint(deps.as_mut(), env, non_dao_info);
+            assert_eq!(res, Err(ContractError::Unauthorized {}));
+        }
+
+        #[test]
+        fn works_with_ntrn_funds() {
+            let mut deps = mock_dependencies();
+            let (_info, env) = simple_instantiate(deps.as_mut(), None);
+
+            let funds = vec![Coin::new(500, DEPOSITED_SYMBOL)];
+            let dao_info = mock_info("dao_address", &funds);
+            let res = execute_mint(deps.as_mut(), env, dao_info);
+            assert!(res.is_ok());
+        }
+    }
 
     mod compute_withdrawable_amount {
         use crate::contract::{compute_withdrawable_amount, VESTING_CLIFF};
