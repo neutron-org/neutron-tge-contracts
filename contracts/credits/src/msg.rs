@@ -114,6 +114,8 @@ pub enum QueryMsg {
     /// Returns current config of Credits contract
     #[returns(ConfigResponse)]
     Config {},
+    // TODO: handler to liquidize some portion tokens for address. Also needs implementation changes in withdraw section.
+    // Liquidize { address: String, amount: Uint128 }
 }
 
 #[cw_serde]

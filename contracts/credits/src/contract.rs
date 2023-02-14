@@ -443,10 +443,10 @@ pub fn compute_withdrawable_amount(
 
 #[cfg(test)]
 mod tests {
-    use crate::contract::instantiate;
+    use crate::contract::{execute_add_vesting, instantiate};
     use crate::msg::InstantiateMsg;
     use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{Coin, DepsMut, Env, MessageInfo};
+    use cosmwasm_std::{Coin, DepsMut, Env, MessageInfo, Uint128};
 
     fn _do_simple_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env) {
         do_instantiate(
@@ -476,6 +476,28 @@ mod tests {
         assert_eq!(0, res.messages.len());
 
         (info, env)
+    }
+
+    fn _do_add_vesting(
+        deps: DepsMut,
+        env: Env,
+        address: String,
+        amount: Uint128,
+        start_time: u64,
+        duration: u64,
+    ) {
+        let airdrop_info = mock_info("airdrop_address", &[]);
+
+        let res = execute_add_vesting(
+            deps,
+            env,
+            airdrop_info,
+            address,
+            amount,
+            start_time,
+            duration,
+        );
+        assert!(res.is_ok());
     }
 
     mod instantiate {
@@ -638,16 +660,15 @@ mod tests {
     mod transfer {}
 
     mod withdraw {
-        use crate::contract::tests::_do_simple_instantiate;
+        use crate::contract::tests::{_do_add_vesting, _do_simple_instantiate};
         use crate::contract::{
             execute_add_vesting, execute_mint, execute_transfer, execute_withdraw, DEPOSITED_SYMBOL,
         };
-        use cosmwasm_std::testing::{mock_dependencies, mock_info};
-        use cosmwasm_std::{coins, BankMsg, DepsMut, Env, Timestamp, Uint128, Addr, StdError};
-        use cosmwasm_std::StdError::NotFound;
-        use cw20_base::ContractError;
-        use cw20_base::state::{BALANCES, TOKEN_INFO};
         use crate::state::ALLOCATIONS;
+        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, StdError, Timestamp, Uint128};
+        use cw20_base::state::{BALANCES, TOKEN_INFO};
+        use cw20_base::ContractError;
 
         #[test]
         fn withdraws_all_vested_tokens_correctly() {
@@ -701,11 +722,15 @@ mod tests {
                 }
                 .into()
             );
-            let allocation = ALLOCATIONS.load(&deps.storage, &Addr::unchecked("somebody")).unwrap();
+            let allocation = ALLOCATIONS
+                .load(&deps.storage, &Addr::unchecked("somebody"))
+                .unwrap();
             assert_eq!(allocation.allocated_amount, Uint128::new(100));
             assert_eq!(allocation.withdrawn_amount, Uint128::new(75));
 
-            let balance = BALANCES.load(&deps.storage, &Addr::unchecked("somebody")).unwrap();
+            let balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("somebody"))
+                .unwrap();
             assert_eq!(balance, Uint128::new(100 - 75));
 
             let token_info = TOKEN_INFO.load(&deps.storage).unwrap();
@@ -721,33 +746,44 @@ mod tests {
             // check
             let somebody_info = mock_info("somebody", &[]);
             let res = execute_withdraw(deps.as_mut(), env, somebody_info);
-            assert_eq!(res, Err(ContractError::Std(StdError::not_found("credits::state::Allocation"))));
+            assert_eq!(
+                res,
+                Err(ContractError::Std(StdError::not_found(
+                    "credits::state::Allocation"
+                )))
+            );
         }
+    }
 
-        fn _do_add_vesting(
-            deps: DepsMut,
-            env: Env,
-            address: String,
-            amount: Uint128,
-            start_time: u64,
-            duration: u64,
-        ) {
+    mod burn {
+        use crate::contract::tests::_do_simple_instantiate;
+        use crate::contract::{execute_burn, execute_mint, DEPOSITED_SYMBOL};
+        use cosmwasm_std::coins;
+        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+
+        #[test]
+        fn works_with_correct_params() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, mut env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            // mint
+            let dao_info = mock_info("dao_address", &coins(1000000000, DEPOSITED_SYMBOL));
+            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
+            assert!(res.is_ok());
+
+            // transfer to `somebody`
             let airdrop_info = mock_info("airdrop_address", &[]);
-
-            let res = execute_add_vesting(
-                deps,
-                env,
+            let res = execute_burn(
+                deps.as_mut(),
+                env.clone(),
                 airdrop_info,
-                address,
-                amount,
-                start_time,
-                duration,
+                "somebody".to_string(),
+                Uint128::new(100),
             );
             assert!(res.is_ok());
         }
     }
-
-    mod burn {}
 
     mod transfer_from {}
 
