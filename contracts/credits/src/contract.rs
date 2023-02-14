@@ -41,6 +41,7 @@ pub fn instantiate(
         dao_address: deps.api.addr_validate(&msg.dao_address)?,
         airdrop_address: None,
         lockdrop_address: None,
+        // when_withdrawable: Timestamp, // TODO: (this is when phase2 lockdrop stage has ended)
     };
 
     if let Some(addr) = msg.airdrop_address {
@@ -206,6 +207,7 @@ pub fn execute_withdraw(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
+    // TODO: return error if not claimable yet
     let owner = info.sender.clone();
     let mut allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
     let withdrawable_amount = compute_withdrawable_amount(
@@ -227,8 +229,7 @@ pub fn execute_withdraw(
     burn_and_send(deps, env, info, owner, withdrawable_amount)
 }
 
-// execute_burn is for rewards from lockdrop only, skips vesting
-// assume that lockdrop account will call this and then send NTRN's to reward receiver by themselves
+// execute_burn is for airdrop account that will burn through all unclaimed tokens
 pub fn execute_burn(
     deps: DepsMut,
     env: Env,
@@ -240,7 +241,7 @@ pub fn execute_burn(
 
     if sender
         != config
-            .lockdrop_address
+            .airdrop_address
             .ok_or_else(|| StdError::generic_err("uninitialized"))?
     {
         return Err(Cw20ContractError::Unauthorized {});
@@ -661,12 +662,10 @@ mod tests {
 
     mod withdraw {
         use crate::contract::tests::{_do_add_vesting, _do_simple_instantiate};
-        use crate::contract::{
-            execute_add_vesting, execute_mint, execute_transfer, execute_withdraw, DEPOSITED_SYMBOL,
-        };
+        use crate::contract::{execute_mint, execute_transfer, execute_withdraw, DEPOSITED_SYMBOL};
         use crate::state::ALLOCATIONS;
         use cosmwasm_std::testing::{mock_dependencies, mock_info};
-        use cosmwasm_std::{coins, Addr, BankMsg, DepsMut, Env, StdError, Timestamp, Uint128};
+        use cosmwasm_std::{coins, Addr, BankMsg, StdError, Timestamp, Uint128};
         use cw20_base::state::{BALANCES, TOKEN_INFO};
         use cw20_base::ContractError;
 
@@ -741,7 +740,7 @@ mod tests {
         fn does_not_withdraw_if_no_tokens_vested_yet() {
             // instantiate
             let mut deps = mock_dependencies();
-            let (_info, mut env) = _do_simple_instantiate(deps.as_mut(), None);
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
 
             // check
             let somebody_info = mock_info("somebody", &[]);
@@ -758,30 +757,61 @@ mod tests {
     mod burn {
         use crate::contract::tests::_do_simple_instantiate;
         use crate::contract::{execute_burn, execute_mint, DEPOSITED_SYMBOL};
-        use cosmwasm_std::coins;
         use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::{coins, Addr, BankMsg, Uint128};
+        use cw20_base::state::{BALANCES, TOKEN_INFO};
+        use cw20_base::ContractError;
 
         #[test]
-        fn works_with_correct_params() {
+        fn works_with_correct_params_for_airdrop() {
             // instantiate
             let mut deps = mock_dependencies();
-            let (_info, mut env) = _do_simple_instantiate(deps.as_mut(), None);
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
 
             // mint
-            let dao_info = mock_info("dao_address", &coins(1000000000, DEPOSITED_SYMBOL));
+            let minted_balance = 1000000000;
+            let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
             let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
             assert!(res.is_ok());
 
-            // transfer to `somebody`
+            // burn amount
             let airdrop_info = mock_info("airdrop_address", &[]);
-            let res = execute_burn(
-                deps.as_mut(),
-                env.clone(),
-                airdrop_info,
-                "somebody".to_string(),
-                Uint128::new(100),
-            );
+            let res = execute_burn(deps.as_mut(), env, airdrop_info, Uint128::new(10000));
             assert!(res.is_ok());
+
+            let msgs = res.unwrap().messages;
+            assert_eq!(msgs.len(), 1);
+            assert_eq!(
+                msgs.first().unwrap().msg,
+                BankMsg::Send {
+                    to_address: "airdrop_address".to_string(),
+                    amount: coins(10000, DEPOSITED_SYMBOL)
+                }
+                .into()
+            );
+
+            let balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("airdrop_address"))
+                .unwrap();
+            assert_eq!(balance, Uint128::new(minted_balance - 10000));
+
+            let token_info = TOKEN_INFO.load(&deps.storage).unwrap();
+            assert_eq!(
+                token_info.total_supply,
+                Uint128::new(minted_balance - 10000)
+            );
+        }
+
+        #[test]
+        fn unauthorized_for_non_airdrop_addresses() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            // burn amount
+            let airdrop_info = mock_info("non_airdrop_address", &[]);
+            let res = execute_burn(deps.as_mut(), env, airdrop_info, Uint128::new(10000));
+            assert_eq!(res, Err(ContractError::Unauthorized {}))
         }
     }
 
