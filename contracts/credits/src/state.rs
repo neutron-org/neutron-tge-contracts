@@ -1,5 +1,5 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Addr, Timestamp, Uint128};
 use cw_storage_plus::{Item, Map};
 
 #[cw_serde]
@@ -10,12 +10,12 @@ pub struct Config {
     pub airdrop_address: Option<Addr>,
     /// Lockdrop contract address,
     pub lockdrop_address: Option<Addr>,
+    /// When can start withdrawing NTRN funds
+    pub when_withdrawable: Timestamp,
 }
 
 #[cw_serde]
 pub struct Allocation {
-    // pub start_timestamp: Timestamp, // why we need start_timestamp in add_vesting?
-    // pub end_timestamp: Timestamp,
     pub allocated_amount: Uint128,
     pub withdrawn_amount: Uint128,
     pub schedule: Schedule,
@@ -35,4 +35,4 @@ pub struct Schedule {
 pub const CONFIG: Item<Config> = Item::new("config");
 
 // assume that we cannot set vesting multiple times for same address
-pub const ALLOCATIONS: Map<&Addr, Allocation> = Map::new("vestings");
+pub const ALLOCATIONS: Map<&Addr, Allocation> = Map::new("allocations");

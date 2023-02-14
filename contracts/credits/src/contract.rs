@@ -41,7 +41,7 @@ pub fn instantiate(
         dao_address: deps.api.addr_validate(&msg.dao_address)?,
         airdrop_address: None,
         lockdrop_address: None,
-        // when_withdrawable: Timestamp, // TODO: (this is when phase2 lockdrop stage has ended)
+        when_withdrawable: msg.when_withdrawable,
     };
 
     if let Some(addr) = msg.airdrop_address {
@@ -131,6 +131,8 @@ pub fn execute_update_config(
     config.airdrop_address = Some(deps.api.addr_validate(&airdrop_address)?);
     config.lockdrop_address = Some(deps.api.addr_validate(&lockdrop_address)?);
 
+    CONFIG.save(deps.storage, &config)?;
+
     Ok(Response::default())
 }
 
@@ -207,6 +209,13 @@ pub fn execute_withdraw(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    if config.when_withdrawable > env.block.time {
+        return Err(Cw20ContractError::Std(StdError::generic_err(
+            "too early to claim",
+        )));
+    }
+
     // TODO: return error if not claimable yet
     let owner = info.sender.clone();
     let mut allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
@@ -356,6 +365,7 @@ fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         dao_address: config.dao_address,
         airdrop_address: config.airdrop_address,
         lockdrop_address: config.lockdrop_address,
+        when_withdrawable: config.when_withdrawable,
     })
 }
 
@@ -447,29 +457,32 @@ mod tests {
     use crate::contract::{execute_add_vesting, instantiate};
     use crate::msg::InstantiateMsg;
     use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{Coin, DepsMut, Env, MessageInfo, Uint128};
+    use cosmwasm_std::{Coin, DepsMut, Env, MessageInfo, Timestamp, Uint128};
 
     fn _do_simple_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env) {
-        do_instantiate(
+        _do_instantiate(
             deps,
             "dao_address".to_string(),
             Some("airdrop_address".to_string()),
             Some("lockdrop_address".to_string()),
             funds,
+            Timestamp::from_seconds(0),
         )
     }
 
-    fn do_instantiate(
+    fn _do_instantiate(
         mut deps: DepsMut,
         dao_address: String,
         airdrop_address: Option<String>,
         lockdrop_address: Option<String>,
         funds: Option<Vec<Coin>>,
+        when_withdrawable: Timestamp,
     ) -> (MessageInfo, Env) {
         let instantiate_msg = InstantiateMsg {
             dao_address,
             airdrop_address,
             lockdrop_address,
+            when_withdrawable,
         };
         let info = mock_info("creator", &funds.unwrap_or_default());
         let env = mock_env();
@@ -512,12 +525,13 @@ mod tests {
         #[test]
         fn basic() {
             let mut deps = mock_dependencies();
-            let (_info, _env) = do_instantiate(
+            let (_info, _env) = _do_instantiate(
                 deps.as_mut(),
                 "dao_address".to_string(),
                 Some("airdrop_address".to_string()),
                 Some("lockdrop_address".to_string()),
                 None,
+                Timestamp::from_seconds(0),
             );
             let config = query_config(deps.as_ref()).unwrap();
             assert_eq!(config.dao_address, "dao_address".to_string());
@@ -555,8 +569,14 @@ mod tests {
         #[test]
         fn works_without_initial_addresses() {
             let mut deps = mock_dependencies();
-            let (_info, _env) =
-                do_instantiate(deps.as_mut(), "dao_address".to_string(), None, None, None);
+            let (_info, _env) = _do_instantiate(
+                deps.as_mut(),
+                "dao_address".to_string(),
+                None,
+                None,
+                None,
+                Timestamp::from_seconds(0),
+            );
             let config = query_config(deps.as_ref()).unwrap();
             assert_eq!(config.dao_address, "dao_address".to_string());
             assert_eq!(config.lockdrop_address, None);
@@ -564,7 +584,47 @@ mod tests {
         }
     }
 
-    mod update_config {}
+    mod update_config {
+        use crate::contract::execute_update_config;
+        use crate::contract::tests::_do_simple_instantiate;
+        use crate::state::CONFIG;
+        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::Addr;
+        use cw20_base::ContractError;
+
+        #[test]
+        fn update_config_works() {
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+            let dao_info = mock_info("dao_address", &[]);
+            let res = execute_update_config(
+                deps.as_mut(),
+                env,
+                dao_info,
+                "air".to_string(),
+                "lock".to_string(),
+            );
+            assert!(res.is_ok());
+            let config = CONFIG.load(&deps.storage).unwrap();
+            assert_eq!(config.airdrop_address, Some(Addr::unchecked("air")));
+            assert_eq!(config.lockdrop_address, Some(Addr::unchecked("lock")));
+        }
+
+        #[test]
+        fn only_admin_can_update_config() {
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+            let somebody_info = mock_info("somebody", &[]);
+            let res = execute_update_config(
+                deps.as_mut(),
+                env,
+                somebody_info,
+                "airdrop".to_string(),
+                "lockdrop".to_string(),
+            );
+            assert_eq!(res, Err(ContractError::Unauthorized {}));
+        }
+    }
 
     mod add_vesting {
         use crate::contract::tests::_do_simple_instantiate;
@@ -661,10 +721,10 @@ mod tests {
     mod transfer {}
 
     mod withdraw {
-        use crate::contract::tests::{_do_add_vesting, _do_simple_instantiate};
+        use crate::contract::tests::{_do_add_vesting, _do_instantiate, _do_simple_instantiate};
         use crate::contract::{execute_mint, execute_transfer, execute_withdraw, DEPOSITED_SYMBOL};
         use crate::state::ALLOCATIONS;
-        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
         use cosmwasm_std::{coins, Addr, BankMsg, StdError, Timestamp, Uint128};
         use cw20_base::state::{BALANCES, TOKEN_INFO};
         use cw20_base::ContractError;
@@ -676,7 +736,7 @@ mod tests {
             let (_info, mut env) = _do_simple_instantiate(deps.as_mut(), None);
 
             // mint
-            let dao_info = mock_info("dao_address", &coins(1000000000, DEPOSITED_SYMBOL));
+            let dao_info = mock_info("dao_address", &coins(1_000_000_000, DEPOSITED_SYMBOL));
             let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
             assert!(res.is_ok());
 
@@ -733,7 +793,29 @@ mod tests {
             assert_eq!(balance, Uint128::new(100 - 75));
 
             let token_info = TOKEN_INFO.load(&deps.storage).unwrap();
-            assert_eq!(token_info.total_supply, Uint128::new(1000000000 - 75));
+            assert_eq!(token_info.total_supply, Uint128::new(1_000_000_000 - 75));
+        }
+
+        #[test]
+        fn does_not_withdraw_until_ready() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_instantiate(
+                deps.as_mut(),
+                "dao_address".to_string(),
+                None,
+                None,
+                None,
+                mock_env().block.time.plus_seconds(1_000_000),
+            );
+            let somebody_info = mock_info("somebody", &[]);
+            let res = execute_withdraw(deps.as_mut(), env, somebody_info);
+            assert_eq!(
+                res,
+                Err(ContractError::Std(StdError::generic_err(
+                    "too early to claim"
+                ))),
+            );
         }
 
         #[test]
@@ -769,7 +851,7 @@ mod tests {
             let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
 
             // mint
-            let minted_balance = 1000000000;
+            let minted_balance = 1_000_000_000;
             let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
             let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
             assert!(res.is_ok());
@@ -785,7 +867,7 @@ mod tests {
                 msgs.first().unwrap().msg,
                 BankMsg::Send {
                     to_address: "airdrop_address".to_string(),
-                    amount: coins(10000, DEPOSITED_SYMBOL)
+                    amount: coins(10_000, DEPOSITED_SYMBOL)
                 }
                 .into()
             );
@@ -793,12 +875,12 @@ mod tests {
             let balance = BALANCES
                 .load(&deps.storage, &Addr::unchecked("airdrop_address"))
                 .unwrap();
-            assert_eq!(balance, Uint128::new(minted_balance - 10000));
+            assert_eq!(balance, Uint128::new(minted_balance - 10_000));
 
             let token_info = TOKEN_INFO.load(&deps.storage).unwrap();
             assert_eq!(
                 token_info.total_supply,
-                Uint128::new(minted_balance - 10000)
+                Uint128::new(minted_balance - 10_000)
             );
         }
 

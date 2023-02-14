@@ -1,6 +1,6 @@
 use crate::state::Allocation;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Addr, Timestamp, Uint128};
 use cw_utils::Expiration;
 
 #[cw_serde]
@@ -11,6 +11,8 @@ pub struct InstantiateMsg {
     pub airdrop_address: Option<String>,
     /// Lockdrop contract address,
     pub lockdrop_address: Option<String>,
+    /// When can start withdrawing NTRN funds
+    pub when_withdrawable: Timestamp,
 }
 
 #[cw_serde]
@@ -30,7 +32,6 @@ pub enum ExecuteMsg {
     },
     /// Transfer is a base message to move tokens to another account without triggering actions
     Transfer { recipient: String, amount: Uint128 },
-    // TODO: rename
     /// Withdraw is a message that burns all vested CNTRN tokens on the sender and sends NTRN tokens in 1:1 proportion
     Withdraw {},
     /// Burn is a message only for `config.lockdrop` account to destroy certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion
@@ -129,6 +130,8 @@ pub struct ConfigResponse {
     pub airdrop_address: Option<Addr>,
     /// Lockdrop contract address,
     pub lockdrop_address: Option<Addr>,
+    /// When can start withdrawing NTRN funds
+    pub when_withdrawable: Timestamp,
 }
 
 #[cw_serde]
