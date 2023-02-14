@@ -541,7 +541,97 @@ mod tests {
 
     mod update_config {}
 
-    mod add_vesting {}
+    mod add_vesting {
+        use crate::contract::tests::simple_instantiate;
+        use crate::contract::{execute_add_vesting, VESTING_CLIFF};
+        use crate::state::{Schedule, ALLOCATIONS};
+        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::{Addr, StdError, Uint128};
+        use cw20_base::ContractError;
+        use cw20_base::ContractError::Std;
+
+        #[test]
+        fn adds_vesting_for_account_with_correct_settings() {
+            let mut deps = mock_dependencies();
+            let (_info, env) = simple_instantiate(deps.as_mut(), None);
+            let airdrop_info = mock_info("airdrop_address", &[]);
+
+            let res = execute_add_vesting(
+                deps.as_mut(),
+                env,
+                airdrop_info,
+                "address".to_string(),
+                Uint128::new(100),
+                15,
+                1000,
+            );
+            assert!(res.is_ok());
+
+            let allocation = ALLOCATIONS
+                .load(&deps.storage, &Addr::unchecked("address"))
+                .unwrap();
+            assert_eq!(allocation.allocated_amount, Uint128::new(100));
+            assert_eq!(allocation.withdrawn_amount, Uint128::new(0));
+            assert_eq!(
+                allocation.schedule,
+                Schedule {
+                    start_time: 15,
+                    cliff: VESTING_CLIFF,
+                    duration: 1000
+                }
+            );
+        }
+
+        #[test]
+        fn non_airdrop_addresses_cannot_set_vesting() {
+            let mut deps = mock_dependencies();
+            let (_info, env) = simple_instantiate(deps.as_mut(), None);
+            let airdrop_info = mock_info("non_airdrop_address", &[]);
+
+            let res = execute_add_vesting(
+                deps.as_mut(),
+                env,
+                airdrop_info,
+                "address".to_string(),
+                Uint128::new(100),
+                15,
+                1000,
+            );
+            assert_eq!(res, Err(ContractError::Unauthorized {}));
+        }
+
+        #[test]
+        fn cannot_add_vesting_twice_to_same_address() {
+            let mut deps = mock_dependencies();
+            let (_info, env) = simple_instantiate(deps.as_mut(), None);
+            let airdrop_info = mock_info("airdrop_address", &[]);
+
+            let res = execute_add_vesting(
+                deps.as_mut(),
+                env.clone(),
+                airdrop_info.clone(),
+                "address".to_string(),
+                Uint128::new(100),
+                15,
+                1000,
+            );
+            assert!(res.is_ok());
+
+            let res = execute_add_vesting(
+                deps.as_mut(),
+                env,
+                airdrop_info,
+                "address".to_string(),
+                Uint128::new(100),
+                15,
+                1000,
+            );
+            assert_eq!(
+                res,
+                Err(Std(StdError::generic_err("cannot add vesting two times")))
+            );
+        }
+    }
 
     mod transfer {
         // use super::*;
@@ -561,8 +651,8 @@ mod tests {
         use crate::contract::{execute_mint, DEPOSITED_SYMBOL};
         use cosmwasm_std::testing::{mock_dependencies, mock_info};
         use cosmwasm_std::{Addr, Coin, StdError, Uint128};
-        use cw20_base::ContractError;
         use cw20_base::state::{BALANCES, TOKEN_INFO};
+        use cw20_base::ContractError;
 
         #[test]
         fn does_not_work_without_funds_sent() {
@@ -603,7 +693,9 @@ mod tests {
             let config = TOKEN_INFO.load(&deps.storage).unwrap();
             assert_eq!(config.total_supply, Uint128::new(500));
 
-            let balance = BALANCES.load(&deps.storage, &Addr::unchecked("dao_address")).unwrap();
+            let balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("dao_address"))
+                .unwrap();
             assert_eq!(balance, Uint128::new(500));
         }
     }
