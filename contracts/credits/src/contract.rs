@@ -206,11 +206,11 @@ pub fn execute_withdraw(
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
     let owner = info.sender.clone();
-    let allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
+    let mut allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
     let withdrawable_amount = compute_withdrawable_amount(
         allocation.allocated_amount,
         allocation.withdrawn_amount,
-        allocation.schedule,
+        &allocation.schedule,
         env.block.time.seconds(),
     )?;
 
@@ -219,6 +219,9 @@ pub fn execute_withdraw(
             "nothing to claim yet",
         )));
     }
+
+    allocation.withdrawn_amount += withdrawable_amount;
+    ALLOCATIONS.save(deps.storage, &owner, &allocation)?;
 
     burn_and_send(deps, env, info, owner, withdrawable_amount)
 }
@@ -361,7 +364,7 @@ fn query_withdrawable_amount(
         amount: compute_withdrawable_amount(
             allocation.allocated_amount,
             allocation.withdrawn_amount,
-            allocation.schedule,
+            &allocation.schedule,
             env.block.time.seconds(),
         )?,
     })
@@ -399,13 +402,13 @@ fn burn_and_send(
 /// Compute the withdrawable based on the current timestamp and the vesting schedule
 ///
 /// The withdrawable amount is vesting amount minus the amount already withdrawn.
-fn compute_withdrawable_amount(
+pub fn compute_withdrawable_amount(
     allocated_amount: Uint128,
     withdrawn_amount: Uint128,
-    vest_schedule: Schedule,
+    vest_schedule: &Schedule,
     current_time: u64, // in seconds
 ) -> StdResult<Uint128> {
-    let f = |schedule: Schedule| {
+    let f = |schedule: &Schedule| {
         // Before the end of cliff period, no token will be vested/unlocked
         if current_time < schedule.start_time + schedule.cliff {
             Uint128::zero()
@@ -531,4 +534,60 @@ mod tests {
     mod transfer_from {}
 
     mod mint {}
+
+    mod compute_withdrawable_amount {
+        use crate::contract::{compute_withdrawable_amount, VESTING_CLIFF};
+        use crate::state::Schedule;
+        use cosmwasm_std::Uint128;
+
+        #[test]
+        fn works_before_start_time() {
+            let now: u64 = 0;
+            let schedule = Schedule {
+                start_time: 10,
+                cliff: VESTING_CLIFF,
+                duration: 2592000, // 30 days
+            };
+            let result =
+                compute_withdrawable_amount(Uint128::new(100), Uint128::new(0), &schedule, now);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), Uint128::zero());
+        }
+
+        #[test]
+        fn works_after_start_time() {
+            // 0.5 time passed
+            let now: u64 = 1296000;
+            let schedule = Schedule {
+                start_time: 0,
+                cliff: VESTING_CLIFF,
+                duration: 2592000, // 30 days
+            };
+            let result =
+                compute_withdrawable_amount(Uint128::new(100), Uint128::new(0), &schedule, now);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), Uint128::new(50));
+
+            // 0.75 time passed
+            let now_2: u64 = 1944000;
+            let result =
+                compute_withdrawable_amount(Uint128::new(100), Uint128::new(0), &schedule, now_2);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), Uint128::new(75));
+
+            // all time passed
+            let now_3: u64 = 3000000;
+            let result =
+                compute_withdrawable_amount(Uint128::new(100), Uint128::new(0), &schedule, now_3);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), Uint128::new(100));
+
+            // 0.5 passed and has already withdrawn funds
+            let now_3: u64 = 1296000;
+            let result =
+                compute_withdrawable_amount(Uint128::new(100), Uint128::new(25), &schedule, now_3);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), Uint128::new(25));
+        }
+    }
 }
