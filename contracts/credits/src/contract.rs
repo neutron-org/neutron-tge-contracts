@@ -11,7 +11,8 @@ use cw_utils::Expiration;
 
 use crate::error::ContractError;
 use crate::msg::{
-    ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, WithdrawableAmountResponse,
+    AllocationResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
+    WithdrawableAmountResponse,
 };
 use crate::state::{Allocation, Config, Schedule, ALLOCATIONS, CONFIG};
 
@@ -20,7 +21,7 @@ const CONTRACT_NAME: &str = "crates.io:credits";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const TOKEN_NAME: &str = "CNTRN";
-const TOKEN_SYMBOL: &str = "cntrn";
+const TOKEN_SYMBOL: &str = "cuntrn";
 const TOKEN_DECIMALS: u8 = 6; // TODO: correct?
 const DEPOSITED_SYMBOL: &str = "untrn";
 
@@ -227,6 +228,7 @@ pub fn execute_withdraw(
 }
 
 // execute_burn is for rewards from lockdrop only, skips vesting
+// assume that lockdrop account will call this and then send NTRN's to reward receiver by themselves
 pub fn execute_burn(
     deps: DepsMut,
     env: Env,
@@ -294,7 +296,7 @@ pub fn execute_mint(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, Cw20ContractError> {
-    // mint in 1:1 proportion to locked untrn funds
+    // mint in 1:1 proportion to locked ntrn funds
     let untrn_amount = try_find_untrns(info.clone().funds)?;
 
     let config = CONFIG.load(deps.storage)?;
@@ -309,6 +311,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawableAmount { address } => {
             to_binary(&query_withdrawable_amount(deps, env, address)?)
         }
+        QueryMsg::Allocation { address } => to_binary(&query_allocation(deps, address)?),
         QueryMsg::Balance { address } => {
             to_binary(&::cw20_base::contract::query_balance(deps, address)?)
         }
@@ -368,6 +371,12 @@ fn query_withdrawable_amount(
             env.block.time.seconds(),
         )?,
     })
+}
+
+fn query_allocation(deps: Deps, address: String) -> StdResult<AllocationResponse> {
+    let owner = deps.api.addr_validate(&address)?;
+    let allocation = ALLOCATIONS.load(deps.storage, &owner)?;
+    Ok(AllocationResponse { allocation })
 }
 
 fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {

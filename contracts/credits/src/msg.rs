@@ -1,3 +1,4 @@
+use crate::state::Allocation;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Uint128};
 use cw_utils::Expiration;
@@ -70,6 +71,9 @@ pub enum QueryMsg {
     /// Returns the current vestings of the given address.
     #[returns(WithdrawableAmountResponse)]
     WithdrawableAmount { address: String },
+    /// Returns the current allocation of the given address
+    #[returns(AllocationResponse)]
+    Allocation { address: String },
     /// Returns the current balance of the given address, 0 if unset.
     #[returns(cw20::BalanceResponse)]
     Balance { address: String },
@@ -128,4 +132,10 @@ pub struct ConfigResponse {
 #[cw_serde]
 pub struct WithdrawableAmountResponse {
     pub amount: Uint128,
+}
+
+#[cw_serde]
+pub struct AllocationResponse {
+    /// Current allocation for a user
+    pub allocation: Allocation,
 }
