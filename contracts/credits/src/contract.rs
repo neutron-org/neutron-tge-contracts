@@ -560,8 +560,9 @@ mod tests {
         use crate::contract::tests::simple_instantiate;
         use crate::contract::{execute_mint, DEPOSITED_SYMBOL};
         use cosmwasm_std::testing::{mock_dependencies, mock_info};
-        use cosmwasm_std::{Coin, StdError};
+        use cosmwasm_std::{Addr, Coin, StdError, Uint128};
         use cw20_base::ContractError;
+        use cw20_base::state::{BALANCES, TOKEN_INFO};
 
         #[test]
         fn does_not_work_without_funds_sent() {
@@ -598,6 +599,12 @@ mod tests {
             let dao_info = mock_info("dao_address", &funds);
             let res = execute_mint(deps.as_mut(), env, dao_info);
             assert!(res.is_ok());
+
+            let config = TOKEN_INFO.load(&deps.storage).unwrap();
+            assert_eq!(config.total_supply, Uint128::new(500));
+
+            let balance = BALANCES.load(&deps.storage, &Addr::unchecked("dao_address")).unwrap();
+            assert_eq!(balance, Uint128::new(500));
         }
     }
 
