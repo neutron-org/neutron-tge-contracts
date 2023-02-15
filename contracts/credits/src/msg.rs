@@ -30,13 +30,16 @@ pub enum ExecuteMsg {
         start_time: u64,
         duration: u64,
     },
-    /// Transfer is a base message to move tokens to another account without triggering actions
+    /// Transfer is a base message to move tokens to another account without triggering actions.
     Transfer { recipient: String, amount: Uint128 },
-    /// Withdraw is a message that burns all vested CNTRN tokens on the sender and sends NTRN tokens in 1:1 proportion
+    /// Withdraw is a message that burns all vested CNTRN tokens on the sender and sends NTRN tokens in 1:1 proportion.
     Withdraw {},
-    /// Burn is a message only for `config.lockdrop` account to destroy certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion
-    /// Used for giving lockdrop rewards
+    /// Burn is a message only for lockdrop account to destroy certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion
+    /// Used for giving lockdrop rewards.
     Burn { amount: Uint128 },
+    /// BurnFrom is a message only for lockdrop contract to burn CNTRN tokens and mint NTRN tokens in 1:1 proportion certain amount for owner.
+    /// Used to skip vesting as a reward for participating in the lockdrop.
+    BurnFrom { owner: String, amount: Uint128 },
     /// Only with "approval" extension. Allows spender to access an additional amount tokens
     /// from the owner's (env.sender) account. If expires is Some(), overwrites current allowance
     /// expiration with this one.

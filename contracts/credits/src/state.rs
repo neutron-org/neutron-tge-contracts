@@ -16,8 +16,11 @@ pub struct Config {
 
 #[cw_serde]
 pub struct Allocation {
+    /// Total allocated amount that can be withdrawn
     pub allocated_amount: Uint128,
+    /// Already amount already withdrawn and burned from account
     pub withdrawn_amount: Uint128,
+    /// schedule is a vesting schedule settings for this allocation
     pub schedule: Schedule,
 }
 
@@ -27,7 +30,7 @@ pub struct Schedule {
     pub start_time: u64,
     /// Time before with no token is to be vested/unlocked
     pub cliff: u64,
-    /// Duration of the vesting/unlocking process. At time `start_time + duration`, the tokens are
+    /// Duration of the vesting/unlocking process. At time `start_time + duration`, 100% of the tokens are
     /// vested/unlocked in full
     pub duration: u64,
 }

@@ -2,7 +2,7 @@ use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Addr, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
     StdResult, Uint128,
 };
 use cw2::set_contract_version;
@@ -91,6 +91,7 @@ pub fn execute(
         }
         ExecuteMsg::Withdraw {} => execute_withdraw(deps, env, info),
         ExecuteMsg::Burn { amount } => execute_burn(deps, env, info, amount),
+        ExecuteMsg::BurnFrom { owner, amount } => execute_burn_from(deps, env, info, owner, amount),
         ExecuteMsg::IncreaseAllowance {
             spender,
             amount,
@@ -216,26 +217,25 @@ pub fn execute_withdraw(
         )));
     }
 
-    // TODO: return error if not claimable yet
     let owner = info.sender.clone();
     let mut allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
-    let withdrawable_amount = compute_withdrawable_amount(
+    let to_withdraw = compute_withdrawable_amount(
         allocation.allocated_amount,
         allocation.withdrawn_amount,
         &allocation.schedule,
         env.block.time.seconds(),
     )?;
 
-    if withdrawable_amount.is_zero() {
+    if to_withdraw.is_zero() {
         return Err(Cw20ContractError::Std(StdError::generic_err(
             "nothing to claim yet",
         )));
     }
 
-    allocation.withdrawn_amount += withdrawable_amount;
+    allocation.withdrawn_amount += to_withdraw;
     ALLOCATIONS.save(deps.storage, &owner, &allocation)?;
 
-    burn_and_send(deps, env, info, owner, withdrawable_amount)
+    burn_and_send(deps, env, info, to_withdraw)
 }
 
 // execute_burn is for airdrop account that will burn through all unclaimed tokens
@@ -246,9 +246,8 @@ pub fn execute_burn(
     amount: Uint128,
 ) -> Result<Response, Cw20ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let sender = info.sender.clone();
 
-    if sender
+    if info.sender
         != config
             .airdrop_address
             .ok_or_else(|| StdError::generic_err("uninitialized"))?
@@ -256,7 +255,29 @@ pub fn execute_burn(
         return Err(Cw20ContractError::Unauthorized {});
     }
 
-    burn_and_send(deps, env, info, sender, amount)
+    burn_and_send(deps, env, info, amount)
+}
+
+pub fn execute_burn_from(
+    deps: DepsMut,
+    env: Env,
+    mut info: MessageInfo,
+    owner: String,
+    amount: Uint128,
+) -> Result<Response, Cw20ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    if info.sender
+        != config
+            .lockdrop_address
+            .ok_or_else(|| StdError::generic_err("uninitialized"))?
+    {
+        return Err(Cw20ContractError::Unauthorized {});
+    }
+
+    // use it as analog of burn_from, but we skip allowance step since we only allow it for lockdrop address
+    info.sender = deps.api.addr_validate(&owner)?;
+
+    burn_and_send(deps, env, info, amount)
 }
 
 pub fn execute_increase_allowance(
@@ -411,12 +432,12 @@ fn burn_and_send(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    sender: Addr,
     amount: Uint128,
 ) -> Result<Response, Cw20ContractError> {
+    let to_address = info.sender.to_string();
     let burn_response = ::cw20_base::contract::execute_burn(deps, env, info, amount)?;
     let send = BankMsg::Send {
-        to_address: sender.to_string(),
+        to_address,
         amount: vec![Coin::new(amount.u128(), DEPOSITED_SYMBOL)],
     };
 
@@ -976,6 +997,60 @@ mod tests {
             let airdrop_info = mock_info("non_airdrop_address", &[]);
             let res = execute_burn(deps.as_mut(), env, airdrop_info, Uint128::new(10000));
             assert_eq!(res, Err(ContractError::Unauthorized {}))
+        }
+    }
+
+    mod burn_from {
+        use crate::contract::tests::_do_simple_instantiate;
+        use crate::contract::{execute_burn_from, execute_mint, DEPOSITED_SYMBOL};
+        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::{coins, Addr, BankMsg, Uint128};
+        use cw20_base::state::{BALANCES, TOKEN_INFO};
+
+        #[test]
+        fn works_properly_with_airdrop_account() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            // mint
+            let minted_balance = 1_000_000_000;
+            let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
+            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
+            assert!(res.is_ok());
+
+            // burn_from
+            let lockdrop_info = mock_info("lockdrop_address", &[]);
+            let res = execute_burn_from(
+                deps.as_mut(),
+                env,
+                lockdrop_info,
+                "airdrop_address".to_string(),
+                Uint128::new(20_000),
+            );
+            assert!(res.is_ok());
+
+            let msgs = res.unwrap().messages;
+            assert_eq!(msgs.len(), 1);
+            assert_eq!(
+                msgs.first().unwrap().msg,
+                BankMsg::Send {
+                    to_address: "airdrop_address".to_string(),
+                    amount: coins(20_000, DEPOSITED_SYMBOL)
+                }
+                .into()
+            );
+
+            let balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("airdrop_address"))
+                .unwrap();
+            assert_eq!(balance, Uint128::new(minted_balance - 20_000));
+
+            let token_info = TOKEN_INFO.load(&deps.storage).unwrap();
+            assert_eq!(
+                token_info.total_supply,
+                Uint128::new(minted_balance - 20_000)
+            );
         }
     }
 
