@@ -7,6 +7,7 @@ use cosmwasm_std::{
 };
 use cw2::set_contract_version;
 use cw20_base::state as Cw20State;
+use cw20_base::state::BALANCES;
 use cw_utils::Expiration;
 
 use crate::error::ContractError;
@@ -219,18 +220,23 @@ pub fn execute_withdraw(
 
     let owner = info.sender.clone();
     let mut allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
-    let to_withdraw = compute_withdrawable_amount(
+    let withdrawable_amount = compute_withdrawable_amount(
         allocation.allocated_amount,
         allocation.withdrawn_amount,
         &allocation.schedule,
         env.block.time.seconds(),
     )?;
 
-    if to_withdraw.is_zero() {
+    if withdrawable_amount.is_zero() {
         return Err(Cw20ContractError::Std(StdError::generic_err(
             "nothing to claim yet",
         )));
     }
+
+    // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
+    // so we need to withdraw not more than the current balance
+    let actual_balance = BALANCES.load(deps.storage, &owner)?;
+    let to_withdraw = withdrawable_amount.min(actual_balance);
 
     allocation.withdrawn_amount += to_withdraw;
     ALLOCATIONS.save(deps.storage, &owner, &allocation)?;
@@ -397,14 +403,18 @@ fn query_withdrawable_amount(
 ) -> StdResult<WithdrawableAmountResponse> {
     let owner = deps.api.addr_validate(&address)?;
     let allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
-    Ok(WithdrawableAmountResponse {
-        amount: compute_withdrawable_amount(
-            allocation.allocated_amount,
-            allocation.withdrawn_amount,
-            &allocation.schedule,
-            env.block.time.seconds(),
-        )?,
-    })
+    let withdrawable_amount = compute_withdrawable_amount(
+        allocation.allocated_amount,
+        allocation.withdrawn_amount,
+        &allocation.schedule,
+        env.block.time.seconds(),
+    )?;
+    // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
+    // so we need to withdraw not more than the current balance
+    let actual_balance = BALANCES.load(deps.storage, &owner)?;
+    let amount = withdrawable_amount.min(actual_balance);
+
+    Ok(WithdrawableAmountResponse { amount })
 }
 
 fn query_allocation(deps: Deps, address: String) -> StdResult<AllocationResponse> {
@@ -825,7 +835,9 @@ mod tests {
 
     mod withdraw {
         use crate::contract::tests::{_do_add_vesting, _do_instantiate, _do_simple_instantiate};
-        use crate::contract::{execute_mint, execute_transfer, execute_withdraw, DEPOSITED_SYMBOL};
+        use crate::contract::{
+            execute_burn_from, execute_mint, execute_transfer, execute_withdraw, DEPOSITED_SYMBOL,
+        };
         use crate::state::ALLOCATIONS;
         use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
         use cosmwasm_std::{coins, Addr, BankMsg, StdError, Timestamp, Uint128};
@@ -872,7 +884,7 @@ mod tests {
             env.block.time = Timestamp::from_seconds(env.block.time.seconds() + 750);
 
             // check that we burn cuntrn's and send untrn's exactly 100/3*4 = 75
-            let res = execute_withdraw(deps.as_mut(), env, somebody_info);
+            let res = execute_withdraw(deps.as_mut(), env.clone(), somebody_info);
             assert!(res.is_ok());
             let msgs = res.unwrap().messages;
             assert_eq!(msgs.len(), 1);
@@ -897,6 +909,51 @@ mod tests {
 
             let token_info = TOKEN_INFO.load(&deps.storage).unwrap();
             assert_eq!(token_info.total_supply, Uint128::new(1_000_000_000 - 75));
+
+            // now let's check that if we distribute rewards and skip all vesting, we still successfully withdraw what's left
+
+            // pass all vesting duration (> 1000 seconds)
+            env.block.time = Timestamp::from_seconds(env.block.time.seconds() + 1250);
+
+            // distribute rewards for that account
+            let lockdrop_info = mock_info("lockdrop_address", &[]);
+            let res = execute_burn_from(
+                deps.as_mut(),
+                env.clone(),
+                lockdrop_info,
+                "somebody".to_string(),
+                Uint128::new(10),
+            );
+            assert!(res.is_ok());
+
+            // after sending 10 to account, we only have 25-10=15 left
+
+            // withdraw
+            let somebody_info = mock_info("somebody", &[]);
+            let res = execute_withdraw(deps.as_mut(), env, somebody_info);
+            assert!(res.is_ok());
+
+            // check that we burn cuntrn's and send untrn's exactly 15
+            let msgs = res.unwrap().messages;
+            assert_eq!(msgs.len(), 1);
+            assert_eq!(
+                msgs.first().unwrap().msg,
+                BankMsg::Send {
+                    to_address: "somebody".to_string(),
+                    amount: coins(15, DEPOSITED_SYMBOL)
+                }
+                .into()
+            );
+            let allocation = ALLOCATIONS
+                .load(&deps.storage, &Addr::unchecked("somebody"))
+                .unwrap();
+            assert_eq!(allocation.allocated_amount, Uint128::new(100));
+            assert_eq!(allocation.withdrawn_amount, Uint128::new(90)); // because we sent 10 as rewards that skipped vesting
+
+            let balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("somebody"))
+                .unwrap();
+            assert!(balance.is_zero());
         }
 
         #[test]
