@@ -22,7 +22,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const TOKEN_NAME: &str = "CNTRN";
 const TOKEN_SYMBOL: &str = "cuntrn";
-const TOKEN_DECIMALS: u8 = 6; // TODO: correct?
+const TOKEN_DECIMALS: u8 = 6;
 const DEPOSITED_SYMBOL: &str = "untrn";
 
 // Zero cliff for vesting. TODO: change?
