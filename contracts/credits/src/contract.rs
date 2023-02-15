@@ -979,7 +979,120 @@ mod tests {
         }
     }
 
-    mod transfer_from {}
+    mod transfer_from {
+        use crate::contract::tests::_do_simple_instantiate;
+        use crate::contract::{
+            execute_increase_allowance, execute_mint, execute_transfer_from, DEPOSITED_SYMBOL,
+        };
+        use cosmwasm_std::testing::{mock_dependencies, mock_info};
+        use cosmwasm_std::{coins, Addr, Uint128};
+        use cw20_base::state::BALANCES;
+        use cw20_base::ContractError;
+
+        #[test]
+        fn works_with_allowance_set() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            // mint
+            let minted_balance = 1_000_000_000;
+            let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
+            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
+            assert!(res.is_ok());
+
+            // set allowance
+            let airdrop_info = mock_info("airdrop_address", &[]);
+            let res = execute_increase_allowance(
+                deps.as_mut(),
+                env.clone(),
+                airdrop_info,
+                "lockdrop_address".to_string(),
+                Uint128::new(100),
+                None,
+            );
+
+            assert!(res.is_ok());
+
+            // transfer_from
+            let lockdrop_info = mock_info("lockdrop_address", &[]);
+            let res = execute_transfer_from(
+                deps.as_mut(),
+                env,
+                lockdrop_info,
+                "airdrop_address".to_string(),
+                "recipient_address".to_string(),
+                Uint128::new(50),
+            );
+            assert!(res.is_ok());
+
+            let recipient_balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("recipient_address"))
+                .unwrap();
+            assert_eq!(recipient_balance, Uint128::new(50));
+
+            let airdrop_balance = BALANCES
+                .load(&deps.storage, &Addr::unchecked("airdrop_address"))
+                .unwrap();
+            assert_eq!(airdrop_balance, Uint128::new(minted_balance - 50));
+        }
+
+        #[test]
+        fn does_not_transfer_without_allowance() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            // mint
+            let minted_balance = 1_000_000_000;
+            let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
+            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
+            assert!(res.is_ok());
+
+            // transfer_from
+            let other_info = mock_info("lockdrop_address", &[]);
+            let res = execute_transfer_from(
+                deps.as_mut(),
+                env,
+                other_info,
+                "airdrop_address".to_string(),
+                "recipient_address".to_string(),
+                Uint128::new(50),
+            );
+            assert_eq!(res, Err(ContractError::NoAllowance {}));
+        }
+
+        #[test]
+        fn only_lockdrop_can_transfer_from() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            // set allowance
+            let airdrop_info = mock_info("airdrop_address", &[]);
+            let res = execute_increase_allowance(
+                deps.as_mut(),
+                env.clone(),
+                airdrop_info,
+                "lockdrop_address".to_string(),
+                Uint128::new(100),
+                None,
+            );
+            assert!(res.is_ok());
+
+            let non_lockdrop_info = mock_info("non_lockdrop_address", &[]);
+            let res = execute_transfer_from(
+                deps.as_mut(),
+                env,
+                non_lockdrop_info,
+                "airdrop_address".to_string(),
+                "recipient_address".to_string(),
+                Uint128::new(50),
+            );
+
+            assert_eq!(res, Err(ContractError::Unauthorized {}));
+        }
+    }
 
     mod mint {
         use crate::contract::tests::_do_simple_instantiate;
