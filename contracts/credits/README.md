@@ -1,5 +1,5 @@
 # Credits contract
 
-This is the contract that holds vested NTRNs.
+This is the cw20 like contract that mints CNTRN's and holds vested NTRNs in 1:1 proportion.
 
-TODO: a bit more description
+Mostly used by airdrop contract to distribute/vest airdropped funds.

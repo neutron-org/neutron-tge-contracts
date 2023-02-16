@@ -11,7 +11,6 @@ use cw20_base::state as Cw20State;
 use cw20_base::state::BALANCES;
 use cw_utils::Expiration;
 
-use crate::error::ContractError;
 use crate::msg::{
     AllocationResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
     WithdrawableAmountResponse,
@@ -30,7 +29,6 @@ const DEPOSITED_SYMBOL: &str = "untrn";
 // Cliff duration in seconds for vesting.
 // Before the schedule.start_time + schedule.cliff vesting does not start.
 // 0 cliff means no cliff
-// TODO: change?
 const VESTING_CLIFF: u64 = 0;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -39,7 +37,7 @@ pub fn instantiate(
     _env: Env,
     _info: MessageInfo,
     msg: InstantiateMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response, Cw20ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let mut config = Config {
@@ -237,10 +235,18 @@ pub fn execute_withdraw(
         )));
     }
 
+    // TODO: better description
     // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
     // so we need to withdraw not more than the current balance
     let actual_balance = BALANCES.load(deps.storage, &owner)?;
     let to_withdraw = withdrawable_amount.min(actual_balance);
+
+    // check that zero
+    if to_withdraw.is_zero() {
+        return Err(Cw20ContractError::Std(StdError::generic_err(
+            "nothing to claim",
+        )));
+    }
 
     allocation.withdrawn_amount += to_withdraw;
     ALLOCATIONS.save(deps.storage, &owner, &allocation)?;
@@ -472,6 +478,7 @@ fn burn_and_send(
 /// Compute the withdrawable based on the current timestamp and the vesting schedule
 ///
 /// The withdrawable amount is vesting amount minus the amount already withdrawn.
+/// Implementation copied from
 pub fn compute_withdrawable_amount(
     allocated_amount: Uint128,
     withdrawn_amount: Uint128,
