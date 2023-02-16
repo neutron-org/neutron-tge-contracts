@@ -27,7 +27,9 @@ const TOKEN_SYMBOL: &str = "cuntrn";
 const TOKEN_DECIMALS: u8 = 6;
 const DEPOSITED_SYMBOL: &str = "untrn";
 
-// Zero cliff for vesting. Before the schedule.start_time + schedule.cliff vesting does not start.
+// Cliff duration in seconds for vesting.
+// Before the schedule.start_time + schedule.cliff vesting does not start.
+// 0 cliff means no cliff
 // TODO: change?
 const VESTING_CLIFF: u64 = 0;
 

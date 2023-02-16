@@ -34,10 +34,9 @@ pub enum ExecuteMsg {
     Transfer { recipient: String, amount: Uint128 },
     /// Withdraw is a message that burns all vested CNTRN tokens on the sender and sends NTRN tokens in 1:1 proportion.
     Withdraw {},
-    /// Burn is a message only for lockdrop account to destroy certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion
-    /// Used for giving lockdrop rewards.
+    /// Burn is a message only for airdrop account to destroy certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion.
     Burn { amount: Uint128 },
-    /// BurnFrom is a message only for lockdrop contract to burn CNTRN tokens and mint NTRN tokens in 1:1 proportion certain amount for owner.
+    /// BurnFrom is a message only for lockdrop contract to burn owner's CNTRN tokens and mint NTRN tokens in 1:1 proportion certain amount for owner.
     /// Used to skip vesting as a reward for participating in the lockdrop.
     BurnFrom { owner: String, amount: Uint128 },
     /// Only with "approval" extension. Allows spender to access an additional amount tokens
