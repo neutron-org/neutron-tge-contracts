@@ -190,7 +190,7 @@ pub fn receive_cw20(
             let sender = addr_validate_to_lower(deps.api, cw20_msg.sender)?;
             withdraw_liquidity(deps, env, info, sender, cw20_msg.amount)
         },
-        Ok(Cw20HookMsg::Swap { .. }) => {return Err(ContractError::NonSupported{}) }
+        Ok(Cw20HookMsg::Swap { .. }) => {Err(ContractError::NonSupported{}) }
         Err(err) => Err(err.into()),
     }
 }

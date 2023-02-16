@@ -853,7 +853,6 @@ fn try_token_to_native() {
     let info = mock_info("auction", &[]);
 
     let res = execute(deps.as_mut(), env, info, msg).unwrap();
-    let msg_transfer = res.messages.get(0).expect("no message");
 
     // Current price is 1.5, so expected return without spread is 1000
     // 952380952,3809524 = 20000000000 - (30000000000 * 20000000000) / (30000000000 + 1500000000)
@@ -863,7 +862,6 @@ fn try_token_to_native() {
     let expected_spread_amount = Uint128::new(47619047u128);
 
     let expected_commission_amount = expected_ret_amount.multiply_ratio(3u128, 1000u128); // 0.3%
-    let expected_maker_fee_amount = expected_commission_amount.multiply_ratio(166u128, 1000u128);
     let expected_return_amount = expected_ret_amount
         .checked_sub(expected_commission_amount)
         .unwrap();

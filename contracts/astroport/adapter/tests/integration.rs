@@ -1,21 +1,14 @@
 use astroport::asset::{native_asset_info, Asset, AssetInfo, PairInfo};
-use astroport::factory::{
-    ExecuteMsg as FactoryExecuteMsg, InstantiateMsg as FactoryInstantiateMsg, PairConfig, PairType,
-    QueryMsg as FactoryQueryMsg,
-};
 use astroport::pair::{
     ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg,  QueryMsg,
     TWAP_PRECISION,
 };
-use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Uint128};
-use cosmwasm_std::OverflowOperation::Add;
-use cw20::{BalanceResponse, Cw20Coin, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
+use cw20::{Cw20ExecuteMsg};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use adapter::contract;
 use adapter::msg::InstantiateMsg;
 
-const OWNER: &str = "owner";
 
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     App::new(|router, _, storage| {
@@ -45,19 +38,6 @@ fn store_pair_code(app: &mut App) -> u64 {
     );
 
     app.store_code(pair_contract)
-}
-
-fn store_factory_code(app: &mut App) -> u64 {
-    let factory_contract = Box::new(
-        ContractWrapper::new_with_empty(
-            astroport_factory::contract::execute,
-            astroport_factory::contract::instantiate,
-            astroport_factory::contract::query,
-        )
-        .with_reply_empty(astroport_factory::contract::reply),
-    );
-
-    app.store_code(factory_contract)
 }
 
 fn instantiate_pair(router: &mut App, owner: &Addr) -> Addr {
@@ -105,7 +85,6 @@ fn instantiate_pair(router: &mut App, owner: &Addr) -> Addr {
 #[test]
 fn test_provide_and_withdraw_liquidity() {
     let owner = Addr::unchecked("owner");
-    let alice_address = Addr::unchecked("alice");
     let auction = Addr::unchecked("auction");
     let mut router = mock_app(
         owner.clone(),
@@ -252,28 +231,6 @@ fn test_provide_and_withdraw_liquidity() {
     assert_eq!(res.events[3].attributes[2], attr("to", "bob"));
     assert_eq!(res.events[3].attributes[3], attr("amount", 50.to_string()));
 
-    // Checking withdraw liquidity
-    let token_contract_code_id = store_token_code(&mut router);
-    let foo_token = router
-        .instantiate_contract(
-            token_contract_code_id,
-            owner.clone(),
-            &astroport::token::InstantiateMsg {
-                name: "Foo token".to_string(),
-                symbol: "FOO".to_string(),
-                decimals: 6,
-                initial_balances: vec![Cw20Coin {
-                    address: alice_address.to_string(),
-                    amount: Uint128::from(1000000000u128),
-                }],
-                mint: None,
-                marketing: None,
-            },
-            &[],
-            String::from("FOO"),
-            None,
-        )
-        .unwrap();
 
     let msg = Cw20ExecuteMsg::Send {
         contract: pair_instance.to_string(),
@@ -282,7 +239,7 @@ fn test_provide_and_withdraw_liquidity() {
     };
     // Withdraw with LP token is successful
     router
-        .execute_contract(auction.clone(), lp_token, &msg, &[])
+        .execute_contract(auction, lp_token, &msg, &[])
         .unwrap();
     // Check pair config
     let config: ConfigResponse = router
@@ -406,7 +363,7 @@ fn test_if_twap_is_calculated_correctly_when_pool_idles() {
         None,
         Some(Decimal::percent(50)),
     );
-    app.execute_contract(auction.clone(), pair_instance.clone(), &msg, &coins)
+    app.execute_contract(auction, pair_instance.clone(), &msg, &coins)
         .unwrap();
 
     // Get current twap accumulator values
