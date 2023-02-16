@@ -450,6 +450,7 @@ fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
     Ok(token.amount)
 }
 
+// burns cuntrns and send untrns to the sender
 fn burn_and_send(
     deps: DepsMut,
     env: Env,

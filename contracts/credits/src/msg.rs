@@ -81,6 +81,7 @@ pub enum QueryMsg {
     /// Returns the current balance of the given address, 0 if unset.
     #[returns(cw20::BalanceResponse)]
     Balance { address: String },
+    /// Returns the balance of the given address at a given block height, 0 if unset.
     #[returns(cw20::BalanceResponse)]
     BalanceAtHeight { address: String, height: u64 },
     /// Returns metadata on the contract - name, decimals, supply, etc.
@@ -139,6 +140,7 @@ pub struct ConfigResponse {
 
 #[cw_serde]
 pub struct WithdrawableAmountResponse {
+    /// Amount that the user can withdraw at this block height.
     pub amount: Uint128,
 }
 
