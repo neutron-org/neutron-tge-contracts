@@ -10,8 +10,8 @@ use protobuf::Message;
 use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::factory::PairType;
 use astroport::pair::{
-    Cw20HookMsg, ExecuteMsg, PoolResponse, ReverseSimulationResponse,
-    SimulationResponse, TWAP_PRECISION,
+    Cw20HookMsg, ExecuteMsg, PoolResponse, ReverseSimulationResponse, SimulationResponse,
+    TWAP_PRECISION,
 };
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 
@@ -23,9 +23,9 @@ use crate::contract::{
 };
 use crate::error::ContractError;
 use crate::mock_querier::mock_dependencies;
+use crate::msg::InstantiateMsg;
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::{Config, CONFIG};
-use crate::msg::InstantiateMsg;
 
 fn store_liquidity_token(deps: DepsMut, msg_id: u64, contract_addr: String) {
     let data = MsgInstantiateContractResponse {
@@ -70,7 +70,7 @@ fn proper_initialization() {
         token_code_id: 10u64,
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr: Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let sender = "addr0000";
@@ -156,7 +156,7 @@ fn provide_liquidity() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr: Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let env = mock_env();
@@ -662,7 +662,7 @@ fn withdraw_liquidity() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr: Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let env = mock_env();
@@ -771,8 +771,6 @@ fn try_native_to_token() {
             &[(&String::from(MOCK_CONTRACT_ADDR), &asset_pool_amount)],
         ),
     ]);
-
-
 }
 
 #[test]
@@ -814,7 +812,7 @@ fn try_token_to_native() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr: Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let env = mock_env();
@@ -931,7 +929,6 @@ fn try_token_to_native() {
         ]
     );
 
-
     // Failed due to trying to swap while swap is restricted
     let msg = ExecuteMsg::Receive(Cw20ReceiveMsg {
         sender: String::from("addr0000"),
@@ -1032,7 +1029,7 @@ fn test_query_pool() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr: Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let env = mock_env();
@@ -1099,7 +1096,7 @@ fn test_query_share() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr: Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let env = mock_env();
@@ -1213,7 +1210,7 @@ fn test_accumulate_prices() {
                 price0_cumulative_last: Uint128::new(case.last0),
                 price1_cumulative_last: Uint128::new(case.last1),
                 lockdrop_addr: Addr::unchecked("lockdrop"),
-                auction_addr: Addr::unchecked("auction")
+                auction_addr: Addr::unchecked("auction"),
             },
             Uint128::new(case.x_amount),
             Uint128::new(case.y_amount),
@@ -1284,7 +1281,6 @@ proptest! {
     }
 }
 
-
 #[test]
 fn try_to_swap() {
     let total_share = Uint128::new(20000000000u128);
@@ -1324,7 +1320,7 @@ fn try_to_swap() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr: Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let env = mock_env();

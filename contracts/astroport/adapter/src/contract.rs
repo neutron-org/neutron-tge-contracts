@@ -7,8 +7,9 @@ use cosmwasm_std::{
     SubMsg, Uint128, Uint256, WasmMsg,
 };
 
-use crate::response::MsgInstantiateContractResponse;
+use crate::error::ContractError::Unauthorized;
 use crate::msg::InstantiateMsg;
+use crate::response::MsgInstantiateContractResponse;
 use astroport::asset::{
     addr_opt_validate, addr_validate_to_lower, check_swap_parameters, format_lp_token_name, Asset,
     AssetInfo, PairInfo, MINIMUM_LIQUIDITY_AMOUNT,
@@ -18,8 +19,8 @@ use astroport::factory::PairType;
 use astroport::generator::Cw20HookMsg as GeneratorHookMsg;
 use astroport::pair::{migration_check, ConfigResponse, DEFAULT_SLIPPAGE, MAX_ALLOWED_SLIPPAGE};
 use astroport::pair::{
-    CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MigrateMsg, PoolResponse,
-    QueryMsg, ReverseSimulationResponse, SimulationResponse, TWAP_PRECISION,
+    CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, MigrateMsg, PoolResponse, QueryMsg,
+    ReverseSimulationResponse, SimulationResponse, TWAP_PRECISION,
 };
 use astroport::querier::{query_factory_config, query_fee_info, query_supply};
 use astroport::{token::InstantiateMsg as TokenInstantiateMsg, U256};
@@ -28,7 +29,6 @@ use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
 use protobuf::Message;
 use std::str::FromStr;
 use std::vec;
-use crate::error::ContractError::Unauthorized;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "astroport-pair";
@@ -70,7 +70,7 @@ pub fn instantiate(
         price0_cumulative_last: Uint128::zero(),
         price1_cumulative_last: Uint128::zero(),
         lockdrop_addr: addr_validate_to_lower(deps.api, msg.lockdrop_addr.as_str())?,
-        auction_addr: addr_validate_to_lower(deps.api, msg.auction_addr.as_str())?
+        auction_addr: addr_validate_to_lower(deps.api, msg.auction_addr.as_str())?,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -189,8 +189,8 @@ pub fn receive_cw20(
         Ok(Cw20HookMsg::WithdrawLiquidity { .. }) => {
             let sender = addr_validate_to_lower(deps.api, cw20_msg.sender)?;
             withdraw_liquidity(deps, env, info, sender, cw20_msg.amount)
-        },
-        Ok(Cw20HookMsg::Swap { .. }) => {Err(ContractError::NonSupported{}) }
+        }
+        Ok(Cw20HookMsg::Swap { .. }) => Err(ContractError::NonSupported {}),
         Err(err) => Err(err.into()),
     }
 }
@@ -219,7 +219,7 @@ pub fn provide_liquidity(
     receiver: Option<String>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if config.auction_addr != info.sender{
+    if config.auction_addr != info.sender {
         return Err(Unauthorized {});
     }
 

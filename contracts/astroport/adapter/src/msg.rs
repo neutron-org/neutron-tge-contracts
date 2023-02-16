@@ -1,8 +1,8 @@
-use cosmwasm_schema::{cw_serde};
+use cosmwasm_schema::cw_serde;
 
-use astroport::asset::{AssetInfo};
+use astroport::asset::AssetInfo;
 
-use cosmwasm_std::{Addr, Binary, };
+use cosmwasm_std::{Addr, Binary};
 
 /// This structure describes the parameters used for creating a contract.
 #[cw_serde]

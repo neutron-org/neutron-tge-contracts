@@ -1,14 +1,12 @@
-use astroport::asset::{native_asset_info, Asset, AssetInfo, PairInfo};
-use astroport::pair::{
-    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg,  QueryMsg,
-    TWAP_PRECISION,
-};
-use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Uint128};
-use cw20::{Cw20ExecuteMsg};
-use cw_multi_test::{App, ContractWrapper, Executor};
 use adapter::contract;
 use adapter::msg::InstantiateMsg;
-
+use astroport::asset::{native_asset_info, Asset, AssetInfo, PairInfo};
+use astroport::pair::{
+    ConfigResponse, CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, QueryMsg, TWAP_PRECISION,
+};
+use cosmwasm_std::{attr, to_binary, Addr, Coin, Decimal, Uint128};
+use cw20::Cw20ExecuteMsg;
+use cw_multi_test::{App, ContractWrapper, Executor};
 
 fn mock_app(owner: Addr, coins: Vec<Coin>) -> App {
     App::new(|router, _, storage| {
@@ -29,12 +27,8 @@ fn store_token_code(app: &mut App) -> u64 {
 
 fn store_pair_code(app: &mut App) -> u64 {
     let pair_contract = Box::new(
-        ContractWrapper::new_with_empty(
-            contract::execute,
-            contract::instantiate,
-            contract::query,
-        )
-        .with_reply_empty(contract::reply),
+        ContractWrapper::new_with_empty(contract::execute, contract::instantiate, contract::query)
+            .with_reply_empty(contract::reply),
     );
 
     app.store_code(pair_contract)
@@ -58,7 +52,7 @@ fn instantiate_pair(router: &mut App, owner: &Addr) -> Addr {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr:  Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let pair = router
@@ -231,7 +225,6 @@ fn test_provide_and_withdraw_liquidity() {
     assert_eq!(res.events[3].attributes[2], attr("to", "bob"));
     assert_eq!(res.events[3].attributes[3], attr("amount", 50.to_string()));
 
-
     let msg = Cw20ExecuteMsg::Send {
         contract: pair_instance.to_string(),
         amount: Uint128::from(50u8),
@@ -295,7 +288,6 @@ fn provide_liquidity_msg(
 
     (msg, coins)
 }
-
 
 #[test]
 fn test_if_twap_is_calculated_correctly_when_pool_idles() {
@@ -425,7 +417,7 @@ fn create_pair_with_same_assets() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr:  Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let resp = router
@@ -460,7 +452,7 @@ fn wrong_number_of_assets() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr:  Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let err = router
@@ -489,7 +481,7 @@ fn wrong_number_of_assets() {
         factory_addr: String::from("factory"),
         init_params: None,
         lockdrop_addr: Addr::unchecked("lockdrop"),
-        auction_addr:  Addr::unchecked("auction")
+        auction_addr: Addr::unchecked("auction"),
     };
 
     let err = router
