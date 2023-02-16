@@ -1,9 +1,8 @@
-use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_schema::{cw_serde};
 
-use astroport::asset::{Asset, AssetInfo, PairInfo};
+use astroport::asset::{AssetInfo};
 
-use cosmwasm_std::{from_slice, Addr, Binary, Decimal, QuerierWrapper, StdResult, Uint128};
-use cw20::Cw20ReceiveMsg;
+use cosmwasm_std::{Addr, Binary, };
 
 /// This structure describes the parameters used for creating a contract.
 #[cw_serde]
@@ -16,8 +15,8 @@ pub struct InstantiateMsg {
     pub factory_addr: String,
     /// Optional binary serialised parameters for custom pool types
     pub init_params: Option<Binary>,
-    /// Lockdrop contract address
+    /// Lockdrop contract address. Auction will share LP tokens w lockdrop, which is able to withdraw them
     pub lockdrop_addr: Addr,
-    /// Auction address
+    /// Auction address. Only auction can provide liquidity
     pub auction_addr: Addr,
 }

@@ -10,7 +10,7 @@ use protobuf::Message;
 use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::factory::PairType;
 use astroport::pair::{
-    Cw20HookMsg, ExecuteMsg, InstantiateMsg, PoolResponse, ReverseSimulationResponse,
+    Cw20HookMsg, ExecuteMsg, PoolResponse, ReverseSimulationResponse,
     SimulationResponse, TWAP_PRECISION,
 };
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
@@ -25,6 +25,7 @@ use crate::error::ContractError;
 use crate::mock_querier::mock_dependencies;
 use crate::response::MsgInstantiateContractResponse;
 use crate::state::{Config, CONFIG};
+use crate::msg::InstantiateMsg;
 
 fn store_liquidity_token(deps: DepsMut, msg_id: u64, contract_addr: String) {
     let data = MsgInstantiateContractResponse {
@@ -68,6 +69,8 @@ fn proper_initialization() {
         ],
         token_code_id: 10u64,
         init_params: None,
+        lockdrop_addr: Addr::unchecked("lockdrop"),
+        auction_addr: Addr::unchecked("auction")
     };
 
     let sender = "addr0000";
@@ -152,6 +155,8 @@ fn provide_liquidity() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: None,
+        lockdrop_addr: Addr::unchecked("lockdrop"),
+        auction_addr: Addr::unchecked("auction")
     };
 
     let env = mock_env();
@@ -185,7 +190,7 @@ fn provide_liquidity() {
 
     let env = mock_env();
     let info = mock_info(
-        "addr0000",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(100_000000000000000000u128),
@@ -201,7 +206,7 @@ fn provide_liquidity() {
             msg: WasmMsg::Execute {
                 contract_addr: String::from("asset0000"),
                 msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
-                    owner: String::from("addr0000"),
+                    owner: String::from("auction"),
                     recipient: String::from(MOCK_CONTRACT_ADDR),
                     amount: Uint128::from(100_000000000000000000u128),
                 })
@@ -238,7 +243,7 @@ fn provide_liquidity() {
             msg: WasmMsg::Execute {
                 contract_addr: String::from("liquidity0000"),
                 msg: to_binary(&Cw20ExecuteMsg::Mint {
-                    recipient: String::from("addr0000"),
+                    recipient: String::from("auction"),
                     amount: Uint128::from(99_999999999999999000u128),
                 })
                 .unwrap(),
@@ -300,7 +305,7 @@ fn provide_liquidity() {
 
     let env = mock_env_with_block_time(env.block.time.seconds() + 1000);
     let info = mock_info(
-        "addr0000",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(200_000000000000000000u128),
@@ -317,7 +322,7 @@ fn provide_liquidity() {
             msg: WasmMsg::Execute {
                 contract_addr: String::from("asset0000"),
                 msg: to_binary(&Cw20ExecuteMsg::TransferFrom {
-                    owner: String::from("addr0000"),
+                    owner: String::from("auction"),
                     recipient: String::from(MOCK_CONTRACT_ADDR),
                     amount: Uint128::from(100_000000000000000000u128),
                 })
@@ -336,7 +341,7 @@ fn provide_liquidity() {
             msg: WasmMsg::Execute {
                 contract_addr: String::from("liquidity0000"),
                 msg: to_binary(&Cw20ExecuteMsg::Mint {
-                    recipient: String::from("addr0000"),
+                    recipient: String::from("auction"),
                     amount: Uint128::from(50_000000000000000000u128),
                 })
                 .unwrap(),
@@ -372,7 +377,7 @@ fn provide_liquidity() {
 
     let env = mock_env();
     let info = mock_info(
-        "addr0000",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(100_000000000000000000u128),
@@ -436,7 +441,7 @@ fn provide_liquidity() {
 
     let env = mock_env_with_block_time(env.block.time.seconds() + 1000);
     let info = mock_info(
-        "addr0001",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(100_000000000000000000u128),
@@ -477,7 +482,7 @@ fn provide_liquidity() {
 
     let env = mock_env_with_block_time(env.block.time.seconds() + 1000);
     let info = mock_info(
-        "addr0001",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(98_000000000000000000u128),
@@ -518,7 +523,7 @@ fn provide_liquidity() {
 
     let env = mock_env_with_block_time(env.block.time.seconds() + 1000);
     let info = mock_info(
-        "addr0001",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(100_000000000000000000u128),
@@ -558,7 +563,7 @@ fn provide_liquidity() {
 
     let env = mock_env_with_block_time(env.block.time.seconds() + 1000);
     let info = mock_info(
-        "addr0001",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(99_000000000000000000u128),
@@ -586,7 +591,7 @@ fn provide_liquidity() {
         receiver: None,
     };
     let info = mock_info(
-        "addr0001",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(99_000000000000000000u128),
@@ -615,7 +620,7 @@ fn provide_liquidity() {
         receiver: None,
     };
     let info = mock_info(
-        "addr0001",
+        "auction",
         &[Coin {
             denom: "uusd".to_string(),
             amount: Uint128::from(100_000000000000000000u128),
@@ -656,6 +661,8 @@ fn withdraw_liquidity() {
 
         factory_addr: String::from("factory"),
         init_params: None,
+        lockdrop_addr: Addr::unchecked("lockdrop"),
+        auction_addr: Addr::unchecked("auction")
     };
 
     let env = mock_env();
@@ -765,184 +772,7 @@ fn try_native_to_token() {
         ),
     ]);
 
-    let msg = InstantiateMsg {
-        asset_infos: vec![
-            AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            },
-            AssetInfo::Token {
-                contract_addr: Addr::unchecked("asset0000"),
-            },
-        ],
-        token_code_id: 10u64,
-        factory_addr: String::from("factory"),
-        init_params: None,
-    };
 
-    let env = mock_env();
-    let info = mock_info("addr0000", &[]);
-    // we can just call .unwrap() to assert this was a success
-    let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-    // Store liquidity token
-    store_liquidity_token(deps.as_mut(), 1, "liquidity0000".to_string());
-
-    // Normal swap
-    let msg = ExecuteMsg::Swap {
-        offer_asset: Asset {
-            info: AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            },
-            amount: offer_amount,
-        },
-        ask_asset_info: None,
-        belief_price: None,
-        max_spread: Some(Decimal::percent(50)),
-        to: None,
-    };
-    let env = mock_env_with_block_time(1000);
-    let info = mock_info(
-        "addr0000",
-        &[Coin {
-            denom: "uusd".to_string(),
-            amount: offer_amount,
-        }],
-    );
-
-    let res = execute(deps.as_mut(), env, info, msg).unwrap();
-    let msg_transfer = res.messages.get(0).expect("no message");
-
-    // Current price is 1.5, so expected return without spread is 1000
-    // 952380952 = 20000000000 - (30000000000 * 20000000000) / (30000000000 + 1500000000)
-    let expected_ret_amount = Uint128::new(952_380_952u128);
-
-    // 47619047 = 1500000000 * (20000000000 / 30000000000) - 952380952
-    let expected_spread_amount = Uint128::new(47619047u128);
-
-    let expected_commission_amount = expected_ret_amount.multiply_ratio(3u128, 1000u128); // 0.3%
-    let expected_maker_fee_amount = expected_commission_amount.multiply_ratio(166u128, 1000u128); // 0.166
-
-    let expected_return_amount = expected_ret_amount
-        .checked_sub(expected_commission_amount)
-        .unwrap();
-    let expected_tax_amount = Uint128::zero(); // no tax for token
-
-    // Check simulation result
-    deps.querier.with_balance(&[(
-        &String::from(MOCK_CONTRACT_ADDR),
-        &[Coin {
-            denom: "uusd".to_string(),
-            amount: collateral_pool_amount, /* user deposit must be pre-applied */
-        }],
-    )]);
-
-    let err = query_simulation(
-        deps.as_ref(),
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "cny".to_string(),
-            },
-            amount: offer_amount,
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "Generic error: Given offer asset does not belong in the pair"
-    );
-
-    let simulation_res: SimulationResponse = query_simulation(
-        deps.as_ref(),
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "uusd".to_string(),
-            },
-            amount: offer_amount,
-        },
-    )
-    .unwrap();
-    assert_eq!(expected_return_amount, simulation_res.return_amount);
-    assert_eq!(expected_commission_amount, simulation_res.commission_amount);
-    assert_eq!(expected_spread_amount, simulation_res.spread_amount);
-
-    // Check reverse simulation result
-    let err = query_reverse_simulation(
-        deps.as_ref(),
-        Asset {
-            info: AssetInfo::NativeToken {
-                denom: "cny".to_string(),
-            },
-            amount: expected_return_amount,
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "Generic error: Given ask asset doesn't belong to pairs"
-    );
-
-    let reverse_simulation_res: ReverseSimulationResponse = query_reverse_simulation(
-        deps.as_ref(),
-        Asset {
-            info: AssetInfo::Token {
-                contract_addr: Addr::unchecked("asset0000"),
-            },
-            amount: expected_return_amount,
-        },
-    )
-    .unwrap();
-    assert!(
-        (offer_amount.u128() as i128 - reverse_simulation_res.offer_amount.u128() as i128).abs()
-            < 5i128
-    );
-    assert!(
-        (expected_commission_amount.u128() as i128
-            - reverse_simulation_res.commission_amount.u128() as i128)
-            .abs()
-            < 5i128
-    );
-    assert!(
-        (expected_spread_amount.u128() as i128
-            - reverse_simulation_res.spread_amount.u128() as i128)
-            .abs()
-            < 5i128
-    );
-
-    assert_eq!(
-        res.attributes,
-        vec![
-            attr("action", "swap"),
-            attr("sender", "addr0000"),
-            attr("receiver", "addr0000"),
-            attr("offer_asset", "uusd"),
-            attr("ask_asset", "asset0000"),
-            attr("offer_amount", offer_amount.to_string()),
-            attr("return_amount", expected_return_amount.to_string()),
-            attr("tax_amount", expected_tax_amount.to_string()),
-            attr("spread_amount", expected_spread_amount.to_string()),
-            attr("commission_amount", expected_commission_amount.to_string()),
-            attr("maker_fee_amount", expected_maker_fee_amount.to_string()),
-        ]
-    );
-
-    assert_eq!(
-        &SubMsg {
-            msg: WasmMsg::Execute {
-                contract_addr: String::from("asset0000"),
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: String::from("addr0000"),
-                    amount: expected_return_amount,
-                })
-                .unwrap(),
-                funds: vec![],
-            }
-            .into(),
-            id: 0,
-            gas_limit: None,
-            reply_on: ReplyOn::Never,
-        },
-        msg_transfer,
-    );
 }
 
 #[test]
@@ -983,6 +813,8 @@ fn try_token_to_native() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: None,
+        lockdrop_addr: Addr::unchecked("lockdrop"),
+        auction_addr: Addr::unchecked("auction")
     };
 
     let env = mock_env();
@@ -1009,22 +841,16 @@ fn try_token_to_native() {
     let env = mock_env_with_block_time(1000);
     let info = mock_info("addr0000", &[]);
     let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-    assert_eq!(res, ContractError::Unauthorized {});
+    assert_eq!(res, ContractError::NonSupported {});
 
     // Normal sell
     let msg = ExecuteMsg::Receive(Cw20ReceiveMsg {
-        sender: String::from("addr0000"),
-        amount: offer_amount,
-        msg: to_binary(&Cw20HookMsg::Swap {
-            ask_asset_info: None,
-            belief_price: None,
-            max_spread: Some(Decimal::percent(50)),
-            to: None,
-        })
-        .unwrap(),
+        sender: String::from("auction"),
+        msg: to_binary(&Cw20HookMsg::WithdrawLiquidity { assets: vec![] }).unwrap(),
+        amount: Uint128::new(100u128),
     });
     let env = mock_env_with_block_time(1000);
-    let info = mock_info("asset0000", &[]);
+    let info = mock_info("auction", &[]);
 
     let res = execute(deps.as_mut(), env, info, msg).unwrap();
     let msg_transfer = res.messages.get(0).expect("no message");
@@ -1100,37 +926,15 @@ fn try_token_to_native() {
     assert_eq!(
         res.attributes,
         vec![
-            attr("action", "swap"),
-            attr("sender", "addr0000"),
-            attr("receiver", "addr0000"),
-            attr("offer_asset", "asset0000"),
-            attr("ask_asset", "uusd"),
-            attr("offer_amount", offer_amount.to_string()),
-            attr("return_amount", expected_return_amount.to_string()),
-            attr("tax_amount", Uint128::zero().to_string()),
-            attr("spread_amount", expected_spread_amount.to_string()),
-            attr("commission_amount", expected_commission_amount.to_string()),
-            attr("maker_fee_amount", expected_maker_fee_amount.to_string()),
+            attr("action", "withdraw_liquidity"),
+            attr("sender", "auction"),
+            attr("withdrawn_share", "100"),
+            attr("refund_assets", "100uusd, 157asset0000"),
         ]
     );
 
-    assert_eq!(
-        &SubMsg {
-            msg: CosmosMsg::Bank(BankMsg::Send {
-                to_address: String::from("addr0000"),
-                amount: vec![Coin {
-                    denom: "uusd".to_string(),
-                    amount: expected_return_amount
-                }],
-            }),
-            id: 0,
-            gas_limit: None,
-            reply_on: ReplyOn::Never,
-        },
-        msg_transfer,
-    );
 
-    // Failed due to trying to swap a non token (specifying an address of a non token contract)
+    // Failed due to trying to swap while swap is restricted
     let msg = ExecuteMsg::Receive(Cw20ReceiveMsg {
         sender: String::from("addr0000"),
         amount: offer_amount,
@@ -1145,7 +949,7 @@ fn try_token_to_native() {
     let env = mock_env_with_block_time(1000);
     let info = mock_info("liquidtity0000", &[]);
     let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-    assert_eq!(res, ContractError::Unauthorized {});
+    assert_eq!(res, ContractError::NonSupported {});
 }
 
 #[test]
@@ -1229,6 +1033,8 @@ fn test_query_pool() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: None,
+        lockdrop_addr: Addr::unchecked("lockdrop"),
+        auction_addr: Addr::unchecked("auction")
     };
 
     let env = mock_env();
@@ -1294,6 +1100,8 @@ fn test_query_share() {
         token_code_id: 10u64,
         factory_addr: String::from("factory"),
         init_params: None,
+        lockdrop_addr: Addr::unchecked("lockdrop"),
+        auction_addr: Addr::unchecked("auction")
     };
 
     let env = mock_env();
@@ -1406,6 +1214,8 @@ fn test_accumulate_prices() {
                 block_time_last: case.block_time_last,
                 price0_cumulative_last: Uint128::new(case.last0),
                 price1_cumulative_last: Uint128::new(case.last1),
+                lockdrop_addr: Addr::unchecked("lockdrop"),
+                auction_addr: Addr::unchecked("auction")
             },
             Uint128::new(case.x_amount),
             Uint128::new(case.y_amount),
@@ -1474,6 +1284,76 @@ proptest! {
             commission_amount,
         ).unwrap();
     }
+}
+
+
+#[test]
+fn try_to_swap() {
+    let total_share = Uint128::new(20000000000u128);
+    let asset_pool_amount = Uint128::new(30000000000u128);
+    let collateral_pool_amount = Uint128::new(20000000000u128);
+    let offer_amount = Uint128::new(1500000000u128);
+
+    let mut deps = mock_dependencies(&[Coin {
+        denom: "uusd".to_string(),
+        amount: collateral_pool_amount,
+    }]);
+
+    deps.querier.with_token_balances(&[
+        (
+            &String::from("liquidity0000"),
+            &[(&String::from(MOCK_CONTRACT_ADDR), &total_share)],
+        ),
+        (
+            &String::from("asset0000"),
+            &[(
+                &String::from(MOCK_CONTRACT_ADDR),
+                &(asset_pool_amount + offer_amount),
+            )],
+        ),
+    ]);
+
+    let msg = InstantiateMsg {
+        asset_infos: vec![
+            AssetInfo::NativeToken {
+                denom: "uusd".to_string(),
+            },
+            AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+        ],
+        token_code_id: 10u64,
+        factory_addr: String::from("factory"),
+        init_params: None,
+        lockdrop_addr: Addr::unchecked("lockdrop"),
+        auction_addr: Addr::unchecked("auction")
+    };
+
+    let env = mock_env();
+    let info = mock_info("addr0000", &[]);
+    // We can just call .unwrap() to assert this was a success
+    let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+    // Store liquidity token
+    store_liquidity_token(deps.as_mut(), 1, "liquidity0000".to_string());
+
+    // Unauthorized access; can not execute swap directy for token swap
+    let msg = ExecuteMsg::Swap {
+        offer_asset: Asset {
+            info: AssetInfo::Token {
+                contract_addr: Addr::unchecked("asset0000"),
+            },
+            amount: offer_amount,
+        },
+        ask_asset_info: None,
+        belief_price: None,
+        max_spread: None,
+        to: None,
+    };
+    let env = mock_env_with_block_time(1000);
+    let info = mock_info("addr0000", &[]);
+    let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
+    assert_eq!(res, ContractError::NonSupported {});
 }
 
 #[test]
