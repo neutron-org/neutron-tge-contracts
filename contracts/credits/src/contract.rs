@@ -6,6 +6,7 @@ use cosmwasm_std::{
     StdResult, Uint128,
 };
 use cw2::set_contract_version;
+use cw20::BalanceResponse;
 use cw20_base::state as Cw20State;
 use cw20_base::state::BALANCES;
 use cw_utils::Expiration;
@@ -26,7 +27,8 @@ const TOKEN_SYMBOL: &str = "cuntrn";
 const TOKEN_DECIMALS: u8 = 6;
 const DEPOSITED_SYMBOL: &str = "untrn";
 
-// Zero cliff for vesting. TODO: change?
+// Zero cliff for vesting. Before the schedule.start_time + schedule.cliff vesting does not start.
+// TODO: change?
 const VESTING_CLIFF: u64 = 0;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -354,6 +356,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Balance { address } => {
             to_binary(&::cw20_base::contract::query_balance(deps, address)?)
         }
+        QueryMsg::BalanceAtHeight { address, height } => {
+            to_binary(&query_balance_at_height(deps, address, height)?)
+        }
         QueryMsg::TokenInfo {} => to_binary(&::cw20_base::contract::query_token_info(deps)?),
         QueryMsg::Minter {} => to_binary(&::cw20_base::contract::query_minter(deps)?),
         QueryMsg::Allowance { owner, spender } => to_binary(
@@ -394,6 +399,13 @@ fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         lockdrop_address: config.lockdrop_address,
         when_withdrawable: config.when_withdrawable,
     })
+}
+
+fn query_balance_at_height(deps: Deps, address: String, height: u64) -> StdResult<BalanceResponse> {
+    let balance = BALANCES
+        .may_load_at_height(deps.storage, &deps.api.addr_validate(&address)?, height)?
+        .unwrap_or_default();
+    Ok(BalanceResponse { balance })
 }
 
 fn query_withdrawable_amount(

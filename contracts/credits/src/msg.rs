@@ -81,6 +81,8 @@ pub enum QueryMsg {
     /// Returns the current balance of the given address, 0 if unset.
     #[returns(cw20::BalanceResponse)]
     Balance { address: String },
+    #[returns(cw20::BalanceResponse)]
+    BalanceAtHeight { address: String, height: u64 },
     /// Returns metadata on the contract - name, decimals, supply, etc.
     #[returns(cw20::TokenInfoResponse)]
     TokenInfo {},

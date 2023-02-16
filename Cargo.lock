@@ -174,9 +174,9 @@ dependencies = [
  "cw-multi-test",
  "cw-storage-plus 1.0.1",
  "cw-utils 1.0.1",
- "cw2 1.0.1",
- "cw20 1.0.1",
- "cw20-base 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cw2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cw20 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cw20-base 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00)",
  "schemars",
  "serde",
  "thiserror",
@@ -311,7 +311,7 @@ checksum = "c80e93d1deccb8588db03945016a292c3c631e6325d349ebb35d2db6f4f946f7"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
- "cw2 1.0.1",
+ "cw2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "schemars",
  "semver",
  "serde",
@@ -371,6 +371,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw2"
+version = "1.0.1"
+source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00#b374f38508075b930077b57725549a12a0a37c00"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus 1.0.1",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cw20"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -397,6 +409,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw20"
+version = "1.0.1"
+source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00#b374f38508075b930077b57725549a12a0a37c00"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-utils 1.0.1",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cw20-base"
 version = "1.0.1"
 dependencies = [
@@ -405,8 +429,8 @@ dependencies = [
  "cw-multi-test",
  "cw-storage-plus 1.0.1",
  "cw-utils 1.0.1",
- "cw2 1.0.1",
- "cw20 1.0.1",
+ "cw2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cw20 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "schemars",
  "semver",
  "serde",
@@ -416,15 +440,14 @@ dependencies = [
 [[package]]
 name = "cw20-base"
 version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afcd279230b08ed8afd8be5828221622bd5b9ce25d0b01d58bad626c6ce0169c"
+source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00#b374f38508075b930077b57725549a12a0a37c00"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus 1.0.1",
  "cw-utils 1.0.1",
- "cw2 1.0.1",
- "cw20 1.0.1",
+ "cw2 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00)",
+ "cw20 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00)",
  "schemars",
  "semver",
  "serde",
