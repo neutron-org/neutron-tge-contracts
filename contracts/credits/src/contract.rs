@@ -222,14 +222,14 @@ pub fn execute_withdraw(
 
     let owner = info.sender.clone();
     let mut allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
-    let withdrawable_amount = compute_withdrawable_amount(
+    let max_withdrawable_amount = compute_withdrawable_amount(
         allocation.allocated_amount,
         allocation.withdrawn_amount,
         &allocation.schedule,
         env.block.time.seconds(),
     )?;
 
-    if withdrawable_amount.is_zero() {
+    if max_withdrawable_amount.is_zero() {
         return Err(Cw20ContractError::Std(StdError::generic_err(
             "nothing to claim yet",
         )));
@@ -239,7 +239,7 @@ pub fn execute_withdraw(
     // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
     // so we need to withdraw not more than the current balance
     let actual_balance = BALANCES.load(deps.storage, &owner)?;
-    let to_withdraw = withdrawable_amount.min(actual_balance);
+    let to_withdraw = max_withdrawable_amount.min(actual_balance);
 
     // check that zero
     if to_withdraw.is_zero() {
@@ -290,7 +290,7 @@ pub fn execute_burn_from(
         return Err(Cw20ContractError::Unauthorized {});
     }
 
-    // use it as analog of burn_from, but we skip allowance step since we only allow it for lockdrop address
+    // burn funds of `owner`, but skip the vesting stage
     info.sender = deps.api.addr_validate(&owner)?;
 
     burn_and_send(deps, env, info, amount)
@@ -475,10 +475,11 @@ fn burn_and_send(
     Ok(burn_response.add_message(send))
 }
 
-/// Compute the withdrawable based on the current timestamp and the vesting schedule
+/// Compute the max withdrawable amount based on the current timestamp and the vesting schedule
 ///
 /// The withdrawable amount is vesting amount minus the amount already withdrawn.
-/// Implementation copied from
+/// Implementation copied from mars-protocol mars-vesting contract:
+/// https://github.com/mars-protocol/v1-core/tree/master/contracts/mars-vesting
 pub fn compute_withdrawable_amount(
     allocated_amount: Uint128,
     withdrawn_amount: Uint128,
@@ -508,7 +509,8 @@ pub fn compute_withdrawable_amount(
 #[cfg(test)]
 mod tests {
     use crate::contract::{
-        execute_add_vesting, execute_mint, execute_transfer, instantiate, DEPOSITED_SYMBOL,
+        execute_add_vesting, execute_burn_from, execute_mint, execute_transfer, instantiate,
+        DEPOSITED_SYMBOL,
     };
     use crate::msg::InstantiateMsg;
     use crate::state::ALLOCATIONS;
@@ -617,12 +619,23 @@ mod tests {
         assert!(res.is_ok());
     }
 
+    fn _withdraw_rewards(deps: DepsMut, env: Env, amount: u128) {
+        let res = execute_burn_from(
+            deps,
+            env,
+            mock_info("lockdrop_address", &[]),
+            "somebody".to_string(),
+            Uint128::new(amount),
+        );
+        assert!(res.is_ok());
+    }
+
     fn _assert_withdrawn(
         deps: DepsMut,
         res: Result<Response, ContractError>,
         previous_total_supply: u128,
         allocated_amount: u128,
-        withdrawn_amount: u128,
+        withdrawn_total_amount: u128,
         withdrawn_now_amount: u128,
         rewarded_amount_without_vesting: u128,
     ) {
@@ -641,14 +654,19 @@ mod tests {
             .load(deps.storage, &Addr::unchecked("somebody"))
             .unwrap();
         assert_eq!(allocation.allocated_amount, Uint128::new(allocated_amount));
-        assert_eq!(allocation.withdrawn_amount, Uint128::new(withdrawn_amount));
+        assert_eq!(
+            allocation.withdrawn_amount,
+            Uint128::new(withdrawn_total_amount)
+        );
 
         let balance = BALANCES
             .load(deps.storage, &Addr::unchecked("somebody"))
             .unwrap();
         assert_eq!(
             balance,
-            Uint128::new(allocated_amount - withdrawn_amount - rewarded_amount_without_vesting)
+            Uint128::new(
+                allocated_amount - withdrawn_total_amount - rewarded_amount_without_vesting
+            )
         );
 
         let token_info = TOKEN_INFO.load(deps.storage).unwrap();
@@ -947,49 +965,102 @@ mod tests {
     }
 
     mod withdraw {
+        use crate::contract::execute_withdraw;
         use crate::contract::tests::{
             _assert_withdrawn, _do_instantiate, _do_simple_instantiate,
-            _instantiate_vest_to_somebody,
+            _instantiate_vest_to_somebody, _withdraw_rewards,
         };
-        use crate::contract::{execute_burn_from, execute_withdraw};
         use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-        use cosmwasm_std::{StdError, Timestamp, Uint128};
+        use cosmwasm_std::StdError;
         use cw20_base::ContractError;
 
+        // withdrawing rewards (burn_from) should not fail withdrawing all funds later
         #[test]
-        fn withdraws_all_vested_tokens_correctly() {
+        fn full() {
             // instantiate
             let (mut deps, mut env) = _instantiate_vest_to_somebody(10_000_000, 100, None, 1000);
 
             // at this point `somebody` has vested 100 NTRNs on 1000 seconds
 
             // pass 3/4 vesting duration (750 seconds)
-            env.block.time = Timestamp::from_seconds(env.block.time.seconds() + 750);
+            env.block.time = env.block.time.plus_seconds(750);
 
-            // check that we burn cuntrn's and send untrn's exactly 100/3*4 = 75
+            // withdraw 75 (100 * 75%)
             let res = execute_withdraw(deps.as_mut(), env.clone(), mock_info("somebody", &[]));
             _assert_withdrawn(deps.as_mut(), res, 10_000_000, 100, 75, 75, 0);
 
             // now let's check that if we distribute rewards and skip all vesting, we still successfully withdraw what's left
 
             // pass all vesting duration (> 1000 seconds)
-            env.block.time = Timestamp::from_seconds(env.block.time.seconds() + 1250);
+            env.block.time = env.block.time.plus_seconds(1250);
 
-            // distribute rewards for that account
-            let res = execute_burn_from(
-                deps.as_mut(),
-                env.clone(),
-                mock_info("lockdrop_address", &[]),
-                "somebody".to_string(),
-                Uint128::new(10),
-            );
-            assert!(res.is_ok());
+            // withdraw rewards for that account
+            _withdraw_rewards(deps.as_mut(), env.clone(), 10);
 
             // after sending 10 to account, we only have 25-10=15 left
 
             // withdraw what's left
             let res = execute_withdraw(deps.as_mut(), env, mock_info("somebody", &[]));
             _assert_withdrawn(deps.as_mut(), res, 10_000_000 - 75 - 10, 100, 90, 15, 10);
+        }
+
+        // withdrawing rewards (burn_from) should not change amount of vested tokens
+        #[test]
+        fn vesting_schedule_immutable() {
+            // instantiate
+            let (mut deps, mut env) = _instantiate_vest_to_somebody(10_000_000, 100, None, 1000);
+
+            // at this point `somebody` has vested 100 NTRNs on 1000 seconds
+
+            // pass 50% time
+            env.block.time = env.block.time.plus_seconds(500);
+
+            // withdraw rewards for that account
+            _withdraw_rewards(deps.as_mut(), env.clone(), 25);
+
+            // because vesting schedule is immutable we still have 50 to withdraw,
+            // even though we withdrew 25 as rewards
+            let res = execute_withdraw(deps.as_mut(), env, mock_info("somebody", &[]));
+            _assert_withdrawn(deps.as_mut(), res, 10_000_000 - 25, 100, 50, 50, 25);
+        }
+
+        #[test]
+        fn does_not_withdraw_if_vesting_empty() {
+            // instantiate
+            let (mut deps, env) = _instantiate_vest_to_somebody(10_000_000, 100, None, 1000);
+
+            // at this point `somebody` has vested 100 NTRNs on 1000 seconds
+
+            // call at 0% progress of vesting returns error
+            let res = execute_withdraw(deps.as_mut(), env, mock_info("somebody", &[]));
+            assert_eq!(
+                res,
+                Err(ContractError::Std(StdError::generic_err(
+                    "nothing to claim yet"
+                ))),
+            );
+        }
+
+        #[test]
+        fn does_not_withdraw_if_vesting_does_not_started() {
+            // instantiate
+            let (mut deps, env) = _instantiate_vest_to_somebody(
+                10_000_000,
+                100,
+                Some(mock_env().block.time.plus_seconds(100).seconds()),
+                1000,
+            );
+
+            // at this point `somebody` has vested 100 NTRNs on 1000 seconds
+
+            // call at 0% progress of vesting returns error
+            let res = execute_withdraw(deps.as_mut(), env, mock_info("somebody", &[]));
+            assert_eq!(
+                res,
+                Err(ContractError::Std(StdError::generic_err(
+                    "nothing to claim yet"
+                ))),
+            );
         }
 
         #[test]
@@ -1095,10 +1166,14 @@ mod tests {
 
     mod burn_from {
         use crate::contract::tests::_do_simple_instantiate;
-        use crate::contract::{execute_burn_from, execute_mint, DEPOSITED_SYMBOL};
+        use crate::contract::{
+            execute_burn_from, execute_mint, execute_transfer, DEPOSITED_SYMBOL,
+        };
         use cosmwasm_std::testing::{mock_dependencies, mock_info};
-        use cosmwasm_std::{coins, Addr, BankMsg, Uint128};
+        use cosmwasm_std::OverflowOperation::Sub;
+        use cosmwasm_std::{coins, Addr, BankMsg, OverflowError, StdError, Uint128};
         use cw20_base::state::{BALANCES, TOKEN_INFO};
+        use cw20_base::ContractError::Std;
 
         #[test]
         fn works_properly_with_airdrop_account() {
@@ -1113,11 +1188,10 @@ mod tests {
             assert!(res.is_ok());
 
             // burn_from
-            let lockdrop_info = mock_info("lockdrop_address", &[]);
             let res = execute_burn_from(
                 deps.as_mut(),
                 env,
-                lockdrop_info,
+                mock_info("lockdrop_address", &[]),
                 "airdrop_address".to_string(),
                 Uint128::new(20_000),
             );
@@ -1143,6 +1217,46 @@ mod tests {
             assert_eq!(
                 token_info.total_supply,
                 Uint128::new(minted_balance - 20_000)
+            );
+        }
+
+        #[test]
+        fn returns_error_if_not_enough() {
+            // instantiate
+            let mut deps = mock_dependencies();
+            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+            // mint
+            let minted_balance = 1_000_000_000;
+            let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
+            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
+            assert!(res.is_ok());
+
+            // transfer to somebody
+            let res = execute_transfer(
+                deps.as_mut(),
+                env.clone(),
+                mock_info("airdrop_address", &[]),
+                "somebody".to_string(),
+                Uint128::new(100),
+            );
+            assert!(res.is_ok());
+
+            // burn_from somebody
+            let res = execute_burn_from(
+                deps.as_mut(),
+                env,
+                mock_info("lockdrop_address", &[]),
+                "somebody".to_string(),
+                Uint128::new(20_000),
+            );
+            assert_eq!(
+                res,
+                Err(Std(StdError::overflow(OverflowError {
+                    operation: Sub,
+                    operand1: "100".to_string(),
+                    operand2: "20000".to_string()
+                })))
             );
         }
     }
