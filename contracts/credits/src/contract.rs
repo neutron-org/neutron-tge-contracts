@@ -507,10 +507,60 @@ pub fn compute_withdrawable_amount(
 
 #[cfg(test)]
 mod tests {
-    use crate::contract::{execute_add_vesting, instantiate};
+    use crate::contract::{
+        execute_add_vesting, execute_mint, execute_transfer, instantiate, DEPOSITED_SYMBOL,
+    };
     use crate::msg::InstantiateMsg;
-    use cosmwasm_std::testing::{mock_env, mock_info};
-    use cosmwasm_std::{Coin, DepsMut, Env, MessageInfo, Timestamp, Uint128};
+    use crate::state::ALLOCATIONS;
+    use cosmwasm_std::testing::{
+        mock_dependencies, mock_env, mock_info, MockApi, MockQuerier, MockStorage,
+    };
+    use cosmwasm_std::{
+        coins, Addr, BankMsg, Coin, DepsMut, Empty, Env, MessageInfo, OwnedDeps, Response,
+        Timestamp, Uint128,
+    };
+    use cw20_base::state::{BALANCES, TOKEN_INFO};
+    use cw20_base::ContractError;
+
+    // instantiates the contracts, mints the money, transfers `amount` to `somebody` address
+    fn _instantiate_vest_to_somebody(
+        total_to_mint: u128,
+        amount: u128,
+        vesting_start_time: Option<u64>,
+        vesting_duration: u64,
+    ) -> (OwnedDeps<MockStorage, MockApi, MockQuerier, Empty>, Env) {
+        // instantiate
+        let mut deps = mock_dependencies();
+        let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
+
+        // mint
+        let dao_info = mock_info("dao_address", &coins(total_to_mint, DEPOSITED_SYMBOL));
+        let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
+        assert!(res.is_ok());
+
+        // transfer to `somebody` with vesting
+        let airdrop_info = mock_info("airdrop_address", &[]);
+        let res = execute_transfer(
+            deps.as_mut(),
+            env.clone(),
+            airdrop_info,
+            "somebody".to_string(),
+            Uint128::new(amount),
+        );
+        assert!(res.is_ok());
+
+        // vest
+        _do_add_vesting(
+            deps.as_mut(),
+            env.clone(),
+            "somebody".to_string(),
+            Uint128::new(amount),
+            vesting_start_time.unwrap_or(env.block.time.seconds()),
+            vesting_duration,
+        );
+
+        (deps, env)
+    }
 
     fn _do_simple_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env) {
         _do_instantiate(
@@ -565,6 +615,47 @@ mod tests {
             duration,
         );
         assert!(res.is_ok());
+    }
+
+    fn _assert_withdrawn(
+        deps: DepsMut,
+        res: Result<Response, ContractError>,
+        previous_total_supply: u128,
+        allocated_amount: u128,
+        withdrawn_amount: u128,
+        withdrawn_now_amount: u128,
+        rewarded_amount_without_vesting: u128,
+    ) {
+        assert!(res.is_ok());
+        let msgs = res.unwrap().messages;
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(
+            msgs.first().unwrap().msg,
+            BankMsg::Send {
+                to_address: "somebody".to_string(),
+                amount: coins(withdrawn_now_amount, DEPOSITED_SYMBOL)
+            }
+            .into()
+        );
+        let allocation = ALLOCATIONS
+            .load(deps.storage, &Addr::unchecked("somebody"))
+            .unwrap();
+        assert_eq!(allocation.allocated_amount, Uint128::new(allocated_amount));
+        assert_eq!(allocation.withdrawn_amount, Uint128::new(withdrawn_amount));
+
+        let balance = BALANCES
+            .load(deps.storage, &Addr::unchecked("somebody"))
+            .unwrap();
+        assert_eq!(
+            balance,
+            Uint128::new(allocated_amount - withdrawn_amount - rewarded_amount_without_vesting)
+        );
+
+        let token_info = TOKEN_INFO.load(deps.storage).unwrap();
+        assert_eq!(
+            token_info.total_supply,
+            Uint128::new(previous_total_supply - withdrawn_now_amount)
+        );
     }
 
     mod instantiate {
@@ -856,81 +947,28 @@ mod tests {
     }
 
     mod withdraw {
-        use crate::contract::tests::{_do_add_vesting, _do_instantiate, _do_simple_instantiate};
-        use crate::contract::{
-            execute_burn_from, execute_mint, execute_transfer, execute_withdraw, DEPOSITED_SYMBOL,
+        use crate::contract::tests::{
+            _assert_withdrawn, _do_instantiate, _do_simple_instantiate,
+            _instantiate_vest_to_somebody,
         };
-        use crate::state::ALLOCATIONS;
+        use crate::contract::{execute_burn_from, execute_withdraw};
         use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-        use cosmwasm_std::{coins, Addr, BankMsg, StdError, Timestamp, Uint128};
-        use cw20_base::state::{BALANCES, TOKEN_INFO};
+        use cosmwasm_std::{StdError, Timestamp, Uint128};
         use cw20_base::ContractError;
 
         #[test]
         fn withdraws_all_vested_tokens_correctly() {
             // instantiate
-            let mut deps = mock_dependencies();
-            let (_info, mut env) = _do_simple_instantiate(deps.as_mut(), None);
+            let (mut deps, mut env) = _instantiate_vest_to_somebody(10_000_000, 100, None, 1000);
 
-            // mint
-            let dao_info = mock_info("dao_address", &coins(1_000_000_000, DEPOSITED_SYMBOL));
-            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
-            assert!(res.is_ok());
-
-            // transfer to `somebody`
-            let airdrop_info = mock_info("airdrop_address", &[]);
-            let res = execute_transfer(
-                deps.as_mut(),
-                env.clone(),
-                airdrop_info,
-                "somebody".to_string(),
-                Uint128::new(100),
-            );
-            assert!(res.is_ok());
-
-            // vest
-            _do_add_vesting(
-                deps.as_mut(),
-                env.clone(),
-                "somebody".to_string(),
-                Uint128::new(100),
-                env.block.time.seconds(),
-                1000,
-            );
-
-            let somebody_info = mock_info("somebody", &[]);
-
-            // at this point `somebody` has vested 100 NTRNs
+            // at this point `somebody` has vested 100 NTRNs on 1000 seconds
 
             // pass 3/4 vesting duration (750 seconds)
             env.block.time = Timestamp::from_seconds(env.block.time.seconds() + 750);
 
             // check that we burn cuntrn's and send untrn's exactly 100/3*4 = 75
-            let res = execute_withdraw(deps.as_mut(), env.clone(), somebody_info);
-            assert!(res.is_ok());
-            let msgs = res.unwrap().messages;
-            assert_eq!(msgs.len(), 1);
-            assert_eq!(
-                msgs.first().unwrap().msg,
-                BankMsg::Send {
-                    to_address: "somebody".to_string(),
-                    amount: coins(75, DEPOSITED_SYMBOL)
-                }
-                .into()
-            );
-            let allocation = ALLOCATIONS
-                .load(&deps.storage, &Addr::unchecked("somebody"))
-                .unwrap();
-            assert_eq!(allocation.allocated_amount, Uint128::new(100));
-            assert_eq!(allocation.withdrawn_amount, Uint128::new(75));
-
-            let balance = BALANCES
-                .load(&deps.storage, &Addr::unchecked("somebody"))
-                .unwrap();
-            assert_eq!(balance, Uint128::new(100 - 75));
-
-            let token_info = TOKEN_INFO.load(&deps.storage).unwrap();
-            assert_eq!(token_info.total_supply, Uint128::new(1_000_000_000 - 75));
+            let res = execute_withdraw(deps.as_mut(), env.clone(), mock_info("somebody", &[]));
+            _assert_withdrawn(deps.as_mut(), res, 10_000_000, 100, 75, 75, 0);
 
             // now let's check that if we distribute rewards and skip all vesting, we still successfully withdraw what's left
 
@@ -938,11 +976,10 @@ mod tests {
             env.block.time = Timestamp::from_seconds(env.block.time.seconds() + 1250);
 
             // distribute rewards for that account
-            let lockdrop_info = mock_info("lockdrop_address", &[]);
             let res = execute_burn_from(
                 deps.as_mut(),
                 env.clone(),
-                lockdrop_info,
+                mock_info("lockdrop_address", &[]),
                 "somebody".to_string(),
                 Uint128::new(10),
             );
@@ -950,32 +987,9 @@ mod tests {
 
             // after sending 10 to account, we only have 25-10=15 left
 
-            // withdraw
-            let somebody_info = mock_info("somebody", &[]);
-            let res = execute_withdraw(deps.as_mut(), env, somebody_info);
-            assert!(res.is_ok());
-
-            // check that we burn cuntrn's and send untrn's exactly 15
-            let msgs = res.unwrap().messages;
-            assert_eq!(msgs.len(), 1);
-            assert_eq!(
-                msgs.first().unwrap().msg,
-                BankMsg::Send {
-                    to_address: "somebody".to_string(),
-                    amount: coins(15, DEPOSITED_SYMBOL)
-                }
-                .into()
-            );
-            let allocation = ALLOCATIONS
-                .load(&deps.storage, &Addr::unchecked("somebody"))
-                .unwrap();
-            assert_eq!(allocation.allocated_amount, Uint128::new(100));
-            assert_eq!(allocation.withdrawn_amount, Uint128::new(90)); // because we sent 10 as rewards that skipped vesting
-
-            let balance = BALANCES
-                .load(&deps.storage, &Addr::unchecked("somebody"))
-                .unwrap();
-            assert!(balance.is_zero());
+            // withdraw what's left
+            let res = execute_withdraw(deps.as_mut(), env, mock_info("somebody", &[]));
+            _assert_withdrawn(deps.as_mut(), res, 10_000_000 - 75 - 10, 100, 90, 15, 10);
         }
 
         #[test]
