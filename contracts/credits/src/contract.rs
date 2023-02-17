@@ -235,9 +235,11 @@ pub fn execute_withdraw(
         )));
     }
 
-    // TODO: better description
-    // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
-    // so we need to withdraw not more than the current balance
+    // Guard against the case where actual balance is smaller than max withdrawable amount.
+    // That can happen if user already withdrawn some funds as rewards for lockdrop participation through burn_from (skipping vesting).
+    // Example: user had 100 CNTRN on balance, and burned 100 CNTRN through burn_from.
+    // Suppose vesting period fully ended. In that case `compute_withdrawable_amount()` will return 100 NTRN,
+    // although he has 0 on balance.
     let actual_balance = BALANCES.load(deps.storage, &owner)?;
     let to_withdraw = max_withdrawable_amount.min(actual_balance);
 
