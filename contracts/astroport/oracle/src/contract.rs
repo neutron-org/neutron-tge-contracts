@@ -205,9 +205,9 @@ fn consult(
 }
 
 /// Returns token TWAP value for given height.
-/// * **token** token for which we multiply its TWAP value by an amount.
+/// * **token** token for which we getting its historicalTWAP value.
 ///
-/// * **height** amount of tokens we multiply the TWAP by.
+/// * **height** height, on which we receive TWAP
 fn twap_at_height(
     deps: Deps,
     token: AssetInfo,

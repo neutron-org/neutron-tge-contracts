@@ -6,10 +6,13 @@ use cw_storage_plus::{Item, SnapshotItem, Strategy};
 
 /// Stores the contract config at the given key
 pub const CONFIG: Item<Config> = Item::new("config");
-/// Stores the latest cumulative and average prices at the given key
-/// TODO: proper checkpoints
-pub const PRICE_LAST: SnapshotItem<PriceCumulativeLast> =
-    SnapshotItem::new("price_last", "", "", Strategy::EveryBlock);
+/// Stores the latest cumulative and average prices at the given key and height
+pub const PRICE_LAST: SnapshotItem<PriceCumulativeLast> = SnapshotItem::new(
+    "price_last",
+    "price_last_checkpoints",
+    "price_last_changelog",
+    Strategy::EveryBlock,
+);
 
 /// This structure stores the latest cumulative and average token prices for the target pool
 #[cw_serde]
