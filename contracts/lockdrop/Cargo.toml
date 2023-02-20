@@ -28,16 +28,16 @@ astroport = { git = "https://github.com/astroport-fi/astroport-core.git", branch
 astroport-periphery = { path = "../../packages/astroport_periphery" }
 terraswap = "2.6"
 cosmwasm-std = { version = "1.0" }
-cw20 = { version = "0.13" }
-cw2 = { version = "0.13" }
-cw-storage-plus = {version = "0.13", features = ["iterator"]}
+cw20 = { version = "1.0.1" }
+cw2 = { version = "1.0.1" }
+cw-storage-plus = {version = "1.0.1", features = ["iterator"]}
 schemars = "0.8.3"
 serde = { version = "1.0.127", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
-cw20-base = { version = "0.13", features = ["library"] }
+cw20-base = { version = "1.0.1", features = ["library"] }
 cosmwasm-schema = { version = "1.0" }
-cw-multi-test = "0.13"
+cw-multi-test = "0.16.2"
 
 # Terraswap contracts
 terraswap-factory = { git = "https://github.com/terraswap/terraswap.git", branch = "main" }
@@ -50,10 +50,9 @@ astroport-pair-stable = { git = "https://github.com/astroport-fi/astroport-core.
 astroport-token = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
 astroport-vesting = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
 astroport-generator = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
-astroport-generator-proxy-to-mirror = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
 astroport-staking = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
 astroport-xastro-token = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
-neutron-auction = { path = "../auction" }
+astroport-auction = { path = "../auction" }
 astroport-airdrop = { path = "../airdrop" }
 astroport-whitelist = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
 astroport-governance = { git = "https://github.com/astroport-fi/astroport-governance.git", branch = "main" }

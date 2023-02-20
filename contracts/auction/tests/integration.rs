@@ -170,7 +170,7 @@ fn instantiate_auction_contract(
         init_timestamp: 1_000_00,
         deposit_window: 100_000_00,
         withdrawal_window: 5_000_00,
-        native_denom: "usdc".to_string(),
+        stable_denom: "usdc".to_string(),
     };
 
     // Init contract
@@ -419,7 +419,7 @@ fn instantiate_airdrop_lockdrop_contracts(
         owner.clone().to_string(),
     );
 
-    // Set ASTRO airdrop incentives
+    // Set cNTRN airdrop incentives
     app.execute_contract(
         Addr::unchecked(owner.clone()),
         astro_token_instance.clone(),
@@ -923,11 +923,11 @@ fn proper_initialization_only_auction_astro() {
         .unwrap();
 
     assert!(resp.total_cntrn_deposited.is_zero());
-    assert!(resp.total_opposite_deposited.is_zero());
+    assert!(resp.total_usdc_deposited.is_zero());
     assert!(resp.lp_shares_minted.is_none());
     assert!(!resp.is_lp_staked);
     assert_eq!(0u64, resp.pool_init_timestamp);
-    assert!(resp.generator_cntrn_per_share.is_zero());
+    assert!(resp.generator_ntrn_per_share.is_zero());
 }
 
 #[test]
@@ -935,16 +935,10 @@ fn proper_initialization_all_contracts() {
     let owner = Addr::unchecked(OWNER);
     let mut app = mock_app(
         owner.clone(),
-        vec![
-            Coin {
-                denom: "usdc".to_string(),
-                amount: Uint128::new(100_000_000_000u128),
-            },
-            Coin {
-                denom: "uluna".to_string(),
-                amount: Uint128::new(100_000_000_000u128),
-            },
-        ],
+        vec![Coin {
+            denom: "usdc".to_string(),
+            amount: Uint128::new(100_000_000_000u128),
+        }],
     );
     let (auction_instance, _, _, _, _, _, auction_init_msg, _, _) = init_all_contracts(&mut app);
 
@@ -978,11 +972,11 @@ fn proper_initialization_all_contracts() {
         .unwrap();
 
     assert!(resp.total_cntrn_deposited.is_zero());
-    assert!(resp.total_opposite_deposited.is_zero());
+    assert!(resp.total_usdc_deposited.is_zero());
     assert!(resp.lp_shares_minted.is_none());
     assert!(!resp.is_lp_staked);
     assert_eq!(0u64, resp.pool_init_timestamp);
-    assert!(resp.generator_cntrn_per_share.is_zero());
+    assert!(resp.generator_ntrn_per_share.is_zero());
 }
 
 #[test]
@@ -1098,10 +1092,10 @@ fn test_delegate_astro_tokens_from_airdrop() {
         Uint128::from(100000000u64),
         state_resp.total_cntrn_deposited
     );
-    assert_eq!(Uint128::from(0u64), state_resp.total_opposite_deposited);
+    assert_eq!(Uint128::from(0u64), state_resp.total_usdc_deposited);
     assert_eq!(None, state_resp.lp_shares_minted);
     assert!(!state_resp.is_lp_staked);
-    assert!(state_resp.generator_cntrn_per_share.is_zero());
+    assert!(state_resp.generator_ntrn_per_share.is_zero());
     // Check user response
     let user_resp: UserInfoResponse = app
         .wrap()
@@ -1113,7 +1107,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
         )
         .unwrap();
     assert_eq!(Uint128::from(100000000u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(0u64), user_resp.native_delegated);
+    assert_eq!(Uint128::from(0u64), user_resp.usdc_delegated);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
 
@@ -1134,10 +1128,10 @@ fn test_delegate_astro_tokens_from_airdrop() {
         Uint128::from(200000000u64),
         state_resp.total_cntrn_deposited
     );
-    assert_eq!(Uint128::from(0u64), state_resp.total_opposite_deposited);
+    assert_eq!(Uint128::from(0u64), state_resp.total_usdc_deposited);
     assert_eq!(None, state_resp.lp_shares_minted);
     assert!(!state_resp.is_lp_staked);
-    assert!(state_resp.generator_cntrn_per_share.is_zero());
+    assert!(state_resp.generator_ntrn_per_share.is_zero());
     // Check user response
     let user_resp: UserInfoResponse = app
         .wrap()
@@ -1149,7 +1143,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
         )
         .unwrap();
     assert_eq!(Uint128::from(200000000u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(0u64), user_resp.native_delegated);
+    assert_eq!(Uint128::from(0u64), user_resp.usdc_delegated);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
 
@@ -1299,7 +1293,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
         )
         .unwrap();
     assert_eq!(Uint128::from(100000000u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(0u64), user_resp.native_delegated);
+    assert_eq!(Uint128::from(0u64), user_resp.usdc_delegated);
 
     // ######    SUCCESS :: ASTRO Successfully deposited again   ######
     app.execute_contract(
@@ -1318,7 +1312,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
         Uint128::from(200000000u64),
         state_resp.total_cntrn_deposited
     );
-    assert_eq!(Uint128::from(0u64), state_resp.total_opposite_deposited);
+    assert_eq!(Uint128::from(0u64), state_resp.total_usdc_deposited);
 
     // Check user response
     let user_resp: UserInfoResponse = app
@@ -1506,7 +1500,7 @@ fn test_deposit_ust() {
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
     assert_eq!(Uint128::from(00u64), state_resp.total_cntrn_deposited);
-    assert_eq!(Uint128::from(10000u64), state_resp.total_opposite_deposited);
+    assert_eq!(Uint128::from(10000u64), state_resp.total_usdc_deposited);
     assert_eq!(None, state_resp.lp_shares_minted);
     assert!(!state_resp.is_lp_staked);
 
@@ -1521,7 +1515,7 @@ fn test_deposit_ust() {
         )
         .unwrap();
     assert_eq!(Uint128::from(0u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(10000u64), user_resp.native_delegated);
+    assert_eq!(Uint128::from(10000u64), user_resp.usdc_delegated);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
 
@@ -1539,7 +1533,7 @@ fn test_deposit_ust() {
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
     assert_eq!(Uint128::from(00u64), state_resp.total_cntrn_deposited);
-    assert_eq!(Uint128::from(20000u64), state_resp.total_opposite_deposited);
+    assert_eq!(Uint128::from(20000u64), state_resp.total_usdc_deposited);
 
     // Check user response
     user_resp = app
@@ -1552,7 +1546,7 @@ fn test_deposit_ust() {
         )
         .unwrap();
     assert_eq!(Uint128::from(0u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(20000u64), user_resp.native_delegated);
+    assert_eq!(Uint128::from(20000u64), user_resp.usdc_delegated);
 
     // finish claim period for deposit failure
     app.update_block(|b| {
@@ -1668,8 +1662,8 @@ fn test_withdraw_ust() {
         user1_address.clone(),
         auction_instance.clone(),
         &ExecuteMsg::Withdraw {
-            amount_opposite: Uint128::from(10000u64),
-            amount_cntrn: Uint128::from(1000u64),
+            amount_stable: Uint128::from(10000u64),
+            amount_volatile: Uint128::from(1000u64),
         },
         &[],
     )
@@ -1679,7 +1673,7 @@ fn test_withdraw_ust() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(Uint128::from(20000u64), state_resp.total_opposite_deposited);
+    assert_eq!(Uint128::from(20000u64), state_resp.total_usdc_deposited);
 
     // Check user response
     let mut user_resp: UserInfoResponse = app
@@ -1691,7 +1685,7 @@ fn test_withdraw_ust() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(0u64), user_resp.native_delegated);
+    assert_eq!(Uint128::from(0u64), user_resp.usdc_delegated);
 
     app.execute_contract(
         user1_address.clone(),
@@ -1714,8 +1708,8 @@ fn test_withdraw_ust() {
             user1_address.clone(),
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
-                amount_opposite: Uint128::from(10000u64),
-                amount_cntrn: Uint128::from(10000u64),
+                amount_stable: Uint128::from(10000u64),
+                amount_volatile: Uint128::from(10000u64),
             },
             &[],
         )
@@ -1731,8 +1725,8 @@ fn test_withdraw_ust() {
         user1_address.clone(),
         auction_instance.clone(),
         &ExecuteMsg::Withdraw {
-            amount_opposite: Uint128::from(5000u64),
-            amount_cntrn: Uint128::from(5000u64),
+            amount_stable: Uint128::from(5000u64),
+            amount_volatile: Uint128::from(5000u64),
         },
         &[],
     )
@@ -1742,7 +1736,7 @@ fn test_withdraw_ust() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(Uint128::from(25000u64), state_resp.total_opposite_deposited);
+    assert_eq!(Uint128::from(25000u64), state_resp.total_usdc_deposited);
 
     // Check user response
     user_resp = app
@@ -1754,7 +1748,7 @@ fn test_withdraw_ust() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(5000u64), user_resp.native_delegated);
+    assert_eq!(Uint128::from(5000u64), user_resp.usdc_delegated);
 
     // ######    ERROR :: Max 1 withdrawal allowed during current window   ######
 
@@ -1763,8 +1757,8 @@ fn test_withdraw_ust() {
             user1_address.clone(),
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
-                amount_opposite: Uint128::from(10u64),
-                amount_cntrn: Uint128::from(10u64),
+                amount_stable: Uint128::from(10u64),
+                amount_volatile: Uint128::from(10u64),
             },
             &[],
         )
@@ -1787,8 +1781,8 @@ fn test_withdraw_ust() {
             user2_address.clone(),
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
-                amount_opposite: Uint128::from(10000u64),
-                amount_cntrn: Uint128::from(10000u64),
+                amount_stable: Uint128::from(10000u64),
+                amount_volatile: Uint128::from(10000u64),
             },
             &[],
         )
@@ -1804,8 +1798,8 @@ fn test_withdraw_ust() {
         user2_address.clone(),
         auction_instance.clone(),
         &ExecuteMsg::Withdraw {
-            amount_opposite: Uint128::from(2000u64),
-            amount_cntrn: Uint128::from(2000u64),
+            amount_stable: Uint128::from(2000u64),
+            amount_volatile: Uint128::from(2000u64),
         },
         &[],
     )
@@ -1815,7 +1809,7 @@ fn test_withdraw_ust() {
         .wrap()
         .query_wasm_smart(&auction_instance, &QueryMsg::State {})
         .unwrap();
-    assert_eq!(Uint128::from(23000u64), state_resp.total_opposite_deposited);
+    assert_eq!(Uint128::from(23000u64), state_resp.total_usdc_deposited);
 
     // Check user response
     user_resp = app
@@ -1827,7 +1821,7 @@ fn test_withdraw_ust() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(8000u64), user_resp.native_delegated);
+    assert_eq!(Uint128::from(8000u64), user_resp.usdc_delegated);
 
     // ######    ERROR :: Max 1 withdrawal allowed during current window   ######
 
@@ -1836,8 +1830,8 @@ fn test_withdraw_ust() {
             user2_address.clone(),
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
-                amount_opposite: Uint128::from(10u64),
-                amount_cntrn: Uint128::from(10u64),
+                amount_stable: Uint128::from(10u64),
+                amount_volatile: Uint128::from(10u64),
             },
             &[],
         )
@@ -1858,8 +1852,8 @@ fn test_withdraw_ust() {
             user3_address.clone(),
             auction_instance.clone(),
             &ExecuteMsg::Withdraw {
-                amount_opposite: Uint128::from(10u64),
-                amount_cntrn: Uint128::from(10u64),
+                amount_stable: Uint128::from(10u64),
+                amount_volatile: Uint128::from(10u64),
             },
             &[],
         )
@@ -1998,16 +1992,13 @@ fn test_add_liquidity_to_astroport_pool() {
         Uint128::from(242189994u64),
         state_resp.total_cntrn_deposited
     );
-    assert_eq!(
-        Uint128::from(6530319u64),
-        state_resp.total_opposite_deposited
-    );
+    assert_eq!(Uint128::from(6530319u64), state_resp.total_usdc_deposited);
     assert_eq!(
         Some(Uint128::from(39769057u64)),
         state_resp.lp_shares_minted
     );
     assert!(!state_resp.is_lp_staked);
-    assert!(state_resp.generator_cntrn_per_share.is_zero());
+    assert!(state_resp.generator_ntrn_per_share.is_zero());
     assert_eq!(10611001u64, state_resp.pool_init_timestamp);
 
     // Astroport Pool :: Check response
@@ -2053,7 +2044,7 @@ fn test_add_liquidity_to_astroport_pool() {
         )
         .unwrap();
     assert_eq!(Uint128::from(100000000u64), user1info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(432423u64), user1info_resp.native_delegated);
+    assert_eq!(Uint128::from(432423u64), user1info_resp.usdc_delegated);
     assert_eq!(Some(Uint128::from(9527010u64)), user1info_resp.lp_shares);
     assert_eq!(
         Some(Uint128::from(367554u64)),
@@ -2072,7 +2063,7 @@ fn test_add_liquidity_to_astroport_pool() {
         )
         .unwrap();
     assert_eq!(Uint128::from(65435340u64), user2info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(454353u64), user2info_resp.native_delegated);
+    assert_eq!(Uint128::from(454353u64), user2info_resp.usdc_delegated);
     assert_eq!(Some(Uint128::from(6755923u64)), user2info_resp.lp_shares);
     assert_eq!(
         Some(Uint128::from(260645u64)),
@@ -2090,7 +2081,7 @@ fn test_add_liquidity_to_astroport_pool() {
         )
         .unwrap();
     assert_eq!(Uint128::from(76754654u64), user3info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(5643543u64), user3info_resp.native_delegated);
+    assert_eq!(Uint128::from(5643543u64), user3info_resp.usdc_delegated);
     assert_eq!(Some(Uint128::from(23486123u64)), user3info_resp.lp_shares);
     assert_eq!(
         Some(Uint128::from(906100u64)),
@@ -2218,7 +2209,7 @@ fn test_stake_lp_tokens() {
         .execute_contract(
             Addr::unchecked("not_owner".to_string()),
             auction_instance.clone(),
-            &ExecuteMsg::StakeLpTokens {},
+            &ExecuteMsg::LockLp {},
             &[],
         )
         .unwrap_err();
@@ -2230,7 +2221,7 @@ fn test_stake_lp_tokens() {
         .execute_contract(
             Addr::unchecked(auction_init_msg.owner.clone().unwrap()),
             auction_instance.clone(),
-            &ExecuteMsg::StakeLpTokens {},
+            &ExecuteMsg::LockLp {},
             &[],
         )
         .unwrap();
@@ -2252,10 +2243,7 @@ fn test_stake_lp_tokens() {
         Uint128::from(242189994u64),
         state_resp.total_cntrn_deposited
     );
-    assert_eq!(
-        Uint128::from(6530319u64),
-        state_resp.total_opposite_deposited
-    );
+    assert_eq!(Uint128::from(6530319u64), state_resp.total_usdc_deposited);
     assert_eq!(
         Some(Uint128::from(39769057u64)),
         state_resp.lp_shares_minted
@@ -2279,7 +2267,7 @@ fn test_stake_lp_tokens() {
         )
         .unwrap();
     assert_eq!(Uint128::from(100000000u64), user1info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(432423u64), user1info_resp.native_delegated);
+    assert_eq!(Uint128::from(432423u64), user1info_resp.usdc_delegated);
     assert_eq!(Some(Uint128::from(9527010u64)), user1info_resp.lp_shares);
     assert_eq!(Uint128::from(0u64), user1info_resp.claimed_lp_shares);
     assert_eq!(
@@ -2298,7 +2286,7 @@ fn test_stake_lp_tokens() {
         )
         .unwrap();
     assert_eq!(Uint128::from(65435340u64), user2info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(454353u64), user2info_resp.native_delegated);
+    assert_eq!(Uint128::from(454353u64), user2info_resp.usdc_delegated);
     assert_eq!(Some(Uint128::from(6755923u64)), user2info_resp.lp_shares);
     assert_eq!(Uint128::from(0u64), user2info_resp.claimed_lp_shares);
     assert_eq!(
@@ -2317,7 +2305,7 @@ fn test_stake_lp_tokens() {
         )
         .unwrap();
     assert_eq!(Uint128::from(76754654u64), user3info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(5643543u64), user3info_resp.native_delegated);
+    assert_eq!(Uint128::from(5643543u64), user3info_resp.usdc_delegated);
     assert_eq!(Some(Uint128::from(23486123u64)), user3info_resp.lp_shares);
     assert_eq!(Uint128::from(0u64), user3info_resp.claimed_lp_shares);
     assert_eq!(
@@ -2331,7 +2319,7 @@ fn test_stake_lp_tokens() {
         .execute_contract(
             Addr::unchecked(auction_init_msg.owner.unwrap()),
             auction_instance.clone(),
-            &ExecuteMsg::StakeLpTokens {},
+            &ExecuteMsg::LockLp {},
             &[],
         )
         .unwrap_err();
@@ -2504,7 +2492,7 @@ fn test_claim_rewards() {
     app.execute_contract(
         Addr::unchecked(auction_init_msg.owner.unwrap()),
         auction_instance.clone(),
-        &ExecuteMsg::StakeLpTokens {},
+        &ExecuteMsg::LockLp {},
         &[],
     )
     .unwrap();
@@ -2837,7 +2825,7 @@ fn test_withdraw_unlocked_lp_shares() {
     app.execute_contract(
         Addr::unchecked(auction_init_msg.owner.unwrap()),
         auction_instance.clone(),
-        &ExecuteMsg::StakeLpTokens {},
+        &ExecuteMsg::LockLp {},
         &[],
     )
     .unwrap();
