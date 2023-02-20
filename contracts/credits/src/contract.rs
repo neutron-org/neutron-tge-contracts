@@ -9,7 +9,6 @@ use cw2::set_contract_version;
 use cw20::BalanceResponse;
 use cw20_base::state as Cw20State;
 use cw20_base::state::BALANCES;
-use cw_utils::Expiration;
 
 use crate::msg::{
     AllocationResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
@@ -95,21 +94,6 @@ pub fn execute(
         ExecuteMsg::Withdraw {} => execute_withdraw(deps, env, info),
         ExecuteMsg::Burn { amount } => execute_burn(deps, env, info, amount),
         ExecuteMsg::BurnFrom { owner, amount } => execute_burn_from(deps, env, info, owner, amount),
-        ExecuteMsg::IncreaseAllowance {
-            spender,
-            amount,
-            expires,
-        } => execute_increase_allowance(deps, env, info, spender, amount, expires),
-        ExecuteMsg::DecreaseAllowance {
-            spender,
-            amount,
-            expires,
-        } => execute_decrease_allowance(deps, env, info, spender, amount, expires),
-        ExecuteMsg::TransferFrom {
-            owner,
-            recipient,
-            amount,
-        } => execute_transfer_from(deps, env, info, owner, recipient, amount),
         ExecuteMsg::Mint {} => execute_mint(deps, env, info),
     }
 }
@@ -197,10 +181,6 @@ pub fn execute_transfer(
         != config
             .airdrop_address
             .ok_or_else(|| StdError::generic_err("uninitialized"))?
-        && info.sender
-            != config
-                .lockdrop_address // TODO: why we have lockdrop_address access here? Since we do not have funds on lockdrop balance
-                .ok_or_else(|| StdError::generic_err("uninitialized"))?
     {
         return Err(Cw20ContractError::Unauthorized {});
     }
@@ -296,48 +276,6 @@ pub fn execute_burn_from(
     info.sender = deps.api.addr_validate(&owner)?;
 
     burn_and_send(deps, env, info, amount)
-}
-
-pub fn execute_increase_allowance(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    spender: String,
-    amount: Uint128,
-    expires: Option<Expiration>,
-) -> Result<Response, Cw20ContractError> {
-    ::cw20_base::allowances::execute_increase_allowance(deps, env, info, spender, amount, expires)
-}
-
-pub fn execute_decrease_allowance(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    spender: String,
-    amount: Uint128,
-    expires: Option<Expiration>,
-) -> Result<Response, Cw20ContractError> {
-    ::cw20_base::allowances::execute_decrease_allowance(deps, env, info, spender, amount, expires)
-}
-
-pub fn execute_transfer_from(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    owner: String,
-    recipient: String,
-    amount: Uint128,
-) -> Result<Response, Cw20ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-    if info.sender
-        != config
-            .lockdrop_address
-            .ok_or_else(|| StdError::generic_err("uninitialized"))?
-    {
-        return Err(Cw20ContractError::Unauthorized {});
-    }
-
-    ::cw20_base::allowances::execute_transfer_from(deps, env, info, owner, recipient, amount)
 }
 
 pub fn execute_mint(
@@ -559,7 +497,7 @@ mod tests {
             env.clone(),
             "somebody".to_string(),
             Uint128::new(amount),
-            vesting_start_time.unwrap_or(env.block.time.seconds()),
+            vesting_start_time.unwrap_or_else(|| env.block.time.seconds()),
             vesting_duration,
         );
 
@@ -1260,121 +1198,6 @@ mod tests {
                     operand2: "20000".to_string()
                 })))
             );
-        }
-    }
-
-    mod transfer_from {
-        use crate::contract::tests::_do_simple_instantiate;
-        use crate::contract::{
-            execute_increase_allowance, execute_mint, execute_transfer_from, DEPOSITED_SYMBOL,
-        };
-        use cosmwasm_std::testing::{mock_dependencies, mock_info};
-        use cosmwasm_std::{coins, Addr, Uint128};
-        use cw20_base::state::BALANCES;
-        use cw20_base::ContractError;
-
-        #[test]
-        fn works_with_allowance_set() {
-            // instantiate
-            let mut deps = mock_dependencies();
-            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
-
-            // mint
-            let minted_balance = 1_000_000_000;
-            let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
-            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
-            assert!(res.is_ok());
-
-            // set allowance
-            let airdrop_info = mock_info("airdrop_address", &[]);
-            let res = execute_increase_allowance(
-                deps.as_mut(),
-                env.clone(),
-                airdrop_info,
-                "lockdrop_address".to_string(),
-                Uint128::new(100),
-                None,
-            );
-
-            assert!(res.is_ok());
-
-            // transfer_from
-            let lockdrop_info = mock_info("lockdrop_address", &[]);
-            let res = execute_transfer_from(
-                deps.as_mut(),
-                env,
-                lockdrop_info,
-                "airdrop_address".to_string(),
-                "recipient_address".to_string(),
-                Uint128::new(50),
-            );
-            assert!(res.is_ok());
-
-            let recipient_balance = BALANCES
-                .load(&deps.storage, &Addr::unchecked("recipient_address"))
-                .unwrap();
-            assert_eq!(recipient_balance, Uint128::new(50));
-
-            let airdrop_balance = BALANCES
-                .load(&deps.storage, &Addr::unchecked("airdrop_address"))
-                .unwrap();
-            assert_eq!(airdrop_balance, Uint128::new(minted_balance - 50));
-        }
-
-        #[test]
-        fn does_not_transfer_without_allowance() {
-            // instantiate
-            let mut deps = mock_dependencies();
-            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
-
-            // mint
-            let minted_balance = 1_000_000_000;
-            let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
-            let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
-            assert!(res.is_ok());
-
-            // transfer_from
-            let other_info = mock_info("lockdrop_address", &[]);
-            let res = execute_transfer_from(
-                deps.as_mut(),
-                env,
-                other_info,
-                "airdrop_address".to_string(),
-                "recipient_address".to_string(),
-                Uint128::new(50),
-            );
-            assert_eq!(res, Err(ContractError::NoAllowance {}));
-        }
-
-        #[test]
-        fn only_lockdrop_can_transfer_from() {
-            // instantiate
-            let mut deps = mock_dependencies();
-            let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
-
-            // set allowance
-            let airdrop_info = mock_info("airdrop_address", &[]);
-            let res = execute_increase_allowance(
-                deps.as_mut(),
-                env.clone(),
-                airdrop_info,
-                "lockdrop_address".to_string(),
-                Uint128::new(100),
-                None,
-            );
-            assert!(res.is_ok());
-
-            let non_lockdrop_info = mock_info("non_lockdrop_address", &[]);
-            let res = execute_transfer_from(
-                deps.as_mut(),
-                env,
-                non_lockdrop_info,
-                "airdrop_address".to_string(),
-                "recipient_address".to_string(),
-                Uint128::new(50),
-            );
-
-            assert_eq!(res, Err(ContractError::Unauthorized {}));
         }
     }
 
