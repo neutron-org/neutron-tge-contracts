@@ -4,11 +4,11 @@ use astroport::factory::{
     QueryMsg as FactoryQueryMsg,
 };
 use astroport::generator::ExecuteMsg as GeneratorExecuteMsg;
+use astroport_periphery::airdrop::Cw20HookMsg as Cw20HookMsgAirdrop;
 use astroport_periphery::auction::{
     Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, QueryMsg, State, UpdateConfigMsg,
     UserInfoResponse,
 };
-
 use cosmwasm_std::{attr, to_binary, Addr, Binary, Coin, Timestamp, Uint128, Uint64};
 use cw20::Cw20ExecuteMsg;
 use cw_multi_test::{App, ContractWrapper, Executor};
@@ -275,7 +275,6 @@ fn init_all_contracts(
             new_config: astroport_periphery::lockdrop::UpdateConfigMsg {
                 auction_contract_address: Some(auction_instance.to_string()),
                 generator_address: None,
-                astro_token_address: None,
             },
         },
         &[],
@@ -371,9 +370,9 @@ fn instantiate_airdrop_lockdrop_contracts(
     ));
 
     let lockdrop_contract = Box::new(ContractWrapper::new(
-        astroport_lockdrop::contract::execute,
-        astroport_lockdrop::contract::instantiate,
-        astroport_lockdrop::contract::query,
+        neutron_lockdrop::contract::execute,
+        neutron_lockdrop::contract::instantiate,
+        neutron_lockdrop::contract::query,
     ));
 
     let airdrop_code_id = app.store_code(airdrop_contract);
@@ -392,11 +391,12 @@ fn instantiate_airdrop_lockdrop_contracts(
         init_timestamp: 1_000_00,
         deposit_window: 100_000_00,
         withdrawal_window: 5_000_00,
-        weekly_multiplier: 3,
-        weekly_divider: 51,
+        monthly_multiplier: 3,
+        monthly_divider: 51,
         min_lock_duration: 1u64,
         max_lock_duration: 52u64,
         max_positions_per_user: 24,
+        credit_contract: "credit_contract".to_string(),
     };
 
     let airdrop_instance = app
@@ -473,7 +473,6 @@ fn instantiate_airdrop_lockdrop_contracts(
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::UpdateConfig {
             new_config: astroport_periphery::lockdrop::UpdateConfigMsg {
-                astro_token_address: Some(astro_token_instance.clone().into_string()),
                 auction_contract_address: None,
                 generator_address: None,
             },
@@ -488,7 +487,7 @@ fn instantiate_airdrop_lockdrop_contracts(
         &Cw20ExecuteMsg::Send {
             amount: Uint128::from(100_000_00u64),
             contract: lockdrop_instance.to_string(),
-            msg: to_binary(&Cw20HookMsg::IncreaseCNtrnIncentives {}).unwrap(),
+            msg: to_binary(&Cw20HookMsg::IncreaseNTRNIncentives {}).unwrap(),
         },
         &[],
     )
@@ -1956,7 +1955,7 @@ fn test_add_liquidity_to_astroport_pool() {
         &Cw20ExecuteMsg::Send {
             amount: Uint128::new(100_000_000000),
             contract: auction_instance.to_string(),
-            msg: to_binary(&Cw20HookMsg::IncreaseCNtrnIncentives {}).unwrap(),
+            msg: to_binary(&Cw20HookMsg::IncreaseNTRNIncentives {}).unwrap(),
         },
         &[],
     )
@@ -2188,7 +2187,7 @@ fn test_stake_lp_tokens() {
         &Cw20ExecuteMsg::Send {
             amount: Uint128::new(100_000_000000),
             contract: auction_instance.to_string(),
-            msg: to_binary(&Cw20HookMsg::IncreaseCNtrnIncentives {}).unwrap(),
+            msg: to_binary(&Cw20HookMsg::IncreaseNTRNIncentives {}).unwrap(),
         },
         &[],
     )
@@ -2420,7 +2419,7 @@ fn test_claim_rewards() {
         &Cw20ExecuteMsg::Send {
             amount: Uint128::new(100_000_000000),
             contract: auction_instance.to_string(),
-            msg: to_binary(&Cw20HookMsg::IncreaseCNtrnIncentives {}).unwrap(),
+            msg: to_binary(&Cw20HookMsg::IncreaseNTRNIncentives {}).unwrap(),
         },
         &[],
     )
@@ -2806,7 +2805,7 @@ fn test_withdraw_unlocked_lp_shares() {
         &Cw20ExecuteMsg::Send {
             amount: Uint128::new(100_000_000000),
             contract: auction_instance.to_string(),
-            msg: to_binary(&Cw20HookMsg::IncreaseCNtrnIncentives {}).unwrap(),
+            msg: to_binary(&Cw20HookMsg::IncreaseNTRNIncentives {}).unwrap(),
         },
         &[],
     )

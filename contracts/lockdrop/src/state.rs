@@ -2,6 +2,7 @@ use astroport::common::OwnershipProposal;
 use astroport::generator::PoolInfoResponse;
 use astroport::generator::QueryMsg as GenQueryMsg;
 use astroport::restricted_vector::RestrictedVector;
+use astroport_periphery::lockdrop::PoolType;
 use astroport_periphery::lockdrop::{
     Config, LockupInfoV1, LockupInfoV2, PoolInfo, State, UserInfo,
 };
@@ -15,18 +16,13 @@ pub const CONFIG: Item<Config> = Item::new("config");
 pub const STATE: Item<State> = Item::new("state");
 
 /// Key is an Terraswap LP token address
-pub const ASSET_POOLS: Map<&Addr, PoolInfo> = Map::new("LiquidityPools");
+pub const ASSET_POOLS: Map<PoolType, PoolInfo> = Map::new("LiquidityPools");
 /// Key is an user address
 pub const USER_INFO: Map<&Addr, UserInfo> = Map::new("users");
 /// Key consists of an Terraswap LP token address, an user address, and a duration
-pub const LOCKUP_INFO: Map<(&Addr, &Addr, U64Key), LockupInfoV2> = Map::new("lockup_position");
+pub const LOCKUP_INFO: Map<(PoolType, &Addr, U64Key), LockupInfoV2> = Map::new("lockup_position");
 /// Old LOCKUP_INFO storage interface for backward compatibility
-pub const OLD_LOCKUP_INFO: Map<(&Addr, &Addr, U64Key), LockupInfoV1> = Map::new("lockup_position");
-/// Total received asset reward by lockdrop contract per lp token share
-pub const TOTAL_ASSET_REWARD_INDEX: Map<&Addr, Decimal256> = Map::new("total_asset_reward_index");
-/// Last used total asset reward index for user claim ( lp_addr -> user -> duration )
-pub const USERS_ASSET_REWARD_INDEX: Map<(&Addr, &Addr, U64Key), Decimal256> =
-    Map::new("users_asset_reward_index");
+pub const OLD_LOCKUP_INFO: Map<(PoolType, &Addr, U64Key), LockupInfoV1> = Map::new("lockup_position");
 
 pub trait CompatibleLoader<K, R> {
     fn compatible_load(&self, deps: Deps, key: K, generator: &Option<Addr>) -> StdResult<R>;
@@ -39,13 +35,13 @@ pub trait CompatibleLoader<K, R> {
     ) -> StdResult<Option<R>>;
 }
 
-impl CompatibleLoader<(&Addr, &Addr, U64Key), LockupInfoV2>
-    for Map<'_, (&Addr, &Addr, U64Key), LockupInfoV2>
+impl CompatibleLoader<(PoolType, &Addr, U64Key), LockupInfoV2>
+    for Map<'_, (PoolType, &Addr, U64Key), LockupInfoV2>
 {
     fn compatible_load(
         &self,
         deps: Deps,
-        key: (&Addr, &Addr, U64Key),
+        key: (PoolType, &Addr, U64Key),
         generator: &Option<Addr>,
     ) -> StdResult<LockupInfoV2> {
         self.load(deps.storage, key.clone()).or_else(|_| {
@@ -56,9 +52,7 @@ impl CompatibleLoader<(&Addr, &Addr, U64Key), LockupInfoV2>
             if !old_lockup_info.generator_proxy_debt.is_zero() {
                 let asset = ASSET_POOLS.load(deps.storage, key.0)?;
                 let astro_lp = asset
-                    .migration_info
-                    .expect("Pool should be migrated!")
-                    .astroport_lp_token;
+                    .pool;
                 let pool_info: PoolInfoResponse = deps.querier.query_wasm_smart(
                     generator,
                     &GenQueryMsg::PoolInfo {
@@ -80,8 +74,8 @@ impl CompatibleLoader<(&Addr, &Addr, U64Key), LockupInfoV2>
                 lp_units_locked: old_lockup_info.lp_units_locked,
                 astroport_lp_transferred: old_lockup_info.astroport_lp_transferred,
                 withdrawal_flag: old_lockup_info.withdrawal_flag,
-                astro_rewards: old_lockup_info.astro_rewards,
-                generator_astro_debt: old_lockup_info.generator_astro_debt,
+                ntrn_rewards: old_lockup_info.ntrn_rewards,
+                generator_ntrn_debt: old_lockup_info.generator_ntrn_debt,
                 generator_proxy_debt,
                 unlock_timestamp: old_lockup_info.unlock_timestamp,
             };
@@ -93,7 +87,7 @@ impl CompatibleLoader<(&Addr, &Addr, U64Key), LockupInfoV2>
     fn compatible_may_load(
         &self,
         deps: Deps,
-        key: (&Addr, &Addr, U64Key),
+        key: (PoolType, &Addr, U64Key),
         generator: &Option<Addr>,
     ) -> StdResult<Option<LockupInfoV2>> {
         if !OLD_LOCKUP_INFO.has(deps.storage, key.clone()) {

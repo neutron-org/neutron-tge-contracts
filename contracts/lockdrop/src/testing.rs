@@ -3,6 +3,9 @@ use astroport_periphery::lockdrop::{Config, ExecuteMsg, InstantiateMsg, QueryMsg
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
 use cosmwasm_std::{from_binary, Addr};
 
+const ATOM_LP_TOKEN_ADDR: &str = "atomLp";
+const USDC_LP_TOKEN_ADDR: &str = "usdcLp";
+
 #[test]
 fn update_owner() {
     let mut deps = mock_dependencies();
@@ -19,9 +22,12 @@ fn update_owner() {
         withdrawal_window: 500_000,
         min_lock_duration: 1u64,
         max_lock_duration: 52u64,
-        weekly_multiplier: 1u64,
-        weekly_divider: 12u64,
+        monthly_multiplier: 1u64,
+        monthly_divider: 12u64,
         max_positions_per_user: 14,
+        credit_contract: "credit_contract".to_string(),
+        atom_token: ATOM_LP_TOKEN_ADDR.to_string(),
+        usdc_token: USDC_LP_TOKEN_ADDR.to_string(),
     };
 
     // We can just call .unwrap() to assert this was a success
