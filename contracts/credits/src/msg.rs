@@ -67,9 +67,16 @@ pub enum QueryMsg {
     /// Returns the current balance of the given address, 0 if unset.
     #[returns(cw20::BalanceResponse)]
     Balance { address: String },
-    /// Returns the balance of the given address at a given block height, 0 if unset.
+    /// Returns the total supply at provided height, or current total supply if `height` is unset.
+    #[returns(TotalSupplyResponse)]
+    TotalSupplyAtHeight { height: Option<u64> },
+    /// Returns the balance of the given address at a given block height or current balance if `height` is unset.
+    /// Returns 0 if no balance found.
     #[returns(cw20::BalanceResponse)]
-    BalanceAtHeight { address: String, height: u64 },
+    BalanceAtHeight {
+        address: String,
+        height: Option<u64>,
+    },
     /// Returns metadata on the contract - name, decimals, supply, etc.
     #[returns(cw20::TokenInfoResponse)]
     TokenInfo {},
@@ -117,6 +124,12 @@ pub struct ConfigResponse {
     pub lockdrop_address: Option<Addr>,
     /// When can start withdrawing NTRN funds
     pub when_withdrawable: Timestamp,
+}
+
+#[cw_serde]
+pub struct TotalSupplyResponse {
+    // Total supply of CUNTRNs for specified block height
+    pub total_supply: Uint128,
 }
 
 #[cw_serde]

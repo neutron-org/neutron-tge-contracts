@@ -46,7 +46,7 @@ cosmwasm-storage = "1.1.3"
 cw-storage-plus = "1.0.1"
 cw2 = "1.0.1"
 cw20 = { version = "1.0.1" }
-cw20-base = { git = "https://github.com/neutron-org/cw-plus_balances-snapshots", rev = "b374f38508075b930077b57725549a12a0a37c00", features = ["library"] }
+cw20-base = { git = "https://github.com/neutron-org/cw-plus_balances-snapshots", rev = "099702818f285ecd7ff3b6ef97f4bf1fecef9099", features = ["library"] }
 cw-utils = "1.0.1"
 schemars = "0.8.10"
 serde = { version = "1.0.145", default-features = false, features = ["derive"] }

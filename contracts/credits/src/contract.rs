@@ -8,11 +8,11 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::BalanceResponse;
 use cw20_base::state as Cw20State;
-use cw20_base::state::BALANCES;
+use cw20_base::state::{BALANCES, TOKEN_INFO};
 
 use crate::msg::{
     AllocationResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
-    WithdrawableAmountResponse,
+    TotalSupplyResponse, WithdrawableAmountResponse,
 };
 use crate::state::{Allocation, Config, Schedule, ALLOCATIONS, CONFIG};
 
@@ -33,7 +33,7 @@ const VESTING_CLIFF: u64 = 0;
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, Cw20ContractError> {
@@ -65,7 +65,7 @@ pub fn instantiate(
             cap: None,
         }),
     };
-    Cw20State::TOKEN_INFO.save(deps.storage, &info)?;
+    TOKEN_INFO.save(deps.storage, &info, env.block.height)?;
 
     Ok(Response::new())
 }
@@ -304,6 +304,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Balance { address } => {
             to_binary(&::cw20_base::contract::query_balance(deps, address)?)
         }
+        QueryMsg::TotalSupplyAtHeight { height } => {
+            to_binary(&query_total_supply_at_height(deps, height)?)
+        }
         QueryMsg::BalanceAtHeight { address, height } => {
             to_binary(&query_balance_at_height(deps, address, height)?)
         }
@@ -349,10 +352,33 @@ fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     })
 }
 
-fn query_balance_at_height(deps: Deps, address: String, height: u64) -> StdResult<BalanceResponse> {
-    let balance = BALANCES
-        .may_load_at_height(deps.storage, &deps.api.addr_validate(&address)?, height)?
-        .unwrap_or_default();
+fn query_total_supply_at_height(
+    deps: Deps,
+    maybe_height: Option<u64>,
+) -> StdResult<TotalSupplyResponse> {
+    let total_supply = match maybe_height {
+        Some(height) => TOKEN_INFO.may_load_at_height(deps.storage, height)?,
+        None => TOKEN_INFO.may_load(deps.storage)?,
+    }
+    .map(|info| info.total_supply)
+    .unwrap_or_default();
+
+    Ok(TotalSupplyResponse { total_supply })
+}
+
+fn query_balance_at_height(
+    deps: Deps,
+    address: String,
+    maybe_height: Option<u64>,
+) -> StdResult<BalanceResponse> {
+    let balance = match maybe_height {
+        Some(height) => {
+            BALANCES.may_load_at_height(deps.storage, &deps.api.addr_validate(&address)?, height)?
+        }
+        None => BALANCES.may_load(deps.storage, &deps.api.addr_validate(&address)?)?,
+    }
+    .unwrap_or_default();
+
     Ok(BalanceResponse { balance })
 }
 

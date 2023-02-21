@@ -176,7 +176,7 @@ dependencies = [
  "cw-utils 1.0.1",
  "cw2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cw20 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "cw20-base 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00)",
+ "cw20-base 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=099702818f285ecd7ff3b6ef97f4bf1fecef9099)",
  "schemars",
  "serde",
  "thiserror",
@@ -373,7 +373,7 @@ dependencies = [
 [[package]]
 name = "cw2"
 version = "1.0.1"
-source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00#b374f38508075b930077b57725549a12a0a37c00"
+source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=099702818f285ecd7ff3b6ef97f4bf1fecef9099#099702818f285ecd7ff3b6ef97f4bf1fecef9099"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -411,7 +411,7 @@ dependencies = [
 [[package]]
 name = "cw20"
 version = "1.0.1"
-source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00#b374f38508075b930077b57725549a12a0a37c00"
+source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=099702818f285ecd7ff3b6ef97f4bf1fecef9099#099702818f285ecd7ff3b6ef97f4bf1fecef9099"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -440,14 +440,14 @@ dependencies = [
 [[package]]
 name = "cw20-base"
 version = "1.0.1"
-source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00#b374f38508075b930077b57725549a12a0a37c00"
+source = "git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=099702818f285ecd7ff3b6ef97f4bf1fecef9099#099702818f285ecd7ff3b6ef97f4bf1fecef9099"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus 1.0.1",
  "cw-utils 1.0.1",
- "cw2 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00)",
- "cw20 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=b374f38508075b930077b57725549a12a0a37c00)",
+ "cw2 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=099702818f285ecd7ff3b6ef97f4bf1fecef9099)",
+ "cw20 1.0.1 (git+https://github.com/neutron-org/cw-plus_balances-snapshots?rev=099702818f285ecd7ff3b6ef97f4bf1fecef9099)",
  "schemars",
  "semver",
  "serde",
