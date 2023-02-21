@@ -1,5 +1,4 @@
 pub mod contract;
-mod migration;
 pub mod raw_queries;
 pub mod state;
 

@@ -1,18 +1,66 @@
+use std::fmt::Display;
 use std::ops::Add;
 
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, Uint256, WasmMsg,
+    from_slice, to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, Uint256, WasmMsg,
 };
 use cw20::Cw20ReceiveMsg;
+use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+// TODO: implement display trait
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub enum PoolType {
+    USDC,
+    ATOM,
+}
+
+impl PoolType {
+    fn bytes(&self) -> &[u8] {
+        match self {
+            PoolType::USDC => "usdc".as_bytes(),
+            PoolType::ATOM => "atom".as_bytes(),
+        }
+    }
+}
+
+impl KeyDeserialize for PoolType {
+    type Output = PoolType;
+
+    #[inline(always)]
+    fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
+        from_slice(&value)
+    }
+}
+
+impl<'a> PrimaryKey<'a> for PoolType {
+    type Prefix = ();
+    type SubPrefix = ();
+    type Suffix = Self;
+    type SuperSuffix = Self;
+
+    fn key(&self) -> Vec<Key> {
+        vec![Key::Ref(self.bytes())]
+    }
+}
+
+impl<'a> Prefixer<'a> for PoolType {
+    fn prefix(&self) -> Vec<Key> {
+        vec![Key::Ref(self.bytes())]
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     /// Account which can update config
     pub owner: Option<String>,
+    /// Address of ATOM/NTRN token
+    pub atom_token: String,
+    /// Address of USDC/NTRN token
+    pub usdc_token: String,
     /// Credit cintract address
     pub credit_contract: String,
     /// Timestamp when Contract will start accepting LP Token deposits
@@ -26,9 +74,9 @@ pub struct InstantiateMsg {
     /// Max. no. of weeks allowed for lockup
     pub max_lock_duration: u64,
     /// Lockdrop Reward multiplier
-    pub weekly_multiplier: u64,
+    pub monthly_multiplier: u64,
     /// Lockdrop Reward divider
-    pub weekly_divider: u64,
+    pub monthly_divider: u64,
     /// Max lockup positions a user can have
     pub max_positions_per_user: u32,
 }
@@ -44,6 +92,12 @@ pub struct UpdateConfigMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    IncreaseLockupFor {
+        user_address: String,
+        pool_type: PoolType,
+        amount: Uint128,
+        duration: u64,
+    },
     // Receive hook used to accept LP Token deposits
     Receive(Cw20ReceiveMsg),
     IncreaseNTRNIncentives {},
@@ -51,30 +105,23 @@ pub enum ExecuteMsg {
     UpdateConfig {
         new_config: UpdateConfigMsg,
     },
-    // Called by the bootstrap auction contract when liquidity is added to the
-    // Pool to enable ASTRO withdrawals by users
-    EnableClaims {},
-    // ADMIN Function ::: Add new Pool (Only Terraswap Pools)
-    InitializePool {
-        terraswap_lp_token: String,
-        incentives_share: u64,
-    },
+
     // ADMIN Function ::: To Migrate liquidity from terraswap to astroport
-    MigrateLiquidity {
-        terraswap_lp_token: String,
-        astroport_pool_addr: String,
-        slippage_tolerance: Option<Decimal>,
-    },
+    // MigrateLiquidity {
+    //     terraswap_lp_token: String,
+    //     astroport_pool_addr: String,
+    //     slippage_tolerance: Option<Decimal>,
+    // },
     // ADMIN Function ::: To stake LP Tokens with the generator contract
-    StakeLpTokens {
-        terraswap_lp_token: String,
-    },
+    // StakeLpTokens {
+    //     pool_type: PoolType,
+    // },
     // Facilitates ASTRO reward withdrawal which have not been delegated to bootstrap auction along with optional Unlock (can be forceful)
     // If withdraw_lp_stake is true and force_unlock is false, it Unlocks the lockup position if its lockup duration has concluded
     // If both withdraw_lp_stake and force_unlock are true, it forcefully unlocks the positon. user needs to approve ASTRO Token to
     // be transferred by the lockdrop contract to itself for forceful unlock
     ClaimRewardsAndOptionallyUnlock {
-        terraswap_lp_token: String,
+        pool_type: PoolType,
         duration: u64,
         withdraw_lp_stake: bool,
     },
@@ -97,30 +144,36 @@ pub enum ExecuteMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Cw20HookMsg {
-    /// Open a new user position or add to an existing position (Cw20ReceiveMsg)
-    IncreaseLockup { duration: u64 },
+    // Called by the bootstrap auction contract when liquidity is added to the
+    // Pool to enable ASTRO withdrawals by users
+    // EnableClaims {},
+    // ADMIN Function ::: Add new Pool (Only Terraswap Pools)
+    InitializePool {
+        pool_type: PoolType,
+        incentives_share: u64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CallbackMsg {
     UpdatePoolOnDualRewardsClaim {
-        terraswap_lp_token: Addr,
+        pool_type: PoolType,
         prev_ntrn_balance: Uint128,
         prev_proxy_reward_balances: Vec<Asset>,
     },
     WithdrawUserLockupRewardsCallback {
-        terraswap_lp_token: Addr,
+        pool_type: PoolType,
         user_address: Addr,
         duration: u64,
         withdraw_lp_stake: bool,
     },
-    WithdrawLiquidityFromTerraswapCallback {
-        terraswap_lp_token: Addr,
-        astroport_pool: Addr,
-        prev_assets: [terraswap::asset::Asset; 2],
-        slippage_tolerance: Option<Decimal>,
-    },
+    // WithdrawLiquidityFromTerraswapCallback {
+    //     terraswap_lp_token: Addr,
+    //     astroport_pool: Addr,
+    //     prev_assets: [terraswap::asset::Asset; 2],
+    //     slippage_tolerance: Option<Decimal>,
+    // },
 }
 
 // Modified from
@@ -141,7 +194,7 @@ pub enum QueryMsg {
     Config {},
     State {},
     Pool {
-        terraswap_lp_token: String,
+        pool_type: PoolType,
     },
     UserInfo {
         address: String,
@@ -151,7 +204,7 @@ pub enum QueryMsg {
     },
     LockUpInfo {
         user_address: String,
-        terraswap_lp_token: String,
+        pool_type: PoolType,
         duration: u64,
     },
 }
@@ -177,18 +230,18 @@ pub struct Config {
     pub generator: Option<Addr>,
     /// Timestamp when Contract will start accepting LP Token deposits
     pub init_timestamp: u64,
-    /// Number of seconds during which lockup deposits will be accepted
-    pub deposit_window: u64,
+    /// Number of seconds during which lockup positions be accepted
+    pub lock_window: u64,
     /// Withdrawal Window Length :: Post the deposit window
-    pub withdrawal_window: u64,
+    // pub withdrawal_window: u64,
     /// Min. no. of weeks allowed for lockup
     pub min_lock_duration: u64,
     /// Max. no. of weeks allowed for lockup
     pub max_lock_duration: u64,
     /// Lockdrop Reward multiplier
-    pub weekly_multiplier: u64,
+    pub montly_multiplier: u64,
     /// Lockdrop Reward divider
-    pub weekly_divider: u64,
+    pub monthly_divider: u64,
     /// Total NTRN lockdrop incentives to be distributed among the users
     pub lockdrop_incentives: Uint128,
     /// Max lockup positions a user can have
@@ -199,15 +252,13 @@ pub struct Config {
 pub struct State {
     /// Total ASTRO incentives share
     pub total_incentives_share: u64,
-    /// Boolean value indicating if the user can withdraw their ASTRO rewards or not
-    pub are_claims_allowed: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PoolInfo {
-    pub terraswap_pool: Addr,
-    pub terraswap_amount_in_lockups: Uint128,
-    pub migration_info: Option<MigrationInfo>,
+    pub pool: Addr,
+    pub amount_in_lockups: Uint128,
+    // pub migration_info: Option<MigrationInfo>,
     /// Share of total ASTRO incentives allocated to this pool
     pub incentives_share: u64,
     /// Weighted LP Token balance used to calculate ASTRO rewards a particular user can claim
@@ -268,10 +319,8 @@ pub struct LockupInfoV2 {
 pub struct StateResponse {
     /// Total ASTRO incentives share
     pub total_incentives_share: u64,
-    /// Boolean value indicating if the user can withdraw thier ASTRO rewards or not
-    pub are_claims_allowed: bool,
     /// Vector containing LP addresses for all the supported LP Pools
-    pub supported_pairs_list: Vec<Addr>,
+    pub supported_pairs_list: Vec<PoolType>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -302,14 +351,14 @@ pub struct UserInfoWithListResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct LockUpInfoSummary {
-    pub pool_address: String,
+    pub pool_type: PoolType,
     pub duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct LockUpInfoResponse {
     /// Terraswap LP token
-    pub terraswap_lp_token: Addr,
+    pub pool_type: PoolType,
     /// Terraswap LP units locked by the user
     pub lp_units_locked: Uint128,
     /// Boolean value indicating if the user's has withdrawn funds post the only 1 withdrawal limit cutoff
@@ -329,7 +378,7 @@ pub struct LockUpInfoResponse {
     pub unlock_timestamp: u64,
     /// User's Astroport LP units, calculated as lp_units_locked (terraswap) / total LP units locked (terraswap) * Astroport LP units minted post migration
     pub astroport_lp_units: Option<Uint128>,
-    pub astroport_lp_token: Option<Addr>,
+    pub astroport_lp_token: Addr,
     pub astroport_lp_transferred: Option<Uint128>,
 }
 

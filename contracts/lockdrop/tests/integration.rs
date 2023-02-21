@@ -454,8 +454,8 @@ fn instantiate_lockdrop_contract(app: &mut App, owner: Addr) -> (Addr, Instantia
         withdrawal_window: 500_000,
         min_lock_duration: 1u64,
         max_lock_duration: 52u64,
-        weekly_multiplier: 1u64,
-        weekly_divider: 12u64,
+        monthly_multiplier: 1u64,
+        monthly_divider: 12u64,
         max_positions_per_user: 14,
         credit_contract: "credit_contract".to_string(),
     };
@@ -964,7 +964,7 @@ fn proper_initialization_lockdrop() {
     assert_eq!(None, resp.auction_contract);
     assert_eq!(None, resp.generator);
     assert_eq!(lockdrop_instantiate_msg.init_timestamp, resp.init_timestamp);
-    assert_eq!(lockdrop_instantiate_msg.deposit_window, resp.deposit_window);
+    assert_eq!(lockdrop_instantiate_msg.deposit_window, resp.lock_window);
     assert_eq!(
         lockdrop_instantiate_msg.withdrawal_window,
         resp.withdrawal_window
@@ -978,10 +978,10 @@ fn proper_initialization_lockdrop() {
         resp.max_lock_duration
     );
     assert_eq!(
-        lockdrop_instantiate_msg.weekly_multiplier,
-        resp.weekly_multiplier
+        lockdrop_instantiate_msg.monthly_multiplier,
+        resp.montly_multiplier
     );
-    assert_eq!(lockdrop_instantiate_msg.weekly_divider, resp.weekly_divider);
+    assert_eq!(lockdrop_instantiate_msg.monthly_divider, resp.monthly_divider);
     assert_eq!(Uint128::zero(), resp.lockdrop_incentives);
 
     // Check state
@@ -1206,8 +1206,8 @@ fn test_initialize_pool() {
             },
         )
         .unwrap();
-    assert_eq!("pair_instance".to_string(), pool_resp.terraswap_pool);
-    assert_eq!(Uint128::zero(), pool_resp.terraswap_amount_in_lockups);
+    assert_eq!("pair_instance".to_string(), pool_resp.pool);
+    assert_eq!(Uint128::zero(), pool_resp.amount_in_lockups);
     assert_eq!(None, pool_resp.migration_info);
     assert_eq!(10000000u64, pool_resp.incentives_share);
     assert_eq!(CUint256::zero(), pool_resp.weighted_amount);
@@ -1284,8 +1284,8 @@ fn test_initialize_pool() {
             },
         )
         .unwrap();
-    assert_eq!("pair_instance#2".to_string(), pool_resp.terraswap_pool);
-    assert_eq!(Uint128::zero(), pool_resp.terraswap_amount_in_lockups);
+    assert_eq!("pair_instance#2".to_string(), pool_resp.pool);
+    assert_eq!(Uint128::zero(), pool_resp.amount_in_lockups);
     assert_eq!(None, pool_resp.migration_info);
     assert_eq!(10400000u64, pool_resp.incentives_share);
 
@@ -1527,7 +1527,7 @@ fn test_increase_lockup() {
         .unwrap();
     assert_eq!(
         Uint128::from(10000u128),
-        pool_resp.terraswap_amount_in_lockups
+        pool_resp.amount_in_lockups
     );
     assert_eq!(CUint256::from(13333u64), pool_resp.weighted_amount);
     assert_eq!(10000000u64, pool_resp.incentives_share);
@@ -1595,7 +1595,7 @@ fn test_increase_lockup() {
         .unwrap();
     assert_eq!(
         Uint128::from(20000u128),
-        pool_resp.terraswap_amount_in_lockups
+        pool_resp.amount_in_lockups
     );
     assert_eq!(CUint256::from(30833u64), pool_resp.weighted_amount);
 
@@ -1664,7 +1664,7 @@ fn test_increase_lockup() {
         .unwrap();
     assert_eq!(
         Uint128::from(20010u128),
-        pool_resp.terraswap_amount_in_lockups
+        pool_resp.amount_in_lockups
     );
 
     // check User Info
@@ -1995,7 +1995,7 @@ fn test_migrate_liquidity() {
 
     assert_eq!(
         terraswap_balance_resp.balance,
-        pool_resp_before_migration.terraswap_amount_in_lockups
+        pool_resp_before_migration.amount_in_lockups
     );
     assert_eq!(
         CUint256::from(1750000000u128),
@@ -2040,12 +2040,12 @@ fn test_migrate_liquidity() {
         .unwrap();
 
     assert_eq!(
-        pool_resp_before_migration.terraswap_pool,
-        pool_resp_after_migration.terraswap_pool
+        pool_resp_before_migration.pool,
+        pool_resp_after_migration.pool
     );
     assert_eq!(
-        pool_resp_before_migration.terraswap_amount_in_lockups,
-        pool_resp_after_migration.terraswap_amount_in_lockups
+        pool_resp_before_migration.amount_in_lockups,
+        pool_resp_after_migration.amount_in_lockups
     );
     assert_eq!(
         pool_resp_before_migration.incentives_share,
@@ -2306,7 +2306,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
 
     assert_eq!(
         terraswap_balance_resp.balance,
-        pool_resp_before_migration.terraswap_amount_in_lockups
+        pool_resp_before_migration.amount_in_lockups
     );
     assert_eq!(
         CUint256::from(1750000000u128),
@@ -2351,12 +2351,12 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         .unwrap();
 
     assert_eq!(
-        pool_resp_before_migration.terraswap_pool,
-        pool_resp_after_migration.terraswap_pool
+        pool_resp_before_migration.pool,
+        pool_resp_after_migration.pool
     );
     assert_eq!(
-        pool_resp_before_migration.terraswap_amount_in_lockups,
-        pool_resp_after_migration.terraswap_amount_in_lockups
+        pool_resp_before_migration.amount_in_lockups,
+        pool_resp_after_migration.amount_in_lockups
     );
     assert_eq!(
         pool_resp_before_migration.incentives_share,

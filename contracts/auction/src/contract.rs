@@ -11,7 +11,6 @@ use astroport_periphery::auction::{
     State, UpdateConfigMsg, UserInfo, UserInfoResponse,
 };
 use astroport_periphery::helpers::{build_approve_cw20_msg, cw20_get_balance};
-use astroport_periphery::lockdrop::ExecuteMsg::EnableClaims as LockdropEnableClaims;
 
 use crate::state::{CONFIG, STATE, USERS};
 use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, PairInfo};
@@ -1125,11 +1124,6 @@ pub fn update_state_on_liquidity_addition_to_pool(
 
         // Activate lockdrop and airdrop claims
         let cosmos_msgs = vec![
-            CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: config.lockdrop_contract_address.to_string(),
-                msg: to_binary(&LockdropEnableClaims {})?,
-                funds: vec![],
-            }),
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: config.airdrop_contract_address.to_string(),
                 msg: to_binary(&AirdropEnableClaims {})?,
