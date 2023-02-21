@@ -1107,7 +1107,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
         )
         .unwrap();
     assert_eq!(Uint128::from(100000000u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(0u64), user_resp.usdc_delegated);
+    assert_eq!(Uint128::from(0u64), user_resp.usdc_deposited);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
 
@@ -1143,7 +1143,7 @@ fn test_delegate_astro_tokens_from_airdrop() {
         )
         .unwrap();
     assert_eq!(Uint128::from(200000000u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(0u64), user_resp.usdc_delegated);
+    assert_eq!(Uint128::from(0u64), user_resp.usdc_deposited);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
 
@@ -1293,7 +1293,7 @@ fn test_delegate_astro_tokens_from_lockdrop() {
         )
         .unwrap();
     assert_eq!(Uint128::from(100000000u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(0u64), user_resp.usdc_delegated);
+    assert_eq!(Uint128::from(0u64), user_resp.usdc_deposited);
 
     // ######    SUCCESS :: ASTRO Successfully deposited again   ######
     app.execute_contract(
@@ -1515,7 +1515,7 @@ fn test_deposit_ust() {
         )
         .unwrap();
     assert_eq!(Uint128::from(0u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(10000u64), user_resp.usdc_delegated);
+    assert_eq!(Uint128::from(10000u64), user_resp.usdc_deposited);
     assert_eq!(None, user_resp.lp_shares);
     assert_eq!(None, user_resp.withdrawable_lp_shares);
 
@@ -1546,7 +1546,7 @@ fn test_deposit_ust() {
         )
         .unwrap();
     assert_eq!(Uint128::from(0u64), user_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(20000u64), user_resp.usdc_delegated);
+    assert_eq!(Uint128::from(20000u64), user_resp.usdc_deposited);
 
     // finish claim period for deposit failure
     app.update_block(|b| {
@@ -1685,7 +1685,7 @@ fn test_withdraw_ust() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(0u64), user_resp.usdc_delegated);
+    assert_eq!(Uint128::from(0u64), user_resp.usdc_deposited);
 
     app.execute_contract(
         user1_address.clone(),
@@ -1748,7 +1748,7 @@ fn test_withdraw_ust() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(5000u64), user_resp.usdc_delegated);
+    assert_eq!(Uint128::from(5000u64), user_resp.usdc_deposited);
 
     // ######    ERROR :: Max 1 withdrawal allowed during current window   ######
 
@@ -1821,7 +1821,7 @@ fn test_withdraw_ust() {
             },
         )
         .unwrap();
-    assert_eq!(Uint128::from(8000u64), user_resp.usdc_delegated);
+    assert_eq!(Uint128::from(8000u64), user_resp.usdc_deposited);
 
     // ######    ERROR :: Max 1 withdrawal allowed during current window   ######
 
@@ -2044,7 +2044,7 @@ fn test_add_liquidity_to_astroport_pool() {
         )
         .unwrap();
     assert_eq!(Uint128::from(100000000u64), user1info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(432423u64), user1info_resp.usdc_delegated);
+    assert_eq!(Uint128::from(432423u64), user1info_resp.usdc_deposited);
     assert_eq!(Some(Uint128::from(9527010u64)), user1info_resp.lp_shares);
     assert_eq!(
         Some(Uint128::from(367554u64)),
@@ -2063,7 +2063,7 @@ fn test_add_liquidity_to_astroport_pool() {
         )
         .unwrap();
     assert_eq!(Uint128::from(65435340u64), user2info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(454353u64), user2info_resp.usdc_delegated);
+    assert_eq!(Uint128::from(454353u64), user2info_resp.usdc_deposited);
     assert_eq!(Some(Uint128::from(6755923u64)), user2info_resp.lp_shares);
     assert_eq!(
         Some(Uint128::from(260645u64)),
@@ -2081,7 +2081,7 @@ fn test_add_liquidity_to_astroport_pool() {
         )
         .unwrap();
     assert_eq!(Uint128::from(76754654u64), user3info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(5643543u64), user3info_resp.usdc_delegated);
+    assert_eq!(Uint128::from(5643543u64), user3info_resp.usdc_deposited);
     assert_eq!(Some(Uint128::from(23486123u64)), user3info_resp.lp_shares);
     assert_eq!(
         Some(Uint128::from(906100u64)),
@@ -2267,7 +2267,7 @@ fn test_stake_lp_tokens() {
         )
         .unwrap();
     assert_eq!(Uint128::from(100000000u64), user1info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(432423u64), user1info_resp.usdc_delegated);
+    assert_eq!(Uint128::from(432423u64), user1info_resp.usdc_deposited);
     assert_eq!(Some(Uint128::from(9527010u64)), user1info_resp.lp_shares);
     assert_eq!(Uint128::from(0u64), user1info_resp.claimed_lp_shares);
     assert_eq!(
@@ -2286,7 +2286,7 @@ fn test_stake_lp_tokens() {
         )
         .unwrap();
     assert_eq!(Uint128::from(65435340u64), user2info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(454353u64), user2info_resp.usdc_delegated);
+    assert_eq!(Uint128::from(454353u64), user2info_resp.usdc_deposited);
     assert_eq!(Some(Uint128::from(6755923u64)), user2info_resp.lp_shares);
     assert_eq!(Uint128::from(0u64), user2info_resp.claimed_lp_shares);
     assert_eq!(
@@ -2305,7 +2305,7 @@ fn test_stake_lp_tokens() {
         )
         .unwrap();
     assert_eq!(Uint128::from(76754654u64), user3info_resp.cntrn_delegated);
-    assert_eq!(Uint128::from(5643543u64), user3info_resp.usdc_delegated);
+    assert_eq!(Uint128::from(5643543u64), user3info_resp.usdc_deposited);
     assert_eq!(Some(Uint128::from(23486123u64)), user3info_resp.lp_shares);
     assert_eq!(Uint128::from(0u64), user3info_resp.claimed_lp_shares);
     assert_eq!(

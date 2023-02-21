@@ -2,15 +2,17 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
+    MessageInfo, Order, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 
 use astroport_periphery::auction::{
-    Config, ExecuteMsg, InstantiateMsg, LockDropExecute, MigrateMsg, PoolInfo, PriceFeedQuery,
-    PriceFeedResponse, QueryMsg, State, UpdateConfigMsg, UserInfoResponse, UserLpInfo,
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockDropExecute, MigrateMsg, PoolBalance,
+    PoolInfo, PriceFeedQuery, PriceFeedResponse, QueryMsg, State, UpdateConfigMsg,
+    UserInfoResponse, UserLpInfo,
 };
+use cw20::Cw20ExecuteMsg;
 
-use crate::state::{CONFIG, STATE, USERS};
+use crate::state::{get_users_store, CONFIG, STATE};
 use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo};
 use astroport::querier::query_token_balance;
 use cw2::set_contract_version;
@@ -60,8 +62,10 @@ pub fn instantiate(
             &msg.lockdrop_contract_address,
         )?,
         price_feed_contract: addr_validate_to_lower(deps.api, msg.price_feed_contract)?,
+        reserve_contract_address: addr_validate_to_lower(deps.api, &msg.reserve_contract_address)?,
+        vesting_contract_address: addr_validate_to_lower(deps.api, &msg.vesting_contract_address)?,
         pool_info: None,
-        lp_tokens_vesting_duration: msg.lp_tokens_vesting_duration,
+        lp_tokens_lock_window: msg.lp_tokens_lock_window,
         init_timestamp: msg.init_timestamp,
         deposit_window: msg.deposit_window,
         withdrawal_window: msg.withdrawal_window,
@@ -70,6 +74,7 @@ pub fn instantiate(
         ntrn_denom: msg.base_denom,
         min_exchange_rate_age: msg.min_exchange_rate,
         min_ntrn_amount: msg.min_ntrn_amount,
+        vesting_migration_pack_size: msg.vesting_migration_pack_size,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -114,25 +119,40 @@ pub fn execute(
             amount,
             period,
         } => execute_lock_lp_tokens(deps, env, info, asset, amount, period),
+        ExecuteMsg::Callback(msg) => execute_callback(deps, env, info, msg),
+    }
+}
+
+fn execute_callback(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    msg: CallbackMsg,
+) -> Result<Response, StdError> {
+    match msg {
+        CallbackMsg::FinalizePoolInitialization { prev_lp_balance } => {
+            execute_finalize_init_pool(deps, env, info, prev_lp_balance)
+        }
     }
 }
 
 pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
+    let users_store = get_users_store();
 
     // CHECK :: Auction deposit window open
     if !is_deposit_open(env.block.time.seconds(), &config) {
         return Err(StdError::generic_err("Deposit window closed"));
     }
 
-    let mut stable_amount = Uint128::zero();
-    let mut volatile_amount = Uint128::zero();
+    let mut usdc_amount = Uint128::zero();
+    let mut atom_amount = Uint128::zero();
 
     for fund in info.funds.iter() {
         if fund.denom == config.usdc_denom {
-            stable_amount = fund.amount;
+            usdc_amount = fund.amount;
         } else if fund.denom == config.atom_denom {
-            volatile_amount = fund.amount;
+            atom_amount = fund.amount;
         } else {
             return Err(StdError::generic_err(format!(
                 "Invalid denom. Expected {} or {}",
@@ -140,7 +160,7 @@ pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Res
             )));
         }
     }
-    if stable_amount.is_zero() && volatile_amount.is_zero() {
+    if usdc_amount.is_zero() && atom_amount.is_zero() {
         return Err(StdError::generic_err(format!(
             "You must send at least one of {} or {}",
             config.usdc_denom, config.atom_denom
@@ -148,25 +168,25 @@ pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Res
     }
 
     let mut state = STATE.load(deps.storage)?;
-    let mut user_info = USERS
+    let mut user_info = users_store
         .may_load(deps.storage, &info.sender)?
         .unwrap_or_default();
 
     // UPDATE STATE
-    state.total_usdc_deposited += stable_amount;
-    state.total_atom_deposited += volatile_amount;
-    user_info.usdc_deposited += stable_amount;
-    user_info.atom_deposited += volatile_amount;
+    state.total_usdc_deposited += usdc_amount;
+    state.total_atom_deposited += atom_amount;
+    user_info.usdc_deposited += usdc_amount;
+    user_info.atom_deposited += atom_amount;
 
     // SAVE UPDATED STATE
     STATE.save(deps.storage, &state)?;
-    USERS.save(deps.storage, &info.sender, &user_info)?;
+    users_store.save(deps.storage, &info.sender, &user_info)?;
 
     Ok(Response::new().add_attributes(vec![
         attr("action", "Auction::ExecuteMsg::Deposit"),
         attr("user", info.sender.to_string()),
-        attr("stable_deposited", stable_amount),
-        attr("volatile_deposited", volatile_amount),
+        attr("usdc_deposited", usdc_amount),
+        attr("_deposited", atom_amount),
     ]))
 }
 
@@ -218,7 +238,6 @@ pub fn execute_update_config(
     new_config: UpdateConfigMsg,
 ) -> StdResult<Response> {
     let mut config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
     let mut attributes = vec![attr("action", "update_config")];
 
     // CHECK :: ONLY OWNER CAN CALL THIS FUNCTION
@@ -273,7 +292,8 @@ pub fn execute_withdraw(
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
     let user_address = info.sender;
-    let mut user_info = USERS.load(deps.storage, &user_address)?;
+    let users_store = get_users_store();
+    let mut user_info = users_store.load(deps.storage, &user_address)?;
 
     // CHECK :: Has the user already withdrawn during the current window
     if user_info.withdrawn {
@@ -335,7 +355,7 @@ pub fn execute_withdraw(
 
     // SAVE UPDATED STATE
     STATE.save(deps.storage, &state)?;
-    USERS.save(deps.storage, &user_address, &user_info)?;
+    users_store.save(deps.storage, &user_address, &user_info)?;
 
     Ok(res.add_attributes(vec![
         attr("action", "Auction::ExecuteMsg::Withdraw"),
@@ -387,9 +407,9 @@ pub fn get_lp_size(token1: Uint128, token2: Uint128) -> Uint128 {
 pub fn get_contract_balances(
     deps: Deps,
     address: &Addr,
-    usdc_denom: String,
-    atom_denom: String,
-    ntrn_denom: String,
+    usdc_denom: &String,
+    atom_denom: &String,
+    ntrn_denom: &String,
 ) -> Result<(Uint128, Uint128, Uint128), StdError> {
     let balances = deps.querier.query_all_balances(address)?;
 
@@ -398,16 +418,29 @@ pub fn get_contract_balances(
     let mut ntrn_amount = Uint128::zero();
 
     for balance in balances {
-        if balance.denom == usdc_denom {
+        if balance.denom == *usdc_denom {
             usdc_amount = balance.amount;
-        } else if balance.denom == atom_denom {
+        } else if balance.denom == *atom_denom {
             atom_amount = balance.amount;
-        } else if balance.denom == ntrn_denom {
+        } else if balance.denom == *ntrn_denom {
             ntrn_amount = balance.amount;
         }
     }
 
     Ok((usdc_amount, atom_amount, ntrn_amount))
+}
+
+pub fn get_lp_balances(
+    deps: Deps,
+    owner_address: &Addr,
+    ntrn_usdc_lp_token_address: &Addr,
+    ntrn_atom_lp_token_address: &Addr,
+) -> Result<(Uint128, Uint128), StdError> {
+    let usdc_lp_amount =
+        query_token_balance(&deps.querier, ntrn_usdc_lp_token_address, owner_address)?;
+    let atom_lp_amount =
+        query_token_balance(&deps.querier, ntrn_atom_lp_token_address, owner_address)?;
+    Ok((usdc_lp_amount, atom_lp_amount))
 }
 
 pub fn execute_set_pool_size(
@@ -418,7 +451,7 @@ pub fn execute_set_pool_size(
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
     // CHECK :: Can be executed once
-    if state.lp_stable_shares_minted.is_some() || state.lp_volatile_shares_minted.is_some() {
+    if state.lp_usdc_shares_minted.is_some() || state.lp_atom_shares_minted.is_some() {
         return Err(StdError::generic_err("Liquidity already added"));
     }
 
@@ -436,9 +469,9 @@ pub fn execute_set_pool_size(
     let (usdc_amount, atom_amount, ntrn_amount) = get_contract_balances(
         deps.as_ref(),
         &env.contract.address,
-        config.usdc_denom,
-        config.atom_denom,
-        config.ntrn_denom,
+        &config.usdc_denom,
+        &config.atom_denom,
+        &config.ntrn_denom,
     )?;
 
     let exchange_data: PriceFeedResponse = deps.querier.query_wasm_smart(
@@ -501,7 +534,7 @@ pub fn execute_init_pool(deps: DepsMut, env: Env, info: MessageInfo) -> Result<R
     }
 
     // CHECK :: Can be executed once
-    if state.lp_stable_shares_minted.is_some() || state.lp_volatile_shares_minted.is_some() {
+    if state.lp_usdc_shares_minted.is_some() || state.lp_atom_shares_minted.is_some() {
         return Err(StdError::generic_err("Liquidity already added"));
     }
 
@@ -512,8 +545,15 @@ pub fn execute_init_pool(deps: DepsMut, env: Env, info: MessageInfo) -> Result<R
         ));
     }
 
-    // let mut msgs = vec![];
+    if state.usdc_lp_size.is_zero() || state.atom_lp_size.is_zero() {
+        return Err(StdError::generic_err("Pool size has not been set"));
+    }
 
+    if !is_lock_window_closed(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err("Lock window is still open!"));
+    }
+
+    let mut msgs = vec![];
     if let Some(PoolInfo {
         ntrn_usdc_pool_address,
         ntrn_atom_pool_address,
@@ -524,66 +564,184 @@ pub fn execute_init_pool(deps: DepsMut, env: Env, info: MessageInfo) -> Result<R
         let (usdc_amount, atom_amount, ntrn_amount) = get_contract_balances(
             deps.as_ref(),
             &env.contract.address,
-            config.usdc_denom,
-            config.atom_denom,
-            config.ntrn_denom,
+            &config.usdc_denom,
+            &config.atom_denom,
+            &config.ntrn_denom,
         )?;
 
         // QUERY CURRENT LP TOKEN BALANCE (FOR SAFETY - IN ANY CASE)
-        let cur_st_lp_balance = query_token_balance(
-            &deps.querier,
-            ntrn_usdc_lp_token_address,
-            env.contract.address.clone(),
-        )?;
-        let cur_vl_lp_balance = query_token_balance(
-            &deps.querier,
-            ntrn_atom_lp_token_address,
-            env.contract.address.clone(),
+        let (cur_usdc_lp_balance, cur_atom_lp_balance) = get_lp_balances(
+            deps.as_ref(),
+            &env.contract.address,
+            &ntrn_usdc_lp_token_address,
+            &ntrn_atom_lp_token_address,
         )?;
 
-        let exchange_data: PriceFeedResponse = deps.querier.query_wasm_smart(
-            config.price_feed_contract,
-            &PriceFeedQuery::GetPrice {
-                symbols: vec!["USDC".to_string(), "ATOM".to_string()],
-            },
-        )?;
-        let usdc_to_atom_rate =
-            Decimal::from_ratio(exchange_data.prices[0], exchange_data.prices[1]);
+        msgs.push(build_provide_liquidity_to_lp_pool_msg(
+            ntrn_usdc_pool_address,
+            ntrn_amount,
+            config.ntrn_denom.clone(),
+            usdc_amount,
+            config.usdc_denom,
+        )?);
+        msgs.push(build_provide_liquidity_to_lp_pool_msg(
+            ntrn_atom_pool_address,
+            ntrn_amount,
+            config.ntrn_denom,
+            atom_amount,
+            config.atom_denom,
+        )?);
+        msgs.push(
+            CallbackMsg::FinalizePoolInitialization {
+                prev_lp_balance: PoolBalance {
+                    atom: cur_atom_lp_balance,
+                    usdc: cur_usdc_lp_balance,
+                },
+            }
+            .to_cosmos_msg(&env)?,
+        );
 
-        let all_in_usdc = Uint128::checked_add(usdc_amount, atom_amount * usdc_to_atom_rate)?;
-        let div_ratio = Decimal::from_ratio(usdc_amount, all_in_usdc);
-        let ntrn_to_usdc = ntrn_amount * div_ratio;
-        let ntrn_to_atom = ntrn_amount - ntrn_to_usdc;
-
-        // msgs.push(build_provide_liquidity_to_lp_pool_msg(
-        //     deps.as_ref(),
-        //     ntrn_usdc_pool_address,
-        //     base_coin.amount,
-        //     config.ntrn_denom,
-        //     usdc_amount.amount,
-        //     config.usdc_denom,
-        // )?);
-        // msgs.push(build_provide_liquidity_to_lp_pool_msg(
-        //     deps.as_ref(),
-        //     ntrn_atom_pool_address,
-        //     base_coin.amount,
-        //     config.ntrn_denom,
-        //     atom_amount.amount,
-        //     config.atom_denom,
-        // )?);
-
-        // msgs.push(
-        //     CallbackMsg::UpdateStateOnLiquidityAdditionToPool {
-        //         prev_lp_balance: cur_lp_balance,
-        //     }
-        //     .to_cosmos_msg(&env)?,
-        // );
         Ok(Response::new()
-            // .add_messages(msgs)
+            .add_messages(msgs)
             .add_attributes(vec![attr("action", "Auction::ExecuteMsg::InitPool")]))
     } else {
         Err(StdError::generic_err("Pool info isn't set yet!"))
     }
+}
+
+pub fn execute_finalize_init_pool(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+    prev_lp_balance: PoolBalance,
+) -> Result<Response, StdError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut state = STATE.load(deps.storage)?;
+    if let Some(PoolInfo {
+        ntrn_usdc_pool_address: _,
+        ntrn_atom_pool_address: _,
+        ntrn_usdc_lp_token_address,
+        ntrn_atom_lp_token_address,
+    }) = config.pool_info
+    {
+        let (cur_usdc_lp_balance, cur_atom_lp_balance) = get_lp_balances(
+            deps.as_ref(),
+            &env.contract.address,
+            &ntrn_usdc_lp_token_address,
+            &ntrn_atom_lp_token_address,
+        )?;
+
+        // send 50% of lp tokens to the reserve
+        let usdc_lp_to_reserve =
+            (cur_usdc_lp_balance - prev_lp_balance.usdc) / Uint128::from(2u128);
+        let atom_lp_to_reserve =
+            (cur_atom_lp_balance - prev_lp_balance.atom) / Uint128::from(2u128);
+
+        state.lp_atom_shares_minted = Some(cur_atom_lp_balance - prev_lp_balance.atom);
+        state.lp_usdc_shares_minted = Some(cur_usdc_lp_balance - prev_lp_balance.usdc);
+        state.pool_init_timestamp = env.block.time.seconds();
+        STATE.save(deps.storage, &state)?;
+
+        let msgs = vec![
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: ntrn_usdc_lp_token_address.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: config.reserve_contract_address.to_string(),
+                    amount: usdc_lp_to_reserve,
+                })?,
+            }),
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: ntrn_atom_lp_token_address.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: config.reserve_contract_address.to_string(),
+                    amount: atom_lp_to_reserve,
+                })?,
+            }),
+        ];
+
+        Ok(Response::new().add_messages(msgs).add_attributes(vec![
+            attr("action", "Auction::ExecuteMsg::FinalizePoolInitialization"),
+            attr("usdc_lp_to_reserve", usdc_lp_to_reserve),
+            attr("atom_lp_to_reserve", atom_lp_to_reserve),
+        ]))
+    } else {
+        return Err(StdError::generic_err("Pool info isn't set yet!"));
+    }
+}
+
+fn execute_migrate_to_vesting(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    amount: Uint128,
+) -> Result<Response, StdError> {
+    let config = CONFIG.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
+    let users_store = get_users_store();
+    let ux = users_store
+        .idx
+        .vested
+        .range(deps.storage, None, None, Order::Ascending)
+        .take(config.vesting_migration_pack_size);
+
+    let mut msgs = vec![];
+    for u in ux {
+        match u {
+            Ok((user_addr, user)) => {
+                let user_lp_balance = get_user_lp_info(
+                    user.usdc_deposited,
+                    user.atom_deposited,
+                    state.total_usdc_deposited,
+                    state.total_atom_deposited,
+                    state.usdc_lp_size,
+                    state.atom_lp_size,
+                );
+
+                let vest_atom_lp_amount = user_lp_balance.atom_lp_amount - user.atom_lp_locked;
+                let vest_usdc_lp_amount = user_lp_balance.usdc_lp_amount - user.usdc_lp_locked;
+                if !vest_atom_lp_amount.is_zero() {
+                    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                        contract_addr: config.vesting_contract_address.to_string(),
+                        funds: vec![],
+                        msg: to_binary(&Cw20ExecuteMsg::Send {
+                            contract: config.vesting_contract_address.to_string(),
+                            amount: vest_atom_lp_amount,
+                            msg: to_binary(&VestingExecuteMsg::MigrateVesting {
+                                recipient: user_addr.to_string(),
+                                amount: vest_atom_lp_amount,
+                            })?,
+                        })?,
+                    }));
+                }
+                if !vest_usdc_lp_amount.is_zero() {
+                    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                        contract_addr: config.vesting_contract_address.to_string(),
+                        funds: vec![],
+                        msg: to_binary(&Cw20ExecuteMsg::Send {
+                            contract: config.vesting_contract_address.to_string(),
+                            amount: vest_usdc_lp_amount,
+                            msg: to_binary(&VestingExecuteMsg::MigrateVesting {
+                                recipient: user_addr.to_string(),
+                                amount: vest_usdc_lp_amount,
+                            })?,
+                        })?,
+                    }));
+                }
+                user.is_vested = true;
+                users_store.save(deps.storage, &user_addr, &user)?;
+            }
+            Err(e) => {
+                return Err(StdError::generic_err(format!(
+                    "Error while iterating over users: {}",
+                    e
+                )));
+            }
+        }
+    }
+
+    Ok(Response::new().add_messages(msgs))
 }
 
 /// Builds provide liquidity to pool message.
@@ -601,7 +759,6 @@ pub fn execute_init_pool(deps: DepsMut, env: Env, info: MessageInfo) -> Result<R
 /// * **other_denom** is an object of type [`String`].
 
 fn build_provide_liquidity_to_lp_pool_msg(
-    deps: Deps,
     pool_address: Addr,
     base_amount: Uint128,
     base_denom: String,
@@ -611,13 +768,13 @@ fn build_provide_liquidity_to_lp_pool_msg(
     let base = Asset {
         amount: base_amount,
         info: AssetInfo::NativeToken {
-            denom: String::from(base_denom),
+            denom: String::from(base_denom.clone()),
         },
     };
     let other = Asset {
         amount: other_amount,
         info: AssetInfo::NativeToken {
-            denom: String::from(other_denom),
+            denom: String::from(other_denom.clone()),
         },
     };
 
@@ -625,7 +782,7 @@ fn build_provide_liquidity_to_lp_pool_msg(
         contract_addr: pool_address.to_string(),
         funds: vec![
             Coin {
-                denom: String::from(base_denom),
+                denom: String::from(base_denom.clone()),
                 amount: base_amount,
             },
             Coin {
@@ -662,8 +819,8 @@ pub fn get_user_lp_info(
     };
 
     UserLpInfo {
-        atom_lp_amount,
-        usdc_lp_amount,
+        atom_lp_amount: atom_lp_amount / Uint128::from(2_u128),
+        usdc_lp_amount: usdc_lp_amount / Uint128::from(2_u128),
     }
 }
 
@@ -676,15 +833,16 @@ pub fn get_user_lp_info(
 /// * **info** is an object of type [`MessageInfo`].
 pub fn execute_lock_lp_tokens(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     asset: String,
     amount: Uint128,
     period: u16,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
-    let user_info = USERS.load(deps.storage, &info.sender)?;
+    let mut state = STATE.load(deps.storage)?;
+    let users_store = get_users_store();
+    let mut user_info = users_store.load(deps.storage, &info.sender)?;
 
     // CHECK :: Only admin can call this function
     if info.sender != config.owner {
@@ -699,15 +857,11 @@ pub fn execute_lock_lp_tokens(
         return Err(StdError::generic_err("Pool size isn't set yet!"));
     }
 
+    if is_lock_window_closed(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err("Lock window is closed!"));
+    }
+
     let (usdc_denom, atom_denom) = (config.usdc_denom.clone(), config.atom_denom.clone());
-
-    if asset == usdc_denom && user_info.usdc_deposited.is_zero() {
-        return Err(StdError::generic_err("No USDC deposited!"));
-    }
-
-    if asset == atom_denom && user_info.atom_deposited.is_zero() {
-        return Err(StdError::generic_err("No ATOM deposited!"));
-    }
 
     if asset != usdc_denom && asset != atom_denom {
         return Err(StdError::generic_err(format!(
@@ -716,15 +870,49 @@ pub fn execute_lock_lp_tokens(
         )));
     }
 
+    let user_lp_info = get_user_lp_info(
+        user_info.usdc_deposited,
+        user_info.atom_deposited,
+        state.total_usdc_deposited,
+        state.total_atom_deposited,
+        state.usdc_lp_size,
+        state.atom_lp_size,
+    );
+
+    if asset == usdc_denom {
+        if user_info.usdc_deposited.is_zero() {
+            return Err(StdError::generic_err("No USDC deposited!"));
+        }
+        if amount > user_lp_info.usdc_lp_amount - user_info.usdc_lp_locked {
+            return Err(StdError::generic_err("Not enough USDC LP!"));
+        }
+        user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_add(amount)?;
+        state.usdc_lp_locked = state.usdc_lp_locked.checked_add(amount)?;
+    }
+
+    if asset == atom_denom {
+        if user_info.atom_deposited.is_zero() {
+            return Err(StdError::generic_err("No ATOM deposited!"));
+        }
+        if amount > user_lp_info.atom_lp_amount - user_info.atom_lp_locked {
+            return Err(StdError::generic_err("Not enough ATOM LP!"));
+        }
+        user_info.atom_lp_locked += user_info.atom_lp_locked.checked_add(amount)?;
+        state.atom_lp_locked = state.atom_lp_locked.checked_add(amount)?;
+    }
+
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.lockdrop_contract_address.to_string(),
         funds: vec![],
-        msg: to_binary(&LockDropExecute::LockLp {
+        msg: to_binary(&LockDropExecute::IncreaseLockupFor {
             asset: asset.clone(),
             amount,
             period,
         })?,
     });
+
+    users_store.save(deps.storage, &info.sender, &user_info)?;
+    STATE.save(deps.storage, &state)?;
 
     Ok(Response::new().add_message(msg).add_attributes(vec![
         attr("action", "lock_lp_tokens"),
@@ -744,6 +932,14 @@ fn are_windows_closed(current_timestamp: u64, config: &Config) -> bool {
     current_timestamp >= window_end
 }
 
+fn is_lock_window_closed(current_timestamp: u64, config: &Config) -> bool {
+    let lock_window_end = config.init_timestamp
+        + config.deposit_window
+        + config.withdrawal_window
+        + config.lp_tokens_lock_window;
+    current_timestamp >= lock_window_end
+}
+
 /// Returns User's Info
 /// ## Params
 /// * **deps** is an object of type [`Deps`].
@@ -752,9 +948,10 @@ fn are_windows_closed(current_timestamp: u64, config: &Config) -> bool {
 ///
 /// * **user_info** is an object of type [`UserInfo`].
 fn query_user_info(deps: Deps, _env: Env, user_address: String) -> StdResult<UserInfoResponse> {
-    let mut state = STATE.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
+    let users_store = get_users_store();
     let user_address = addr_validate_to_lower(deps.api, &user_address)?;
-    let mut user_info = USERS
+    let user_info = users_store
         .may_load(deps.storage, &user_address)?
         .unwrap_or_default();
 
@@ -768,13 +965,11 @@ fn query_user_info(deps: Deps, _env: Env, user_address: String) -> StdResult<Use
     );
 
     // User Info Response
-    let mut user_info_response = UserInfoResponse {
-        usdc_delegated: user_info.usdc_deposited,
-        atom_delegated: Uint128::zero(),
+    Ok(UserInfoResponse {
+        usdc_deposited: user_info.usdc_deposited,
+        atom_deposited: user_info.atom_deposited,
         withdrawn: user_info.withdrawn,
         usdc_lp_amount: user_lp_info.usdc_lp_amount,
         atom_lp_amount: user_lp_info.atom_lp_amount,
-    };
-
-    Ok(user_info_response)
+    })
 }

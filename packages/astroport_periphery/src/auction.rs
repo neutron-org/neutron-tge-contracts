@@ -1,4 +1,4 @@
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg};
+use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -8,7 +8,9 @@ pub struct InstantiateMsg {
     pub price_feed_contract: String,
     pub airdrop_contract_address: String,
     pub lockdrop_contract_address: String,
-    pub lp_tokens_vesting_duration: u64,
+    pub reserve_contract_address: String,
+    pub vesting_contract_address: String,
+    pub lp_tokens_lock_window: u64,
     pub init_timestamp: u64,
     pub deposit_window: u64,
     pub withdrawal_window: u64,
@@ -19,6 +21,7 @@ pub struct InstantiateMsg {
     pub min_lock_period: u16,
     pub min_exchange_rate: u64,
     pub min_ntrn_amount: Uint128,
+    pub vesting_migration_pack_size: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -58,35 +61,26 @@ pub enum ExecuteMsg {
         amount: Uint128,
         period: u16,
     },
-    // Callback(CallbackMsg),
+    Callback(CallbackMsg),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CallbackMsg {
-    UpdateStateOnRewardClaim {
-        prev_astro_balance: Uint128,
-    },
-    UpdateStateOnLiquidityAdditionToPool {
-        prev_lp_balance: Uint128,
-    },
-    WithdrawUserRewardsCallback {
-        user_address: Addr,
-        withdraw_lp_shares: Option<Uint128>,
-    },
+    FinalizePoolInitialization { prev_lp_balance: PoolBalance },
 }
 
 // // Modified from
 // // https://github.com/CosmWasm/cosmwasm-plus/blob/v0.2.3/packages/cw20/src/receiver.rs#L15
-// impl CallbackMsg {
-//     pub fn to_cosmos_msg(&self, env: &Env) -> StdResult<CosmosMsg> {
-//         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
-//             contract_addr: env.contract.address.to_string(),
-//             msg: to_binary(&ExecuteMsg::Callback(self.clone()))?,
-//             funds: vec![],
-//         }))
-//     }
-// }
+impl CallbackMsg {
+    pub fn to_cosmos_msg(&self, env: &Env) -> StdResult<CosmosMsg> {
+        Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: env.contract.address.to_string(),
+            msg: to_binary(&ExecuteMsg::Callback(self.clone()))?,
+            funds: vec![],
+        }))
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -106,20 +100,24 @@ pub struct Config {
     pub owner: Addr,
     /// Airdrop Contract address
     pub airdrop_contract_address: Addr,
+    /// Reserve Contract address
+    pub reserve_contract_address: Addr,
+    /// Vesting Contract address
+    pub vesting_contract_address: Addr,
     /// Lockdrop Contract address
     pub lockdrop_contract_address: Addr,
     /// Price feed contract address
     pub price_feed_contract: Addr,
     /// Pool info
     pub pool_info: Option<PoolInfo>,
-    ///  Number of seconds over which LP Tokens are vested
-    pub lp_tokens_vesting_duration: u64,
     /// Timestamp since which USDC / ATOM deposits will be allowed
     pub init_timestamp: u64,
     /// Number of seconds post init_timestamp during which deposits / withdrawals will be allowed
     pub deposit_window: u64,
     /// Number of seconds post deposit_window completion during which only withdrawals are allowed
     pub withdrawal_window: u64,
+    /// Lock window for LP tokens
+    pub lp_tokens_lock_window: u64,
     /// Base denom
     pub ntrn_denom: String,
     /// Stable denom
@@ -130,21 +128,23 @@ pub struct Config {
     pub min_ntrn_amount: Uint128,
     /// min exchange freshness rate (seconds)
     pub min_exchange_rate_age: u64,
+    /// vesting migration users pack size
+    pub vesting_migration_pack_size: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct State {
-    /// Total cNTRN tokens delegated to the contract
+    /// Total NTRN tokens delegated to the contract
     pub total_cntrn_deposited: Uint128,
-    /// Total Stable deposited to the contract
+    /// Total USDC deposited to the contract
     pub total_usdc_deposited: Uint128,
-    /// Total Volatile deposited to the contract
+    /// Total ATOM deposited to the contract
     pub total_atom_deposited: Uint128,
     pub is_rest_lp_vested: bool,
     /// Total LP shares minted post liquidity addition to the cNTRN-Native Pool
-    pub lp_stable_shares_minted: Option<Uint128>,
-    pub lp_volatile_shares_minted: Option<Uint128>,
+    pub lp_usdc_shares_minted: Option<Uint128>,
+    pub lp_atom_shares_minted: Option<Uint128>,
     /// Timestamp at which liquidity was added to the NTRN-Stable and NTRN-Volatile LP Pool
     pub pool_init_timestamp: u64,
     /// USDC NTRN amount
@@ -155,26 +155,37 @@ pub struct State {
     pub usdc_lp_size: Uint128,
     /// LP count for ATOM amount
     pub atom_lp_size: Uint128,
+    /// locked USDC LP shares
+    pub usdc_lp_locked: Uint128,
+    /// locked ATOM LP shares
+    pub atom_lp_locked: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct UserInfo {
+    pub address: String,
     /// Total Stable delegated by the user
     pub usdc_deposited: Uint128,
     /// Total Volatile delegated by the user
     pub atom_deposited: Uint128,
     /// Withdrawal counter to capture if the user already withdrew tokens during the "only withdrawals" window
     pub withdrawn: bool,
+    /// LP shares locked for the user
+    pub usdc_lp_locked: Uint128,
+    /// LP shares locked for the user
+    pub atom_lp_locked: Uint128,
+    /// Vested?
+    pub is_vested: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct UserInfoResponse {
     /// Total stable delegated by the user
-    pub usdc_delegated: Uint128,
+    pub usdc_deposited: Uint128,
     /// Total stable delegated by the user
-    pub atom_delegated: Uint128,
+    pub atom_deposited: Uint128,
     /// Withdrawal counter to capture if the user already withdrew UST during the "only withdrawals" window
     pub withdrawn: bool,
     pub atom_lp_amount: Uint128,
@@ -197,7 +208,7 @@ pub struct PriceFeedResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LockDropExecute {
-    LockLp {
+    IncreaseLockupFor {
         asset: String,
         amount: Uint128,
         period: u16,
@@ -209,4 +220,11 @@ pub enum LockDropExecute {
 pub struct UserLpInfo {
     pub atom_lp_amount: Uint128,
     pub usdc_lp_amount: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct PoolBalance {
+    pub atom: Uint128,
+    pub usdc: Uint128,
 }
