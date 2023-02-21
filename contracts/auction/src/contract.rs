@@ -8,7 +8,7 @@ use cosmwasm_std::{
 use astroport_periphery::auction::{
     CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockDropExecute, MigrateMsg, PoolBalance,
     PoolInfo, PriceFeedQuery, PriceFeedResponse, QueryMsg, State, UpdateConfigMsg,
-    UserInfoResponse, UserLpInfo,
+    UserInfoResponse, UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
 };
 use cw20::Cw20ExecuteMsg;
 
@@ -63,7 +63,14 @@ pub fn instantiate(
         )?,
         price_feed_contract: addr_validate_to_lower(deps.api, msg.price_feed_contract)?,
         reserve_contract_address: addr_validate_to_lower(deps.api, &msg.reserve_contract_address)?,
-        vesting_contract_address: addr_validate_to_lower(deps.api, &msg.vesting_contract_address)?,
+        vesting_usdc_contract_address: addr_validate_to_lower(
+            deps.api,
+            &msg.vesting_usdc_contract_address,
+        )?,
+        vesting_atom_contract_address: addr_validate_to_lower(
+            deps.api,
+            &msg.vesting_atom_contract_address,
+        )?,
         pool_info: None,
         lp_tokens_lock_window: msg.lp_tokens_lock_window,
         init_timestamp: msg.init_timestamp,
@@ -119,6 +126,7 @@ pub fn execute(
             amount,
             period,
         } => execute_lock_lp_tokens(deps, env, info, asset, amount, period),
+        ExecuteMsg::MigrateToVesting {} => execute_migrate_to_vesting(deps, env, info),
         ExecuteMsg::Callback(msg) => execute_callback(deps, env, info, msg),
     }
 }
@@ -673,72 +681,82 @@ pub fn execute_finalize_init_pool(
 
 fn execute_migrate_to_vesting(
     deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    amount: Uint128,
+    _env: Env,
+    _info: MessageInfo,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let state = STATE.load(deps.storage)?;
     let users_store = get_users_store();
-    let ux = users_store
+    let users = users_store
         .idx
         .vested
         .range(deps.storage, None, None, Order::Ascending)
-        .take(config.vesting_migration_pack_size);
+        .take(config.vesting_migration_pack_size)
+        .collect::<StdResult<Vec<_>>>()?;
 
-    let mut msgs = vec![];
-    for u in ux {
-        match u {
-            Ok((user_addr, user)) => {
-                let user_lp_balance = get_user_lp_info(
-                    user.usdc_deposited,
-                    user.atom_deposited,
-                    state.total_usdc_deposited,
-                    state.total_atom_deposited,
-                    state.usdc_lp_size,
-                    state.atom_lp_size,
-                );
+    if state.pool_init_timestamp == 0 {
+        return Err(StdError::generic_err("Pool isn't initialized yet!"));
+    }
+    if users.len() == 0 {
+        return Err(StdError::generic_err("No users to migrate!"));
+    }
+    let mut atom_users: Vec<VestingMigrationUser> = vec![];
+    let mut usdc_users: Vec<VestingMigrationUser> = vec![];
+    let mut atom_lp_amount = Uint128::zero();
+    let mut usdc_lp_amount = Uint128::zero();
 
-                let vest_atom_lp_amount = user_lp_balance.atom_lp_amount - user.atom_lp_locked;
-                let vest_usdc_lp_amount = user_lp_balance.usdc_lp_amount - user.usdc_lp_locked;
-                if !vest_atom_lp_amount.is_zero() {
-                    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                        contract_addr: config.vesting_contract_address.to_string(),
-                        funds: vec![],
-                        msg: to_binary(&Cw20ExecuteMsg::Send {
-                            contract: config.vesting_contract_address.to_string(),
-                            amount: vest_atom_lp_amount,
-                            msg: to_binary(&VestingExecuteMsg::MigrateVesting {
-                                recipient: user_addr.to_string(),
-                                amount: vest_atom_lp_amount,
-                            })?,
-                        })?,
-                    }));
-                }
-                if !vest_usdc_lp_amount.is_zero() {
-                    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                        contract_addr: config.vesting_contract_address.to_string(),
-                        funds: vec![],
-                        msg: to_binary(&Cw20ExecuteMsg::Send {
-                            contract: config.vesting_contract_address.to_string(),
-                            amount: vest_usdc_lp_amount,
-                            msg: to_binary(&VestingExecuteMsg::MigrateVesting {
-                                recipient: user_addr.to_string(),
-                                amount: vest_usdc_lp_amount,
-                            })?,
-                        })?,
-                    }));
-                }
-                user.is_vested = true;
-                users_store.save(deps.storage, &user_addr, &user)?;
-            }
-            Err(e) => {
-                return Err(StdError::generic_err(format!(
-                    "Error while iterating over users: {}",
-                    e
-                )));
-            }
+    for (user_addr, mut user) in users {
+        let user_lp_balance = get_user_lp_info(
+            user.usdc_deposited,
+            user.atom_deposited,
+            state.total_usdc_deposited,
+            state.total_atom_deposited,
+            state.usdc_lp_size,
+            state.atom_lp_size,
+        );
+
+        let vest_atom_lp_amount = user_lp_balance.atom_lp_amount - user.atom_lp_locked;
+        let vest_usdc_lp_amount = user_lp_balance.usdc_lp_amount - user.usdc_lp_locked;
+
+        if !vest_atom_lp_amount.is_zero() {
+            atom_users.push(VestingMigrationUser {
+                address: user_addr.to_string(),
+                amount: vest_atom_lp_amount,
+            });
+            atom_lp_amount += vest_atom_lp_amount;
         }
+        if !vest_usdc_lp_amount.is_zero() {
+            usdc_users.push(VestingMigrationUser {
+                address: user_addr.to_string(),
+                amount: vest_usdc_lp_amount,
+            });
+            usdc_lp_amount += vest_usdc_lp_amount;
+        }
+        user.is_vested = true;
+        users_store.save(deps.storage, &user_addr, &user)?;
+    }
+    let mut msgs = vec![];
+    if !atom_lp_amount.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: config.vesting_atom_contract_address.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Send {
+                contract: config.vesting_usdc_contract_address.to_string(),
+                amount: atom_lp_amount,
+                msg: to_binary(&VestingExecuteMsg::MigrateVestingUsers { users: atom_users })?,
+            })?,
+        }));
+    }
+    if !usdc_lp_amount.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: config.vesting_usdc_contract_address.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Send {
+                contract: config.vesting_usdc_contract_address.to_string(),
+                amount: usdc_lp_amount,
+                msg: to_binary(&VestingExecuteMsg::MigrateVestingUsers { users: usdc_users })?,
+            })?,
+        }));
     }
 
     Ok(Response::new().add_messages(msgs))

@@ -9,7 +9,8 @@ pub struct InstantiateMsg {
     pub airdrop_contract_address: String,
     pub lockdrop_contract_address: String,
     pub reserve_contract_address: String,
-    pub vesting_contract_address: String,
+    pub vesting_usdc_contract_address: String,
+    pub vesting_atom_contract_address: String,
     pub lp_tokens_lock_window: u64,
     pub init_timestamp: u64,
     pub deposit_window: u64,
@@ -33,13 +34,13 @@ pub struct UpdateConfigMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct PoolInfo {
-    ///  NTRN-STABLE LP Pool address
+    ///  NTRN-USDC LP Pool address
     pub ntrn_usdc_pool_address: Addr,
-    ///  NTRN-VOL LP Pool address
+    ///  NTRN-ATOM LP Pool address
     pub ntrn_atom_pool_address: Addr,
-    ///  NTRN-NATIVE LP Token address
+    ///  NTRN-USDC LP Token address
     pub ntrn_usdc_lp_token_address: Addr,
-    ///  NTRN-VOL LP Token address
+    ///  NTRN-ATOM LP Token address
     pub ntrn_atom_lp_token_address: Addr,
 }
 
@@ -61,6 +62,7 @@ pub enum ExecuteMsg {
         amount: Uint128,
         period: u16,
     },
+    MigrateToVesting {},
     Callback(CallbackMsg),
 }
 
@@ -102,8 +104,10 @@ pub struct Config {
     pub airdrop_contract_address: Addr,
     /// Reserve Contract address
     pub reserve_contract_address: Addr,
-    /// Vesting Contract address
-    pub vesting_contract_address: Addr,
+    /// Vesting LP-USDC Contract address
+    pub vesting_usdc_contract_address: Addr,
+    /// Vesting LP-ATOM Contract address
+    pub vesting_atom_contract_address: Addr,
     /// Lockdrop Contract address
     pub lockdrop_contract_address: Addr,
     /// Price feed contract address
@@ -135,8 +139,6 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct State {
-    /// Total NTRN tokens delegated to the contract
-    pub total_cntrn_deposited: Uint128,
     /// Total USDC deposited to the contract
     pub total_usdc_deposited: Uint128,
     /// Total ATOM deposited to the contract
@@ -227,4 +229,17 @@ pub struct UserLpInfo {
 pub struct PoolBalance {
     pub atom: Uint128,
     pub usdc: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct VestingMigrationUser {
+    pub address: String,
+    pub amount: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VestingExecuteMsg {
+    MigrateVestingUsers { users: Vec<VestingMigrationUser> },
 }
