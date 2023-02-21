@@ -62,6 +62,11 @@ pub enum ExecuteMsg {
         amount: Uint128,
         period: u16,
     },
+    WithdrawLp {
+        asset: String,
+        amount: Uint128,
+        period: u16,
+    },
     MigrateToVesting {},
     Callback(CallbackMsg),
 }
@@ -211,6 +216,11 @@ pub struct PriceFeedResponse {
 #[serde(rename_all = "snake_case")]
 pub enum LockDropExecute {
     IncreaseLockupFor {
+        asset: String,
+        amount: Uint128,
+        period: u16,
+    },
+    WithdrawFromLockup {
         asset: String,
         amount: Uint128,
         period: u16,

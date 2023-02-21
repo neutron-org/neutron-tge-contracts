@@ -126,6 +126,11 @@ pub fn execute(
             amount,
             period,
         } => execute_lock_lp_tokens(deps, env, info, asset, amount, period),
+        ExecuteMsg::WithdrawLp {
+            asset,
+            amount,
+            period,
+        } => execute_withdraw_lp_tokens(deps, env, info, asset, amount, period),
         ExecuteMsg::MigrateToVesting {} => execute_migrate_to_vesting(deps, env, info),
         ExecuteMsg::Callback(msg) => execute_callback(deps, env, info, msg),
     }
@@ -862,15 +867,6 @@ pub fn execute_lock_lp_tokens(
     let users_store = get_users_store();
     let mut user_info = users_store.load(deps.storage, &info.sender)?;
 
-    // CHECK :: Only admin can call this function
-    if info.sender != config.owner {
-        return Err(StdError::generic_err("Unauthorized"));
-    }
-
-    if asset != config.usdc_denom && asset != config.atom_denom {
-        return Err(StdError::generic_err("Invalid asset"));
-    }
-
     if state.atom_ntrn_size.is_zero() || state.usdc_ntrn_size.is_zero() {
         return Err(StdError::generic_err("Pool size isn't set yet!"));
     }
@@ -934,6 +930,74 @@ pub fn execute_lock_lp_tokens(
 
     Ok(Response::new().add_message(msg).add_attributes(vec![
         attr("action", "lock_lp_tokens"),
+        attr("asset", asset),
+        attr("amount", amount),
+        attr("period", period.to_string()),
+    ]))
+}
+
+/// Lock LP tokens with the LockDrop contract back to auction contract
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
+pub fn execute_withdraw_lp_tokens(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    asset: String,
+    amount: Uint128,
+    period: u16,
+) -> Result<Response, StdError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut state = STATE.load(deps.storage)?;
+    let users_store = get_users_store();
+    let mut user_info = users_store.load(deps.storage, &info.sender)?;
+
+    if state.atom_ntrn_size.is_zero() || state.usdc_ntrn_size.is_zero() {
+        return Err(StdError::generic_err("Pool size isn't set yet!"));
+    }
+
+    if is_lock_window_closed(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err("Lock window is closed!"));
+    }
+
+    let (usdc_denom, atom_denom) = (config.usdc_denom.clone(), config.atom_denom.clone());
+
+    if asset != usdc_denom && asset != atom_denom {
+        return Err(StdError::generic_err(format!(
+            "{} is not supported yet!",
+            asset
+        )));
+    }
+
+    if asset == usdc_denom {
+        user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_sub(amount)?;
+        state.usdc_lp_locked = state.usdc_lp_locked.checked_sub(amount)?;
+    }
+
+    if asset == atom_denom {
+        user_info.atom_lp_locked += user_info.atom_lp_locked.checked_sub(amount)?;
+        state.atom_lp_locked = state.atom_lp_locked.checked_sub(amount)?;
+    }
+
+    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: config.lockdrop_contract_address.to_string(),
+        funds: vec![],
+        msg: to_binary(&LockDropExecute::IncreaseLockupFor {
+            asset: asset.clone(),
+            amount,
+            period,
+        })?,
+    });
+
+    users_store.save(deps.storage, &info.sender, &user_info)?;
+    STATE.save(deps.storage, &state)?;
+
+    Ok(Response::new().add_message(msg).add_attributes(vec![
+        attr("action", "withdraw_lp_tokens"),
         attr("asset", asset),
         attr("amount", amount),
         attr("period", period.to_string()),
