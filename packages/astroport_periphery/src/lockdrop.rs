@@ -105,6 +105,12 @@ pub enum ExecuteMsg {
     UpdateConfig {
         new_config: UpdateConfigMsg,
     },
+    // Function to facilitate LP Token withdrawals from lockups
+    WithdrawFromLockup {
+        pool_type: PoolType,
+        duration: u64,
+        amount: Uint128,
+    },
 
     // ADMIN Function ::: To Migrate liquidity from terraswap to astroport
     // MigrateLiquidity {

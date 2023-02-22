@@ -1,4 +1,8 @@
+use std::cmp::min;
 use std::convert::TryInto;
+use std::ops::Add;
+use std::os::unix::ucred;
+use std::str::FromStr;
 
 use astroport::asset::{addr_validate_to_lower, pair_info_by_pool, Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
@@ -14,7 +18,7 @@ use cosmwasm_std::{
     Storage, SubMsg, Uint128, Uint256, WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
+use cw20::{Balance, BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use cw_storage_plus::Path;
 
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
@@ -30,6 +34,8 @@ use astroport_periphery::U64Key;
 use crate::state::{
     CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE, USER_INFO,
 };
+
+const AIRDROP_REWARDS_MULTIPLIER: &str = "2.5";
 
 const SECONDS_PER_MONTH: u64 = 86400 * 30;
 
@@ -229,6 +235,11 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             amount,
             duration,
         } => handle_increase_lockup(deps, env, info, user_address, pool_type, duration, amount),
+        ExecuteMsg::WithdrawFromLockup {
+            pool_type,
+            duration,
+            amount,
+        } => handle_withdraw_from_lockup(deps, env, info, pool_type, duration, amount),
         ExecuteMsg::UpdateConfig { new_config } => todo!(),
     }
 }
@@ -688,6 +699,99 @@ pub fn handle_increase_lockup(
     ]))
 }
 
+/// Withdraws LP Tokens from an existing Lockup position. Returns a default object of type [`Response`].
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
+///
+/// * **pool_type** is an object of type [`PoolType`]. LiquidPool type - USDC or ATOM
+///
+/// * **duration** is an object of type [`u64`]. Duration of the lockup position from which withdrawal is to be made.
+///
+/// * **amount** is an object of type [`Uint128`]. Number of LP tokens to be withdrawn.
+pub fn handle_withdraw_from_lockup(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    pool_type: PoolType,
+    duration: u64,
+    amount: Uint128,
+) -> StdResult<Response> {
+    let config = CONFIG.load(deps.storage)?;
+
+    if Some(info.sender.clone()) != config.auction_contract {
+        return Err(StdError::generic_err("Unauthorized"));
+    }
+
+    // CHECK :: Valid Withdraw Amount
+    if amount.is_zero() {
+        return Err(StdError::generic_err("Invalid withdrawal request"));
+    }
+
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
+
+    // Retrieve Lockup position
+    let user_address = info.sender;
+    let lockup_key = (pool_type.clone(), &user_address, U64Key::new(duration));
+    let mut lockup_info =
+        LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key.clone(), &config.generator)?;
+
+    // CHECK :: Has user already withdrawn LP tokens once post the deposit window closure state
+    if lockup_info.withdrawal_flag {
+        return Err(StdError::generic_err(
+            "Withdrawal already happened. No more withdrawals accepted",
+        ));
+    }
+
+    // Check :: Amount should be within the allowed withdrawal limit bounds
+    let max_withdrawal_percent =
+        calculate_max_withdrawal_percent_allowed(env.block.time.seconds(), &config);
+    let max_withdrawal_allowed = lockup_info.lp_units_locked * max_withdrawal_percent;
+    if amount > max_withdrawal_allowed {
+        return Err(StdError::generic_err(format!(
+            "Amount exceeds maximum allowed withdrawal limit of {}",
+            max_withdrawal_allowed
+        )));
+    }
+
+    // Update withdrawal flag after the deposit window
+    if env.block.time.seconds() >= config.init_timestamp + config.deposit_window {
+        lockup_info.withdrawal_flag = true;
+    }
+
+    // STATE :: RETRIEVE --> UPDATE
+    lockup_info.lp_units_locked -= amount;
+    pool_info.weighted_amount -= calculate_weight(amount, duration, &config)?;
+    pool_info.terraswap_amount_in_lockups -= amount;
+
+    // Remove Lockup position from the list of user positions if Lp_Locked balance == 0
+    if lockup_info.lp_units_locked.is_zero() {
+        LOCKUP_INFO.remove(deps.storage, lockup_key);
+        // decrement number of user's lockup positions
+        let mut user_info = USER_INFO
+            .may_load(deps.storage, &user_address)?
+            .unwrap_or_default();
+        user_info.lockup_positions_index -= 1;
+        USER_INFO.save(deps.storage, &user_address, &user_info)?;
+    } else {
+        LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
+    }
+
+    // SAVE Updated States
+    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
+
+    Ok(Response::new().add_message(msg).add_attributes(vec![
+        attr("action", "withdraw_from_lockup"),
+        attr("pool_type", pool_type),
+        attr("user_address", user_address),
+        attr("duration", duration.to_string()),
+        attr("amount", amount),
+    ]))
+}
+
 /// Claims user Rewards for a particular Lockup position. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
@@ -845,6 +949,36 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
+}
+
+/// Claims unvested user's airdrop rewards from the Credits Contract plus part of vested tokens (NTRN Lockdrop rewards amount * AIDROP_REWARDS_MULTIPLIER) Returns a [`CosmosMsg`].
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **credits_contract** is an object of type [`Addr`]. Address of the Credits Contract.
+///
+/// * **user_addr** is an object of type [`Addr`]. Address of the user for who claims rewards.
+///
+/// * **ntrn_lockdrop_rewards** is an object of type [`Addr`]. Amount of Lockdrop rewards in uNTRN.
+pub fn claim_airdrop_tokens_with_multiplier_msg(deps: Deps, credits_contract: Addr, user_addr: Addr, ntrn_lockdrop_rewards: Uint128) -> StdResult<CosmosMsg> {
+    // just a mock
+    // unvested tokens amount
+    let unvested_tokens_amount: BalanceResponse = deps.querier.query_wasm_smart(&credits_contract,&Cw20QueryMsg::Balance {address: user_addr.to_string()})?;
+    // vested tokens amount
+    let vested_tokens_amount: BalanceResponse = deps.querier.query_wasm_smart(&credits_contract,&Cw20QueryMsg::Balance {address: user_addr.to_string()})?;
+
+    let airdrop_rewards_multiplier = Decimal::from_str(AIRDROP_REWARDS_MULTIPLIER)?;
+
+    // either we claim whole vested amount or NTRN lockdrop rewards
+    let claimable_vested_amount = min(vested_tokens_amount.balance, ntrn_lockdrop_rewards * airdrop_rewards_multiplier);
+
+    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: credits_contract.to_string(),
+        msg: to_binary(&Cw20ExecuteMsg::BurnFrom { owner: user_addr.to_string(), amount: claimable_vested_amount + unvested_tokens_amount })?,
+        funds: vec![],
+    }))
 }
 
 /// Updates contract state after dual staking rewards are claimed from the generator contract. Returns a default object of type [`Response`].
@@ -1104,20 +1238,24 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     }
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
 
-    // Transfers claimable one time ASTRO rewards to the user that the user gets for all his lock
+    // Transfers claimable one time NTRN rewards to the user that the user gets for all his lock
     if !user_info.ntrn_transferred {
-        // Calculating how much Astro user can claim (from total one time reward)
-        let total_claimable_astro_rewards = user_info.total_ntrn_rewards;
-        if total_claimable_astro_rewards > Uint128::zero() {
+        // Calculating how much NTRN user can claim (from total one time reward)
+        let total_claimable_ntrn_rewards = user_info.total_ntrn_rewards;
+        if total_claimable_ntrn_rewards > Uint128::zero() {
             cosmos_msgs.push(CosmosMsg::Bank(BankMsg::Send {
                 to_address: user_address.to_string(),
-                amount: coins(total_claimable_astro_rewards.u128(), UNTRN_DENOM),
+                amount: coins(total_claimable_ntrn_rewards.u128(), UNTRN_DENOM),
             }))
         }
+
+        // claim airdrop rewards
+        cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(deps.as_ref(), config.credit_contract, user_address, total_claimable_ntrn_rewards)?);
+
         user_info.ntrn_transferred = true;
         attributes.push(attr(
-            "total_claimable_astro_reward",
-            total_claimable_astro_rewards,
+            "total_claimable_ntrn_reward",
+            total_claimable_ntrn_rewards,
         ));
         USER_INFO.save(deps.storage, &user_address, &user_info)?;
     }
