@@ -814,7 +814,7 @@ fn build_provide_liquidity_to_lp_pool_msg(
             },
         ],
         msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
-            assets: [base, other],
+            assets: vec![base, other],
             slippage_tolerance: None,
             auto_stake: None,
             receiver: None,
