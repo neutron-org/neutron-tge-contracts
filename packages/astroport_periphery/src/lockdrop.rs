@@ -9,7 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 // TODO: implement display trait
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Copy)]
 pub enum PoolType {
     USDC,
     ATOM,
@@ -220,6 +220,15 @@ pub enum QueryMsg {
         pool_type: PoolType,
         duration: u64,
     },
+    QueryUserLockupTotalAtHeight {
+        pool_type: PoolType,
+        user_address: String,
+        height: u64,
+    },
+    QueryLockupTotalAtHeight {
+        pool_type: PoolType,
+        height: u64,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

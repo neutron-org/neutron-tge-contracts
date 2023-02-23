@@ -27,9 +27,7 @@ use astroport_periphery::lockdrop::{
 };
 use astroport_periphery::U64Key;
 
-use crate::state::{
-    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE, USER_INFO,
-};
+use crate::state::{CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE, USER_INFO, TOTAL_USER_LOCKUP_AMOUNT};
 
 const AIRDROP_REWARDS_MULTIPLIER: &str = "2.5";
 
@@ -99,7 +97,7 @@ pub fn instantiate(
         generator_proxy_per_share: RestrictedVector::default(),
         is_staked: false,
     };
-    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info)?;
+    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
 
     // POOL INFO :: Initialize new pool
     let pool_info = PoolInfo {
@@ -111,7 +109,7 @@ pub fn instantiate(
         generator_proxy_per_share: RestrictedVector::default(),
         is_staked: false,
     };
-    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info)?;
+    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
 
     let config = Config {
         owner: msg
@@ -384,6 +382,12 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             pool_type,
             duration,
         )?),
+        QueryMsg::QueryUserLockupTotalAtHeight {pool_type, user_address, height} => {
+            to_binary(&query_user_lockup_total_at_height(deps, pool_type, addr_validate_to_lower(deps.api, user_address)?, height)?)
+        },
+        QueryMsg::QueryLockupTotalAtHeight {pool_type, height} => {
+            to_binary(&query_lockup_total_at_height(deps, pool_type, height)?)
+        }
     }
 }
 
@@ -546,7 +550,7 @@ pub fn handle_initialize_pool(
     )?;
     pool_info.is_staked = true;
 
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
+    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info, env.block.height)?;
 
     state.total_incentives_share += incentives_share;
     STATE.save(deps.storage, &state)?;
@@ -616,7 +620,7 @@ fn stake_messages(
 /// * **amount** is an object of type [`Uint128`]. Number of LP tokens sent by the user.
 pub fn handle_increase_lockup(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     user_address_raw: String,
     pool_type: PoolType,
@@ -685,7 +689,16 @@ pub fn handle_increase_lockup(
 
     // SAVE UPDATED STATE
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
+
+    TOTAL_USER_LOCKUP_AMOUNT.update(deps.storage, (pool_type, &user_address), env.block.height, |lockup_amount| -> StdResult<Uint128> {
+        if let Some(la) = lockup_amount {
+            Ok(la + amount)
+        } else {
+            Ok(amount)
+        }
+    })?;
+
+    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info, env.block.height)?;
     USER_INFO.save(deps.storage, &user_address, &user_info)?;
 
     Ok(Response::new().add_attributes(vec![
@@ -777,9 +790,16 @@ pub fn handle_withdraw_from_lockup(
     } else {
         LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
     }
+    TOTAL_USER_LOCKUP_AMOUNT.update(deps.storage, (pool_type, &user_address), env.block.height, |lockup_amount| -> StdResult<Uint128> {
+        if let Some(la) = lockup_amount {
+            Ok(la - amount)
+        } else {
+            Ok(Uint128::zero())
+        }
+    })?;
 
     // SAVE Updated States
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
+    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info, env.block.height)?;
 
     Ok(Response::new().add_attributes(vec![
         attr("action", "withdraw_from_lockup"),
@@ -1083,7 +1103,7 @@ pub fn update_pool_on_dual_rewards_claim(
     }
 
     // SAVE UPDATED STATE OF THE POOL
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
+    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info, env.block.height)?;
 
     Ok(Response::new().add_attributes(vec![
         attr("action", "update_generator_dual_rewards"),
@@ -1265,12 +1285,19 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         pool_info.amount_in_lockups = pool_info
             .amount_in_lockups
             .checked_sub(lockup_info.lp_units_locked)?;
-        ASSET_POOLS.save(deps.storage, pool_type, &pool_info)?;
+        ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
 
         attributes.push(attr("astroport_lp_unlocked", astroport_lp_amount));
         lockup_info.astroport_lp_transferred = Some(astroport_lp_amount);
     }
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
+    TOTAL_USER_LOCKUP_AMOUNT.update(deps.storage, (pool_type, &user_address), env.block.height, |lockup_amount| -> StdResult<Uint128> {
+        if let Some(la) = lockup_amount {
+            Ok(la - lockup_info.lp_units_locked)
+        } else {
+            Ok(Uint128::zero())
+        }
+    })?;
 
     // Transfers claimable one time NTRN rewards to the user that the user gets for all his lock
     if !user_info.ntrn_transferred {
@@ -1405,6 +1432,17 @@ pub fn query_user_info_with_lockups_list(
         lockup_infos,
         lockup_positions_index: user_info.lockup_positions_index,
     })
+}
+
+pub fn query_user_lockup_total_at_height(deps: Deps, pool: PoolType, user: Addr, height: u64) -> StdResult<Option<Uint128>> {
+    Ok(TOTAL_USER_LOCKUP_AMOUNT.may_load_at_height(deps.storage, (pool, &user), height)?)
+}
+
+pub fn query_lockup_total_at_height(deps: Deps, pool: PoolType, height: u64) -> StdResult<Option<Uint128>> {
+    if let Some(pool) = ASSET_POOLS.may_load_at_height(deps.storage, pool, height)? {
+        return Ok(Some(pool.amount_in_lockups));
+    }
+    Ok(Some(Uint128::zero()))
 }
 
 /// Returns summarized details regarding the user
