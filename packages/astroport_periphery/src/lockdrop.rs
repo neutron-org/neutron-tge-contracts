@@ -1,6 +1,3 @@
-use std::fmt::Display;
-use std::ops::Add;
-
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_std::{
@@ -17,6 +14,16 @@ pub enum PoolType {
     USDC,
     ATOM,
 }
+
+impl Into<String> for PoolType {
+    fn into(self) -> String {
+        match self {
+            PoolType::USDC => "usdc".to_string(),
+            PoolType::ATOM => "atom".to_string(),
+        }
+    }
+}
+
 
 impl PoolType {
     fn bytes(&self) -> &[u8] {
@@ -238,8 +245,10 @@ pub struct Config {
     pub init_timestamp: u64,
     /// Number of seconds during which lockup positions be accepted
     pub lock_window: u64,
+    /// Number of seconds during which lockup deposits will be accepted
+    pub deposit_window: u64,
     /// Withdrawal Window Length :: Post the deposit window
-    // pub withdrawal_window: u64,
+    pub withdrawal_window: u64,
     /// Min. no. of weeks allowed for lockup
     pub min_lock_duration: u64,
     /// Max. no. of weeks allowed for lockup

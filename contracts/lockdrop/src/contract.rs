@@ -1,10 +1,8 @@
 use std::cmp::min;
 use std::convert::TryInto;
-use std::ops::Add;
-use std::os::unix::ucred;
 use std::str::FromStr;
 
-use astroport::asset::{addr_validate_to_lower, pair_info_by_pool, Asset, AssetInfo};
+use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::generator::{
     ExecuteMsg as GenExecuteMsg, PendingTokenResponse, QueryMsg as GenQueryMsg, RewardInfoResponse,
@@ -13,19 +11,17 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
+    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary,  CosmosMsg,
     Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
-    Storage, SubMsg, Uint128, Uint256, WasmMsg,
+    Uint128, Uint256, WasmMsg,
 };
-use cw2::{get_contract_version, set_contract_version};
-use cw20::{Balance, BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
-use cw_storage_plus::Path;
+use cw2::{ set_contract_version};
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
-use astroport_periphery::auction::Cw20HookMsg::DelegateAstroTokens;
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
-    LockUpInfoSummary, LockupInfoV2, MigrateMsg, MigrationInfo, PendingAssetRewardResponse,
+    LockUpInfoSummary, LockupInfoV2, MigrateMsg,
     PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg, UserInfoResponse,
     UserInfoWithListResponse,
 };
@@ -128,6 +124,8 @@ pub fn instantiate(
         generator: None,
         init_timestamp: msg.init_timestamp,
         lock_window: msg.deposit_window,
+        deposit_window: msg.deposit_window,
+        withdrawal_window: msg.withdrawal_window,
         min_lock_duration: msg.min_lock_duration,
         max_lock_duration: msg.max_lock_duration,
         montly_multiplier: msg.monthly_multiplier,
@@ -765,7 +763,7 @@ pub fn handle_withdraw_from_lockup(
     // STATE :: RETRIEVE --> UPDATE
     lockup_info.lp_units_locked -= amount;
     pool_info.weighted_amount -= calculate_weight(amount, duration, &config)?;
-    pool_info.terraswap_amount_in_lockups -= amount;
+    pool_info.amount_in_lockups -= amount;
 
     // Remove Lockup position from the list of user positions if Lp_Locked balance == 0
     if lockup_info.lp_units_locked.is_zero() {
@@ -783,13 +781,49 @@ pub fn handle_withdraw_from_lockup(
     // SAVE Updated States
     ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
 
-    Ok(Response::new().add_message(msg).add_attributes(vec![
+    Ok(Response::new().add_attributes(vec![
         attr("action", "withdraw_from_lockup"),
         attr("pool_type", pool_type),
         attr("user_address", user_address),
         attr("duration", duration.to_string()),
         attr("amount", amount),
     ]))
+}
+
+/// Calculates maximum % of LP balances deposited that can be withdrawn
+/// ## Params
+/// * **current_timestamp** is an object of type [`u64`]. Current block timestamp
+///
+/// * **config** is an object of type [`Config`]. Contract configuration
+fn calculate_max_withdrawal_percent_allowed(current_timestamp: u64, config: &Config) -> Decimal {
+    let withdrawal_cutoff_init_point = config.init_timestamp + config.deposit_window;
+
+    // Deposit window :: 100% withdrawals allowed
+    if current_timestamp < withdrawal_cutoff_init_point {
+        return Decimal::from_ratio(100u32, 100u32);
+    }
+
+    let withdrawal_cutoff_second_point =
+        withdrawal_cutoff_init_point + (config.withdrawal_window / 2u64);
+    // Deposit window closed, 1st half of withdrawal window :: 50% withdrawals allowed
+    if current_timestamp <= withdrawal_cutoff_second_point {
+        return Decimal::from_ratio(50u32, 100u32);
+    }
+
+    // max withdrawal allowed decreasing linearly from 50% to 0% vs time elapsed
+    let withdrawal_cutoff_final = withdrawal_cutoff_init_point + config.withdrawal_window;
+    //  Deposit window closed, 2nd half of withdrawal window :: max withdrawal allowed decreases linearly from 50% to 0% vs time elapsed
+    if current_timestamp < withdrawal_cutoff_final {
+        let time_left = withdrawal_cutoff_final - current_timestamp;
+        Decimal::from_ratio(
+            50u64 * time_left,
+            100u64 * (withdrawal_cutoff_final - withdrawal_cutoff_second_point),
+        )
+    }
+    // Withdrawals not allowed
+    else {
+        Decimal::from_ratio(0u32, 100u32)
+    }
 }
 
 /// Claims user Rewards for a particular Lockup position. Returns a default object of type [`Response`].
@@ -976,7 +1010,7 @@ pub fn claim_airdrop_tokens_with_multiplier_msg(deps: Deps, credits_contract: Ad
 
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: credits_contract.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::BurnFrom { owner: user_addr.to_string(), amount: claimable_vested_amount + unvested_tokens_amount })?,
+        msg: to_binary(&Cw20ExecuteMsg::BurnFrom { owner: user_addr.to_string(), amount: claimable_vested_amount + unvested_tokens_amount.balance })?,
         funds: vec![],
     }))
 }
@@ -1250,7 +1284,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         }
 
         // claim airdrop rewards
-        cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(deps.as_ref(), config.credit_contract, user_address, total_claimable_ntrn_rewards)?);
+        cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(deps.as_ref(), config.credit_contract, user_address.clone(), total_claimable_ntrn_rewards)?);
 
         user_info.ntrn_transferred = true;
         attributes.push(attr(
@@ -1401,7 +1435,7 @@ pub fn query_lockup_info(
     let mut lockup_info = LOCKUP_INFO.compatible_load(deps, lockup_key, &config.generator)?;
 
     let mut lockup_astroport_lp_units_opt: Option<Uint128> = None;
-    let mut astroport_lp_token_opt: Addr;
+    let astroport_lp_token_opt: Addr;
     let mut claimable_generator_astro_debt = Uint128::zero();
     let mut claimable_generator_proxy_debt: RestrictedVector<AssetInfo, Uint128> =
         RestrictedVector::default();
