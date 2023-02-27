@@ -1,6 +1,8 @@
+use std::cmp::min;
 use std::convert::TryInto;
+use std::str::FromStr;
 
-use astroport::asset::{addr_validate_to_lower, pair_info_by_pool, Asset, AssetInfo};
+use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::generator::{
     ExecuteMsg as GenExecuteMsg, PendingTokenResponse, QueryMsg as GenQueryMsg, RewardInfoResponse,
@@ -9,27 +11,27 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
-    Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
-    Storage, SubMsg, Uint128, Uint256, WasmMsg,
+    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, CosmosMsg, Decimal,
+    Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult, Uint128,
+    Uint256, WasmMsg,
 };
-use cw2::{get_contract_version, set_contract_version};
+use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
-use cw_storage_plus::Path;
 
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
-use astroport_periphery::auction::Cw20HookMsg::DelegateCNtrnTokens;
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
-    LockUpInfoSummary, LockupInfoV2, MigrateMsg, MigrationInfo, PendingAssetRewardResponse,
-    PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg, UserInfoResponse,
-    UserInfoWithListResponse,
+    LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolType, QueryMsg, State,
+    StateResponse, UpdateConfigMsg, UserInfoResponse, UserInfoWithListResponse,
 };
 use astroport_periphery::U64Key;
 
 use crate::state::{
-    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE, USER_INFO,
+    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE,
+    TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
+
+const AIRDROP_REWARDS_MULTIPLIER: &str = "2.5";
 
 const SECONDS_PER_MONTH: u64 = 86400 * 30;
 
@@ -97,7 +99,7 @@ pub fn instantiate(
         generator_proxy_per_share: RestrictedVector::default(),
         is_staked: false,
     };
-    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info)?;
+    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
 
     // POOL INFO :: Initialize new pool
     let pool_info = PoolInfo {
@@ -109,7 +111,7 @@ pub fn instantiate(
         generator_proxy_per_share: RestrictedVector::default(),
         is_staked: false,
     };
-    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info)?;
+    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
 
     let config = Config {
         owner: msg
@@ -122,6 +124,8 @@ pub fn instantiate(
         generator: None,
         init_timestamp: msg.init_timestamp,
         lock_window: msg.deposit_window,
+        deposit_window: msg.deposit_window,
+        withdrawal_window: msg.withdrawal_window,
         min_lock_duration: msg.min_lock_duration,
         max_lock_duration: msg.max_lock_duration,
         montly_multiplier: msg.monthly_multiplier,
@@ -229,6 +233,11 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             amount,
             duration,
         } => handle_increase_lockup(deps, env, info, user_address, pool_type, duration, amount),
+        ExecuteMsg::WithdrawFromLockup {
+            pool_type,
+            duration,
+            amount,
+        } => handle_withdraw_from_lockup(deps, env, info, pool_type, duration, amount),
         ExecuteMsg::UpdateConfig { new_config } => todo!(),
     }
 }
@@ -375,6 +384,19 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             pool_type,
             duration,
         )?),
+        QueryMsg::QueryUserLockupTotalAtHeight {
+            pool_type,
+            user_address,
+            height,
+        } => to_binary(&query_user_lockup_total_at_height(
+            deps,
+            pool_type,
+            addr_validate_to_lower(deps.api, user_address)?,
+            height,
+        )?),
+        QueryMsg::QueryLockupTotalAtHeight { pool_type, height } => {
+            to_binary(&query_lockup_total_at_height(deps, pool_type, height)?)
+        }
     }
 }
 
@@ -537,7 +559,12 @@ pub fn handle_initialize_pool(
     )?;
     pool_info.is_staked = true;
 
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
+    ASSET_POOLS.save(
+        deps.storage,
+        pool_type.clone(),
+        &pool_info,
+        env.block.height,
+    )?;
 
     state.total_incentives_share += incentives_share;
     STATE.save(deps.storage, &state)?;
@@ -607,7 +634,7 @@ fn stake_messages(
 /// * **amount** is an object of type [`Uint128`]. Number of LP tokens sent by the user.
 pub fn handle_increase_lockup(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     user_address_raw: String,
     pool_type: PoolType,
@@ -676,7 +703,26 @@ pub fn handle_increase_lockup(
 
     // SAVE UPDATED STATE
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
+
+    TOTAL_USER_LOCKUP_AMOUNT.update(
+        deps.storage,
+        (pool_type, &user_address),
+        env.block.height,
+        |lockup_amount| -> StdResult<Uint128> {
+            if let Some(la) = lockup_amount {
+                Ok(la + amount)
+            } else {
+                Ok(amount)
+            }
+        },
+    )?;
+
+    ASSET_POOLS.save(
+        deps.storage,
+        pool_type.clone(),
+        &pool_info,
+        env.block.height,
+    )?;
     USER_INFO.save(deps.storage, &user_address, &user_info)?;
 
     Ok(Response::new().add_attributes(vec![
@@ -696,7 +742,7 @@ pub fn handle_increase_lockup(
 ///
 /// * **info** is an object of type [`MessageInfo`].
 ///
-/// * **terraswap_lp_token** is an object of type [`String`]. Terraswap Lp token address to identify the LP pool against which withdrawal has to be made
+/// * **pool_type** is an object of type [`PoolType`]. LiquidPool type - USDC or ATOM
 ///
 /// * **duration** is an object of type [`u64`]. Duration of the lockup position from which withdrawal is to be made.
 ///
@@ -705,25 +751,26 @@ pub fn handle_withdraw_from_lockup(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    terraswap_lp_token: String,
+    pool_type: PoolType,
     duration: u64,
     amount: Uint128,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
+
+    if Some(info.sender.clone()) != config.auction_contract {
+        return Err(StdError::generic_err("Unauthorized"));
+    }
 
     // CHECK :: Valid Withdraw Amount
     if amount.is_zero() {
         return Err(StdError::generic_err("Invalid withdrawal request"));
     }
 
-    let terraswap_lp_token = addr_validate_to_lower(deps.api, &terraswap_lp_token)?;
-
-    // CHECK ::: LP Token supported or not ?
-    let mut pool_info = ASSET_POOLS.load(deps.storage, &terraswap_lp_token)?;
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
 
     // Retrieve Lockup position
     let user_address = info.sender;
-    let lockup_key = (&terraswap_lp_token, &user_address, U64Key::new(duration));
+    let lockup_key = (pool_type.clone(), &user_address, U64Key::new(duration));
     let mut lockup_info =
         LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key.clone(), &config.generator)?;
 
@@ -753,7 +800,7 @@ pub fn handle_withdraw_from_lockup(
     // STATE :: RETRIEVE --> UPDATE
     lockup_info.lp_units_locked -= amount;
     pool_info.weighted_amount -= calculate_weight(amount, duration, &config)?;
-    pool_info.terraswap_amount_in_lockups -= amount;
+    pool_info.amount_in_lockups -= amount;
 
     // Remove Lockup position from the list of user positions if Lp_Locked balance == 0
     if lockup_info.lp_units_locked.is_zero() {
@@ -767,117 +814,70 @@ pub fn handle_withdraw_from_lockup(
     } else {
         LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
     }
+    TOTAL_USER_LOCKUP_AMOUNT.update(
+        deps.storage,
+        (pool_type, &user_address),
+        env.block.height,
+        |lockup_amount| -> StdResult<Uint128> {
+            if let Some(la) = lockup_amount {
+                Ok(la - amount)
+            } else {
+                Ok(Uint128::zero())
+            }
+        },
+    )?;
 
     // SAVE Updated States
-    ASSET_POOLS.save(deps.storage, &terraswap_lp_token, &pool_info)?;
+    ASSET_POOLS.save(
+        deps.storage,
+        pool_type.clone(),
+        &pool_info,
+        env.block.height,
+    )?;
 
-    // COSMOS_MSG ::TRANSFER WITHDRAWN LP Tokens
-    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: terraswap_lp_token.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::Transfer {
-            recipient: user_address.to_string(),
-            amount,
-        })?,
-        funds: vec![],
-    });
-
-    Ok(Response::new().add_message(msg).add_attributes(vec![
+    Ok(Response::new().add_attributes(vec![
         attr("action", "withdraw_from_lockup"),
-        attr("terraswap_lp_token", terraswap_lp_token),
+        attr("pool_type", pool_type),
         attr("user_address", user_address),
         attr("duration", duration.to_string()),
         attr("amount", amount),
     ]))
 }
 
-/// Delegates part of the ASTRO rewards to be used for LP Bootstrapping via auction. Returns a default object of type [`Response`].
+/// Calculates maximum % of LP balances deposited that can be withdrawn
 /// ## Params
-/// * **deps** is an object of type [`DepsMut`].
+/// * **current_timestamp** is an object of type [`u64`]. Current block timestamp
 ///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **amount** is an object of type [`Uint128`]. Number of ASTRO to delegate.
-pub fn handle_delegate_astro_to_auction(
-    mut deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    amount: Uint128,
-) -> StdResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
-    let user_address = info.sender;
+/// * **config** is an object of type [`Config`]. Contract configuration
+fn calculate_max_withdrawal_percent_allowed(current_timestamp: u64, config: &Config) -> Decimal {
+    let withdrawal_cutoff_init_point = config.init_timestamp + config.deposit_window;
 
-    // CHECK :: Have the deposit / withdraw windows concluded
-    if env.block.time.seconds()
-        < (config.init_timestamp + config.deposit_window + config.withdrawal_window)
-    {
-        return Err(StdError::generic_err(
-            "Deposit / withdraw windows not closed yet",
-        ));
+    // Deposit window :: 100% withdrawals allowed
+    if current_timestamp < withdrawal_cutoff_init_point {
+        return Decimal::from_ratio(100u32, 100u32);
     }
 
-    // CHECK :: Can users withdraw their ASTRO tokens ? -> if so, then delegation is no longer allowed
-    if state.are_claims_allowed {
-        return Err(StdError::generic_err("Delegation window over"));
+    let withdrawal_cutoff_second_point =
+        withdrawal_cutoff_init_point + (config.withdrawal_window / 2u64);
+    // Deposit window closed, 1st half of withdrawal window :: 50% withdrawals allowed
+    if current_timestamp <= withdrawal_cutoff_second_point {
+        return Decimal::from_ratio(50u32, 100u32);
     }
 
-    let mut user_info = USER_INFO
-        .may_load(deps.storage, &user_address)?
-        .unwrap_or_default();
-
-    // If user's total ASTRO rewards == 0 :: We update all of the user's lockup positions to calculate ASTRO rewards and for each alongwith their equivalent Astroport LP Shares
-    if user_info.total_astro_rewards == Uint128::zero() {
-        user_info.total_astro_rewards = update_user_lockup_positions_and_calc_rewards(
-            deps.branch(),
-            &config,
-            &state,
-            &user_address,
-        )?;
+    // max withdrawal allowed decreasing linearly from 50% to 0% vs time elapsed
+    let withdrawal_cutoff_final = withdrawal_cutoff_init_point + config.withdrawal_window;
+    //  Deposit window closed, 2nd half of withdrawal window :: max withdrawal allowed decreases linearly from 50% to 0% vs time elapsed
+    if current_timestamp < withdrawal_cutoff_final {
+        let time_left = withdrawal_cutoff_final - current_timestamp;
+        Decimal::from_ratio(
+            50u64 * time_left,
+            100u64 * (withdrawal_cutoff_final - withdrawal_cutoff_second_point),
+        )
     }
-
-    // CHECK :: ASTRO to delegate cannot exceed user's unclaimed ASTRO balance
-    let max_delegable_astro = user_info
-        .total_astro_rewards
-        .checked_sub(user_info.delegated_astro_rewards)?;
-
-    if amount > max_delegable_astro {
-        return Err(StdError::generic_err(format!("ASTRO to delegate cannot exceed user's unclaimed ASTRO balance. ASTRO to delegate = {}, Max delegable ASTRO = {}. ", amount, max_delegable_astro)));
+    // Withdrawals not allowed
+    else {
+        Decimal::from_ratio(0u32, 100u32)
     }
-
-    // UPDATE STATE
-    user_info.delegated_astro_rewards += amount;
-    state.total_astro_delegated += amount;
-
-    // SAVE UPDATED STATE
-    STATE.save(deps.storage, &state)?;
-    USER_INFO.save(deps.storage, &user_address, &user_info)?;
-
-    // COSMOS_MSG ::Delegate ASTRO to the LP Bootstrapping via Auction contract
-    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config
-            .astro_token
-            .ok_or_else(|| StdError::generic_err("Astro token contract hasn't been set yet!"))?
-            .to_string(),
-        funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Send {
-            contract: config
-                .auction_contract
-                .ok_or_else(|| StdError::generic_err("Auction contract hasn't been set yet!"))?
-                .to_string(),
-            msg: to_binary(&DelegateCNtrnTokens {
-                user_address: user_address.to_string(),
-            })?,
-            amount,
-        })?,
-    });
-
-    Ok(Response::new().add_message(msg).add_attributes(vec![
-        attr("action", "delegate_astro_to_auction"),
-        attr("user_address", user_address),
-        attr("amount", amount),
-    ]))
 }
 
 /// Claims user Rewards for a particular Lockup position. Returns a default object of type [`Response`].
@@ -1039,6 +1039,57 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     Ok(Response::new().add_messages(cosmos_msgs))
 }
 
+/// Claims unvested user's airdrop rewards from the Credits Contract plus part of vested tokens (NTRN Lockdrop rewards amount * AIDROP_REWARDS_MULTIPLIER) Returns a [`CosmosMsg`].
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **credits_contract** is an object of type [`Addr`]. Address of the Credits Contract.
+///
+/// * **user_addr** is an object of type [`Addr`]. Address of the user for who claims rewards.
+///
+/// * **ntrn_lockdrop_rewards** is an object of type [`Addr`]. Amount of Lockdrop rewards in uNTRN.
+pub fn claim_airdrop_tokens_with_multiplier_msg(
+    deps: Deps,
+    credits_contract: Addr,
+    user_addr: Addr,
+    ntrn_lockdrop_rewards: Uint128,
+) -> StdResult<CosmosMsg> {
+    // just a mock
+    // unvested tokens amount
+    let unvested_tokens_amount: BalanceResponse = deps.querier.query_wasm_smart(
+        &credits_contract,
+        &Cw20QueryMsg::Balance {
+            address: user_addr.to_string(),
+        },
+    )?;
+    // vested tokens amount
+    let vested_tokens_amount: BalanceResponse = deps.querier.query_wasm_smart(
+        &credits_contract,
+        &Cw20QueryMsg::Balance {
+            address: user_addr.to_string(),
+        },
+    )?;
+
+    let airdrop_rewards_multiplier = Decimal::from_str(AIRDROP_REWARDS_MULTIPLIER)?;
+
+    // either we claim whole vested amount or NTRN lockdrop rewards
+    let claimable_vested_amount = min(
+        vested_tokens_amount.balance,
+        ntrn_lockdrop_rewards * airdrop_rewards_multiplier,
+    );
+
+    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: credits_contract.to_string(),
+        msg: to_binary(&Cw20ExecuteMsg::BurnFrom {
+            owner: user_addr.to_string(),
+            amount: claimable_vested_amount + unvested_tokens_amount.balance,
+        })?,
+        funds: vec![],
+    }))
+}
+
 /// Updates contract state after dual staking rewards are claimed from the generator contract. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
@@ -1107,7 +1158,12 @@ pub fn update_pool_on_dual_rewards_claim(
     }
 
     // SAVE UPDATED STATE OF THE POOL
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info)?;
+    ASSET_POOLS.save(
+        deps.storage,
+        pool_type.clone(),
+        &pool_info,
+        env.block.height,
+    )?;
 
     Ok(Response::new().add_attributes(vec![
         attr("action", "update_generator_dual_rewards"),
@@ -1289,27 +1345,48 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         pool_info.amount_in_lockups = pool_info
             .amount_in_lockups
             .checked_sub(lockup_info.lp_units_locked)?;
-        ASSET_POOLS.save(deps.storage, pool_type, &pool_info)?;
+        ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
 
         attributes.push(attr("astroport_lp_unlocked", astroport_lp_amount));
         lockup_info.astroport_lp_transferred = Some(astroport_lp_amount);
     }
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
+    TOTAL_USER_LOCKUP_AMOUNT.update(
+        deps.storage,
+        (pool_type, &user_address),
+        env.block.height,
+        |lockup_amount| -> StdResult<Uint128> {
+            if let Some(la) = lockup_amount {
+                Ok(la - lockup_info.lp_units_locked)
+            } else {
+                Ok(Uint128::zero())
+            }
+        },
+    )?;
 
-    // Transfers claimable one time ASTRO rewards to the user that the user gets for all his lock
+    // Transfers claimable one time NTRN rewards to the user that the user gets for all his lock
     if !user_info.ntrn_transferred {
-        // Calculating how much Astro user can claim (from total one time reward)
-        let total_claimable_astro_rewards = user_info.total_ntrn_rewards;
-        if total_claimable_astro_rewards > Uint128::zero() {
+        // Calculating how much NTRN user can claim (from total one time reward)
+        let total_claimable_ntrn_rewards = user_info.total_ntrn_rewards;
+        if total_claimable_ntrn_rewards > Uint128::zero() {
             cosmos_msgs.push(CosmosMsg::Bank(BankMsg::Send {
                 to_address: user_address.to_string(),
-                amount: coins(total_claimable_astro_rewards.u128(), UNTRN_DENOM),
+                amount: coins(total_claimable_ntrn_rewards.u128(), UNTRN_DENOM),
             }))
         }
+
+        // claim airdrop rewards
+        cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(
+            deps.as_ref(),
+            config.credit_contract,
+            user_address.clone(),
+            total_claimable_ntrn_rewards,
+        )?);
+
         user_info.ntrn_transferred = true;
         attributes.push(attr(
-            "total_claimable_astro_reward",
-            total_claimable_astro_rewards,
+            "total_claimable_ntrn_reward",
+            total_claimable_ntrn_rewards,
         ));
         USER_INFO.save(deps.storage, &user_address, &user_info)?;
     }
@@ -1427,6 +1504,26 @@ pub fn query_user_info_with_lockups_list(
     })
 }
 
+pub fn query_user_lockup_total_at_height(
+    deps: Deps,
+    pool: PoolType,
+    user: Addr,
+    height: u64,
+) -> StdResult<Option<Uint128>> {
+    Ok(TOTAL_USER_LOCKUP_AMOUNT.may_load_at_height(deps.storage, (pool, &user), height)?)
+}
+
+pub fn query_lockup_total_at_height(
+    deps: Deps,
+    pool: PoolType,
+    height: u64,
+) -> StdResult<Option<Uint128>> {
+    if let Some(pool) = ASSET_POOLS.may_load_at_height(deps.storage, pool, height)? {
+        return Ok(Some(pool.amount_in_lockups));
+    }
+    Ok(Some(Uint128::zero()))
+}
+
 /// Returns summarized details regarding the user
 /// ## Params
 /// * **deps** is an object of type [`Deps`].
@@ -1455,7 +1552,7 @@ pub fn query_lockup_info(
     let mut lockup_info = LOCKUP_INFO.compatible_load(deps, lockup_key, &config.generator)?;
 
     let mut lockup_astroport_lp_units_opt: Option<Uint128> = None;
-    let mut astroport_lp_token_opt: Addr;
+    let astroport_lp_token_opt: Addr;
     let mut claimable_generator_astro_debt = Uint128::zero();
     let mut claimable_generator_proxy_debt: RestrictedVector<AssetInfo, Uint128> =
         RestrictedVector::default();

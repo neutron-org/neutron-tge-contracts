@@ -18,7 +18,7 @@ use cosmwasm_std::{
 };
 
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
-use astroport_periphery::lockdrop::{Config, PoolInfo};
+use astroport_periphery::lockdrop::{Config, PoolInfo, PoolType};
 use cw20::{Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_multi_test::{App, AppBuilder, BankKeeper, ContractWrapper, Executor, Module};
 use neutron_lockdrop::contract::UNTRN_DENOM;
@@ -90,49 +90,49 @@ fn instantiate_astro_token(app: &mut App, owner: Addr) -> Addr {
 }
 
 // Instantiate Terraswap
-fn instantiate_terraswap(app: &mut App, owner: Addr) -> Addr {
-    // Terraswap Pair
-    let terraswap_pair_contract = Box::new(ContractWrapper::new_with_empty(
-        terraswap_pair::contract::execute,
-        terraswap_pair::contract::instantiate,
-        terraswap_pair::contract::query,
-    ));
-    let terraswap_pair_code_id = app.store_code(terraswap_pair_contract);
-
-    // Terraswap LP Token
-    let terraswap_token_contract = Box::new(ContractWrapper::new_with_empty(
-        cw20_base::contract::execute,
-        cw20_base::contract::instantiate,
-        cw20_base::contract::query,
-    ));
-    let terraswap_token_code_id = app.store_code(terraswap_token_contract);
-
-    // Terraswap Factory Contract
-    let terraswap_factory_contract = Box::new(ContractWrapper::new_with_empty(
-        terraswap_factory::contract::execute,
-        terraswap_factory::contract::instantiate,
-        terraswap_factory::contract::query,
-    ));
-
-    let terraswap_factory_code_id = app.store_code(terraswap_factory_contract);
-
-    let msg = terraswap::factory::InstantiateMsg {
-        pair_code_id: terraswap_pair_code_id,
-        token_code_id: terraswap_token_code_id,
-    };
-
-    let terraswap_factory_instance = app
-        .instantiate_contract(
-            terraswap_factory_code_id,
-            owner.clone(),
-            &msg,
-            &[],
-            String::from("Terraswap_Factory"),
-            None,
-        )
-        .unwrap();
-    terraswap_factory_instance
-}
+// fn instantiate_terraswap(app: &mut App, owner: Addr) -> Addr {
+//     // Terraswap Pair
+//     let terraswap_pair_contract = Box::new(ContractWrapper::new_with_empty(
+//         terraswap_pair::contract::execute,
+//         terraswap_pair::contract::instantiate,
+//         terraswap_pair::contract::query,
+//     ));
+//     let terraswap_pair_code_id = app.store_code(terraswap_pair_contract);
+//
+//     // Terraswap LP Token
+//     let terraswap_token_contract = Box::new(ContractWrapper::new_with_empty(
+//         cw20_base::contract::execute,
+//         cw20_base::contract::instantiate,
+//         cw20_base::contract::query,
+//     ));
+//     let terraswap_token_code_id = app.store_code(terraswap_token_contract);
+//
+//     // Terraswap Factory Contract
+//     let terraswap_factory_contract = Box::new(ContractWrapper::new_with_empty(
+//         terraswap_factory::contract::execute,
+//         terraswap_factory::contract::instantiate,
+//         terraswap_factory::contract::query,
+//     ));
+//
+//     let terraswap_factory_code_id = app.store_code(terraswap_factory_contract);
+//
+//     let msg = terraswap::factory::InstantiateMsg {
+//         pair_code_id: terraswap_pair_code_id,
+//         token_code_id: terraswap_token_code_id,
+//     };
+//
+//     let terraswap_factory_instance = app
+//         .instantiate_contract(
+//             terraswap_factory_code_id,
+//             owner.clone(),
+//             &msg,
+//             &[],
+//             String::from("Terraswap_Factory"),
+//             None,
+//         )
+//         .unwrap();
+//     terraswap_factory_instance
+// }
 
 // Instantiate Astroport
 fn instantiate_astroport(app: &mut App, owner: Addr) -> Addr {
@@ -449,6 +449,7 @@ fn instantiate_lockdrop_contract(app: &mut App, owner: Addr) -> (Addr, Instantia
 
     let lockdrop_instantiate_msg = InstantiateMsg {
         owner: Some(owner.clone().to_string()),
+        atom_token: "ATOM".to_string(),
         init_timestamp: EPOCH_START + 100_000,
         deposit_window: 10_000_000,
         withdrawal_window: 500_000,
@@ -458,6 +459,7 @@ fn instantiate_lockdrop_contract(app: &mut App, owner: Addr) -> (Addr, Instantia
         monthly_divider: 12u64,
         max_positions_per_user: 14,
         credit_contract: "credit_contract".to_string(),
+        usdc_token: "USDC".to_string(),
     };
 
     app.update_block(|b| {
@@ -483,14 +485,14 @@ fn instantiate_lockdrop_contract(app: &mut App, owner: Addr) -> (Addr, Instantia
 fn instantiate_all_contracts(
     app: &mut App,
     owner: Addr,
-) -> (Addr, Addr, Addr, Addr, UpdateConfigMsg) {
+) -> (Addr, Addr, Addr, UpdateConfigMsg) {
     let (lockdrop_instance, _lockdrop_instantiate_msg) =
         instantiate_lockdrop_contract(app, owner.clone());
 
     let astro_token = instantiate_astro_token(app, owner.clone());
 
     // Initiate Terraswap
-    let terraswap_factory_instance = instantiate_terraswap(app, owner.clone());
+    //let terraswap_factory_instance = instantiate_terraswap(app, owner.clone());
 
     // Initiate ASTRO-UST Pair on Astroport
     let astroport_factory_instance = instantiate_astroport(app, owner.clone());
@@ -615,7 +617,7 @@ fn instantiate_all_contracts(
         astro_token,
         lockdrop_instance,
         astroport_factory_instance,
-        terraswap_factory_instance,
+        //terraswap_factory_instance,
         update_msg,
     );
 }
@@ -1205,7 +1207,7 @@ fn test_initialize_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -1283,7 +1285,7 @@ fn test_initialize_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance2.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -1524,7 +1526,7 @@ fn test_increase_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -1589,7 +1591,7 @@ fn test_increase_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -1655,7 +1657,7 @@ fn test_increase_lockup() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM
             },
         )
         .unwrap();
@@ -1982,7 +1984,7 @@ fn test_migrate_liquidity() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -2028,7 +2030,7 @@ fn test_migrate_liquidity() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -2293,7 +2295,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -2339,7 +2341,7 @@ fn test_migrate_liquidity_uusd_uluna_pool() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -2495,7 +2497,7 @@ fn test_stake_lp_tokens() {
         .query_wasm_smart(
             &lockdrop_instance,
             &QueryMsg::Pool {
-                terraswap_lp_token: terraswap_token_instance.clone().to_string(),
+                pool_type: PoolType::ATOM,
             },
         )
         .unwrap();
@@ -2607,6 +2609,7 @@ fn test_claim_rewards() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(false, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -2617,8 +2620,7 @@ fn test_claim_rewards() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -2653,7 +2655,7 @@ fn test_claim_rewards() {
             Addr::unchecked(user_address.clone()),
             lockdrop_instance.clone(),
             &astroport_periphery::lockdrop::ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-                terraswap_lp_token: terraswap_token_instance.clone(),
+                pool_type: PoolType::USDC,
                 duration: 10u64,
                 withdraw_lp_stake: false,
             },
@@ -2678,7 +2680,7 @@ fn test_claim_rewards() {
             Addr::unchecked(user_address.clone()),
             lockdrop_instance.clone(),
             &astroport_periphery::lockdrop::ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-                terraswap_lp_token: terraswap_token_instance.clone(),
+                pool_type: PoolType::USDC,
                 duration: 9u64,
                 withdraw_lp_stake: false,
             },
@@ -2706,6 +2708,7 @@ fn test_claim_rewards() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(false, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -2716,8 +2719,7 @@ fn test_claim_rewards() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -2728,7 +2730,7 @@ fn test_claim_rewards() {
         Addr::unchecked(user_address.clone()),
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-            terraswap_lp_token: terraswap_token_instance.clone(),
+            pool_type: PoolType::USDC,
             duration: 10u64,
             withdraw_lp_stake: false,
         },
@@ -2749,6 +2751,7 @@ fn test_claim_rewards() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(true, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -2759,8 +2762,7 @@ fn test_claim_rewards() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -2790,6 +2792,7 @@ fn test_claim_rewards() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(false, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -2800,8 +2803,7 @@ fn test_claim_rewards() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -2810,7 +2812,7 @@ fn test_claim_rewards() {
         Addr::unchecked(user2_address.clone()),
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-            terraswap_lp_token: terraswap_token_instance.clone(),
+            pool_type: PoolType::USDC,
             duration: 10u64,
             withdraw_lp_stake: false,
         },
@@ -2831,6 +2833,7 @@ fn test_claim_rewards() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(true, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -2841,8 +2844,7 @@ fn test_claim_rewards() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -2937,6 +2939,7 @@ fn test_claim_rewards_and_unlock() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(false, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -2947,8 +2950,7 @@ fn test_claim_rewards_and_unlock() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -3023,6 +3025,7 @@ fn test_claim_rewards_and_unlock() {
 
     assert_eq!(false, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -3033,8 +3036,7 @@ fn test_claim_rewards_and_unlock() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -3063,7 +3065,7 @@ fn test_claim_rewards_and_unlock() {
         Addr::unchecked(user_address.clone()),
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-            terraswap_lp_token: terraswap_token_instance.clone(),
+            pool_type: PoolType::USDC,
             duration: 10u64,
             withdraw_lp_stake: true,
         },
@@ -3138,6 +3140,7 @@ fn test_claim_rewards_and_unlock() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(false, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -3148,8 +3151,7 @@ fn test_claim_rewards_and_unlock() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);
@@ -3168,7 +3170,7 @@ fn test_claim_rewards_and_unlock() {
         Addr::unchecked(user2_address.clone()),
         lockdrop_instance.clone(),
         &astroport_periphery::lockdrop::ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-            terraswap_lp_token: terraswap_token_instance.clone(),
+            pool_type: PoolType::USDC,
             duration: 10u64,
             withdraw_lp_stake: true,
         },
@@ -3300,6 +3302,7 @@ fn test_delegate_astro_to_auction() {
     assert_eq!(Uint128::from(500000000u64), user_info.total_astro_rewards);
     assert_eq!(false, user_info.astro_transferred);
     let lockup_response = astroport_periphery::lockdrop::LockUpInfoResponse {
+        pool_type: PoolType::USDC,
         lp_units_locked: Uint128::from(1000000000u64),
         withdrawal_flag: false,
         astro_rewards: Uint128::from(500000000u64),
@@ -3310,8 +3313,7 @@ fn test_delegate_astro_to_auction() {
         claimable_generator_proxy_debt: RestrictedVector::default(),
         unlock_timestamp: EPOCH_START + 16648000u64,
         astroport_lp_units: Some(Uint128::from(1000000000u64)),
-        astroport_lp_token: Some(astro_lp_address.clone()),
-        terraswap_lp_token: Addr::unchecked(terraswap_token_instance.clone()),
+        astroport_lp_token: astro_lp_address.clone(),
         astroport_lp_transferred: None,
     };
     assert_eq!(lockup_response, user_info.lockup_infos[0]);

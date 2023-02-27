@@ -7,8 +7,8 @@ use astroport_periphery::lockdrop::{
     Config, LockupInfoV1, LockupInfoV2, PoolInfo, State, UserInfo,
 };
 use astroport_periphery::U64Key;
-use cosmwasm_std::{Addr, Decimal256, Deps, StdError, StdResult};
-use cw_storage_plus::{Item, Map};
+use cosmwasm_std::{Addr, Deps, StdError, StdResult, Uint128};
+use cw_storage_plus::{Item, Map, SnapshotMap, Strategy};
 
 use crate::raw_queries::raw_proxy_asset;
 
@@ -16,11 +16,14 @@ pub const CONFIG: Item<Config> = Item::new("config");
 pub const STATE: Item<State> = Item::new("state");
 
 /// Key is an Terraswap LP token address
-pub const ASSET_POOLS: Map<PoolType, PoolInfo> = Map::new("LiquidityPools");
+pub const ASSET_POOLS: SnapshotMap<PoolType, PoolInfo> = SnapshotMap::new("LiquidityPools", "LiquitidyPools_checkpoints", "LiquidityPools_changelog", Strategy::EveryBlock);
 /// Key is an user address
 pub const USER_INFO: Map<&Addr, UserInfo> = Map::new("users");
 /// Key consists of an Terraswap LP token address, an user address, and a duration
 pub const LOCKUP_INFO: Map<(PoolType, &Addr, U64Key), LockupInfoV2> = Map::new("lockup_position");
+
+pub const TOTAL_USER_LOCKUP_AMOUNT: SnapshotMap<(PoolType, &Addr), Uint128> = SnapshotMap::new("total_user_lockup_info", "total_user_lockup_info_checkpoints", "total_lockup_info_changelog", Strategy::EveryBlock);
+
 /// Old LOCKUP_INFO storage interface for backward compatibility
 pub const OLD_LOCKUP_INFO: Map<(PoolType, &Addr, U64Key), LockupInfoV1> = Map::new("lockup_position");
 

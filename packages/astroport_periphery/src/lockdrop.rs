@@ -1,6 +1,3 @@
-use std::fmt::Display;
-use std::ops::Add;
-
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_std::{
@@ -12,11 +9,21 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 // TODO: implement display trait
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Copy)]
 pub enum PoolType {
     USDC,
     ATOM,
 }
+
+impl Into<String> for PoolType {
+    fn into(self) -> String {
+        match self {
+            PoolType::USDC => "usdc".to_string(),
+            PoolType::ATOM => "atom".to_string(),
+        }
+    }
+}
+
 
 impl PoolType {
     fn bytes(&self) -> &[u8] {
@@ -104,6 +111,12 @@ pub enum ExecuteMsg {
     // ADMIN Function ::: To update configuration
     UpdateConfig {
         new_config: UpdateConfigMsg,
+    },
+    // Function to facilitate LP Token withdrawals from lockups
+    WithdrawFromLockup {
+        pool_type: PoolType,
+        duration: u64,
+        amount: Uint128,
     },
 
     // ADMIN Function ::: To Migrate liquidity from terraswap to astroport
@@ -207,6 +220,15 @@ pub enum QueryMsg {
         pool_type: PoolType,
         duration: u64,
     },
+    QueryUserLockupTotalAtHeight {
+        pool_type: PoolType,
+        user_address: String,
+        height: u64,
+    },
+    QueryLockupTotalAtHeight {
+        pool_type: PoolType,
+        height: u64,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -232,8 +254,10 @@ pub struct Config {
     pub init_timestamp: u64,
     /// Number of seconds during which lockup positions be accepted
     pub lock_window: u64,
+    /// Number of seconds during which lockup deposits will be accepted
+    pub deposit_window: u64,
     /// Withdrawal Window Length :: Post the deposit window
-    // pub withdrawal_window: u64,
+    pub withdrawal_window: u64,
     /// Min. no. of weeks allowed for lockup
     pub min_lock_duration: u64,
     /// Max. no. of weeks allowed for lockup
