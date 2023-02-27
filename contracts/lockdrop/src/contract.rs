@@ -634,6 +634,10 @@ pub fn handle_increase_lockup(
 
     let user_address = addr_validate_to_lower(deps.api, user_address_raw)?;
 
+    if config.lockup_rewards_info.iter().find(|i| i.duration == duration).is_none() {
+        return Err(StdError::generic_err("invalid duration"))
+    }
+
     // CHECK ::: LP Token supported or not ?
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
     let mut user_info = USER_INFO
