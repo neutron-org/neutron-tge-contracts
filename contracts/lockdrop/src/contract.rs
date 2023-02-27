@@ -459,7 +459,7 @@ pub fn handle_update_config(
     Ok(Response::new().add_attributes(attributes))
 }
 
-/// Facilitates increasing ASTRO incentives that are to be distributed as Lockdrop participation reward. Returns a default object of type [`Response`].
+/// Facilitates increasing NTRN incentives that are to be distributed as Lockdrop participation reward. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -485,12 +485,12 @@ pub fn handle_increasing_ntrn_incentives(
             msg: format!("{} is not found", UNTRN_DENOM),
         });
     };
-    // Anyone can increase astro incentives
+    // Anyone can increase ntrn incentives
     config.lockdrop_incentives = config.lockdrop_incentives.checked_add(amount)?;
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new()
-        .add_attribute("action", "astro_incentives_increased")
+        .add_attribute("action", "ntrn_incentives_increased")
         .add_attribute("amount", amount))
 }
 
@@ -506,7 +506,7 @@ pub fn handle_increasing_ntrn_incentives(
 ///
 /// * **cw20_sender_addr** is an object of type [`Addr`]. Address caller cw20 contract
 ///
-/// * **incentives_share** is an object of type [`u64`]. Parameter defining share of total ASTRO incentives are allocated for this pool
+/// * **incentives_share** is an object of type [`u64`]. Parameter defining share of total NTRN incentives are allocated for this pool
 pub fn handle_initialize_pool(
     deps: DepsMut,
     env: Env,
@@ -886,7 +886,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
         .may_load(deps.storage, &user_address)?
         .unwrap_or_default();
 
-    // If user's total ASTRO rewards == 0 :: We update all of the user's lockup positions to calculate ASTRO rewards and for each alongwith their equivalent Astroport LP Shares
+    // If user's total NTRN rewards == 0 :: We update all of the user's lockup positions to calculate NTRN rewards and for each alongwith their equivalent Astroport LP Shares
     if user_info.total_ntrn_rewards == Uint128::zero() {
         user_info.total_ntrn_rewards = update_user_lockup_positions_and_calc_rewards(
             deps.branch(),
@@ -1111,9 +1111,9 @@ pub fn update_pool_on_dual_rewards_claim(
     Ok(Response::new().add_attributes(vec![
         attr("action", "update_generator_dual_rewards"),
         attr("pool_type", format!("{:?}", pool_type)),
-        attr("astro_reward_received", base_reward_received),
+        attr("NTRN_reward_received", base_reward_received),
         attr(
-            "generator_astro_per_share",
+            "generator_ntrn_per_share",
             pool_info.generator_ntrn_per_share.to_string(),
         ),
     ]))
@@ -1379,17 +1379,17 @@ pub fn query_user_info(deps: Deps, env: Env, user: String) -> StdResult<UserInfo
             .collect::<Result<Vec<u64>, StdError>>()?
         {
             let lockup_info = query_lockup_info(deps, &env, &user, pool_type.clone(), duration)?;
-            total_astro_rewards += lockup_info.astro_rewards;
+            total_astro_rewards += lockup_info.ntrn_rewards;
             claimable_generator_astro_debt += lockup_info.claimable_generator_astro_debt;
             lockup_infos.push(lockup_info);
         }
     }
 
     Ok(UserInfoResponse {
-        total_astro_rewards,
-        astro_transferred: user_info.ntrn_transferred,
+        total_ntrn_rewards: total_astro_rewards,
+        ntrn_transferred: user_info.ntrn_transferred,
         lockup_infos,
-        claimable_generator_astro_debt,
+        claimable_generator_NTRN_debt: claimable_generator_astro_debt,
         lockup_positions_index: user_info.lockup_positions_index,
     })
 }
@@ -1430,8 +1430,8 @@ pub fn query_user_info_with_lockups_list(
     }
 
     Ok(UserInfoWithListResponse {
-        total_astro_rewards: user_info.total_ntrn_rewards,
-        astro_transferred: user_info.ntrn_transferred,
+        total_ntrn_rewards: user_info.total_ntrn_rewards,
+        ntrn_transferred: user_info.ntrn_transferred,
         lockup_infos,
         lockup_positions_index: user_info.lockup_positions_index,
     })
@@ -1580,8 +1580,8 @@ pub fn query_lockup_info(
         pool_type,
         lp_units_locked: lockup_info.lp_units_locked,
         withdrawal_flag: lockup_info.withdrawal_flag,
-        astro_rewards: lockup_info.ntrn_rewards,
-        generator_astro_debt: lockup_info.generator_ntrn_debt,
+        ntrn_rewards: lockup_info.ntrn_rewards,
+        generator_ntrn_debt: lockup_info.generator_ntrn_debt,
         claimable_generator_astro_debt,
         generator_proxy_debt: lockup_info.generator_proxy_debt,
         claimable_generator_proxy_debt,

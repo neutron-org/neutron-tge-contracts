@@ -3,18 +3,20 @@
   "title": "PoolInfo",
   "type": "object",
   "required": [
-    "generator_astro_per_share",
+    "amount_in_lockups",
+    "generator_ntrn_per_share",
     "generator_proxy_per_share",
-    "has_asset_rewards",
     "incentives_share",
     "is_staked",
-    "terraswap_amount_in_lockups",
-    "terraswap_pool",
+    "pool",
     "weighted_amount"
   ],
   "properties": {
-    "generator_astro_per_share": {
-      "description": "Ratio of Generator ASTRO rewards accured to astroport pool share",
+    "amount_in_lockups": {
+      "$ref": "#/definitions/Uint128"
+    },
+    "generator_ntrn_per_share": {
+      "description": "Ratio of Generator NTRN rewards accured to astroport pool share",
       "allOf": [
         {
           "$ref": "#/definitions/Decimal"
@@ -29,12 +31,8 @@
         }
       ]
     },
-    "has_asset_rewards": {
-      "description": "Flag defines whether the asset has rewards or not",
-      "type": "boolean"
-    },
     "incentives_share": {
-      "description": "Share of total ASTRO incentives allocated to this pool",
+      "description": "Share of total NTRN incentives allocated to this pool",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
@@ -43,24 +41,11 @@
       "description": "Boolean value indicating if the LP Tokens are staked with the Generator contract or not",
       "type": "boolean"
     },
-    "migration_info": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/MigrationInfo"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "terraswap_amount_in_lockups": {
-      "$ref": "#/definitions/Uint128"
-    },
-    "terraswap_pool": {
+    "pool": {
       "$ref": "#/definitions/Addr"
     },
     "weighted_amount": {
-      "description": "Weighted LP Token balance used to calculate ASTRO rewards a particular user can claim",
+      "description": "Weighted LP Token balance used to calculate NTRN rewards a particular user can claim",
       "allOf": [
         {
           "$ref": "#/definitions/Uint256"
@@ -123,21 +108,6 @@
     "Decimal": {
       "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
       "type": "string"
-    },
-    "MigrationInfo": {
-      "type": "object",
-      "required": [
-        "astroport_lp_token",
-        "terraswap_migrated_amount"
-      ],
-      "properties": {
-        "astroport_lp_token": {
-          "$ref": "#/definitions/Addr"
-        },
-        "terraswap_migrated_amount": {
-          "$ref": "#/definitions/Uint128"
-        }
-      }
     },
     "RestrictedVector_for_AssetInfo_and_Decimal": {
       "description": "Vec wrapper for internal use. Some business logic relies on an order of this vector, thus it is forbidden to sort it or remove elements. New values can be added using .update() ONLY.",
