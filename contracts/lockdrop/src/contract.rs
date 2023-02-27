@@ -31,8 +31,6 @@ use crate::state::{CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP
 
 const AIRDROP_REWARDS_MULTIPLIER: &str = "2.5";
 
-const SECONDS_PER_MONTH: u64 = 86400 * 30;
-
 pub const UNTRN_DENOM: &str = "untrn";
 
 /// Contract name that is used for migration.
@@ -74,11 +72,13 @@ pub fn instantiate(
         return Err(StdError::generic_err("Invalid Lockup durations"));
     }
 
-    // CHECK ::Weekly divider/multiplier cannot be 0
-    if msg.monthly_divider == 0u64 || msg.monthly_multiplier == 0u64 {
-        return Err(StdError::generic_err(
-            "weekly divider/multiplier cannot be 0",
-        ));
+    if msg.lockup_rewards_info.is_empty() {
+        return Err(StdError::generic_err("Invalid lockup rewards info"));
+    }
+    for lr_info in &msg.lockup_rewards_info {
+        if lr_info.duration == 0 {
+            return Err(StdError::generic_err("Invalid Lockup info rewards duration"));
+        }
     }
 
     if msg.max_positions_per_user < MIN_POSITIONS_PER_USER {
@@ -126,10 +126,9 @@ pub fn instantiate(
         withdrawal_window: msg.withdrawal_window,
         min_lock_duration: msg.min_lock_duration,
         max_lock_duration: msg.max_lock_duration,
-        montly_multiplier: msg.monthly_multiplier,
-        monthly_divider: msg.monthly_divider,
         lockdrop_incentives: Uint128::zero(),
         max_positions_per_user: msg.max_positions_per_user,
+        lockup_rewards_info: msg.lockup_rewards_info,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -615,7 +614,7 @@ fn stake_messages(
 ///
 /// * **pool_type** is an object of type [`PoolType`]. LiquidPool type - USDC or ATOM
 ///
-/// * **duration** is an object of type [`u64`]. Number of weeks the LP token is locked for (lockup period begins post the withdrawal window closure).
+/// * **duration** is an object of type [`u64`]. Number of seconds the LP token is locked for (lockup period begins post the withdrawal window closure).
 ///
 /// * **amount** is an object of type [`Uint128`]. Number of LP tokens sent by the user.
 pub fn handle_increase_lockup(
@@ -679,7 +678,7 @@ pub fn handle_increase_lockup(
                 ntrn_rewards: Uint128::zero(),
                 unlock_timestamp: config.init_timestamp
                     + config.lock_window
-                    + (duration * SECONDS_PER_MONTH),
+                    + duration,
                 generator_ntrn_debt: Uint128::zero(),
                 generator_proxy_debt: Default::default(),
                 withdrawal_flag: false,
@@ -1623,16 +1622,17 @@ pub fn calculate_astro_incentives_for_lockup(
 /// ## Params
 /// * **amount** is an object of type [`Uint128`]. Number of LP tokens.
 ///
-/// * **duration** is an object of type [`u64`]. Number of weeks.
+/// * **duration** is an object of type [`u64`]. Number of seconds.
 ///
 /// * **config** is an object of type [`Config`]. Config with weekly multiplier and divider.
 fn calculate_weight(amount: Uint128, duration: u64, config: &Config) -> StdResult<Uint256> {
-    let lock_weight = Decimal256::one()
-        + Decimal256::from_ratio(
-            (duration - 1) * config.montly_multiplier,
-            config.monthly_divider,
-        );
-    Ok(lock_weight.checked_mul_uint256(amount.into())?.into())
+    if let Some(info) = config.lockup_rewards_info.iter().find(|info| info.duration == duration) {
+        let lock_weight = Decimal256::one()
+            + info.coefficient;
+        Ok(lock_weight.checked_mul_uint256(amount.into())?.into())
+    } else {
+        Err(StdError::generic_err("invalid duration"))
+    }
 }
 
 /// Calculates ASTRO rewards for each of the user position.

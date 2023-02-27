@@ -1,8 +1,6 @@
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
-use cosmwasm_std::{
-    from_slice, to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, Uint256, WasmMsg,
-};
+use cosmwasm_std::{from_slice, to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, Uint256, WasmMsg, Decimal256};
 use cw20::Cw20ReceiveMsg;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use schemars::JsonSchema;
@@ -80,12 +78,10 @@ pub struct InstantiateMsg {
     pub min_lock_duration: u64,
     /// Max. no. of weeks allowed for lockup
     pub max_lock_duration: u64,
-    /// Lockdrop Reward multiplier
-    pub monthly_multiplier: u64,
-    /// Lockdrop Reward divider
-    pub monthly_divider: u64,
     /// Max lockup positions a user can have
     pub max_positions_per_user: u32,
+    /// Describes rewards coefficients for each lockup duration
+    pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -241,6 +237,12 @@ pub struct MigrationInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct LockupRewardsInfo {
+    pub duration: u64,
+    pub coefficient: Decimal256,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
@@ -262,14 +264,12 @@ pub struct Config {
     pub min_lock_duration: u64,
     /// Max. no. of weeks allowed for lockup
     pub max_lock_duration: u64,
-    /// Lockdrop Reward multiplier
-    pub montly_multiplier: u64,
-    /// Lockdrop Reward divider
-    pub monthly_divider: u64,
     /// Total NTRN lockdrop incentives to be distributed among the users
     pub lockdrop_incentives: Uint128,
     /// Max lockup positions a user can have
     pub max_positions_per_user: u32,
+    /// Describes rewards coefficients for each lockup duration
+    pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
