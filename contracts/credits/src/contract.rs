@@ -104,6 +104,15 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response
     Ok(Response::default())
 }
 
+/// Updates cotract airdrop address and lockdrop address. Returns a default object of type [`Response`]
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **airdrop_address** is an object of type [`String`]. New airdrop contract address for config.
+///
+/// * **lockdrop_address** is an object of type [`String`]. New lockdrop contract address for config.
 pub fn execute_update_config(
     deps: DepsMut,
     _env: Env,
@@ -124,6 +133,21 @@ pub fn execute_update_config(
     Ok(Response::default())
 }
 
+/// Adds vesting settings for the specified `address` and `amount` for `duration`.
+/// `amount` expected to be equal to amount on a user balance.
+/// Returns a default object of type [`Response`].
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **_env** is an object of type [`Env`].
+///
+/// * **address** is an object of type [`String`]. Address to add vesting to.
+///
+/// * **amount** is an object of type [`Uint128`]. Amount to be vested.
+///
+/// * **start_time** is an object of type [`u64`]. Vesting starts after `start_time`. Specified in UNIX time in seconds.
+///
+/// * **duration** is an object of type [`u64`]. Duration of vesting. Specified in seconds.
 pub fn execute_add_vesting(
     deps: DepsMut,
     _env: Env,
@@ -168,6 +192,19 @@ pub fn execute_add_vesting(
     Ok(Response::default())
 }
 
+/// Transfers specified `amount` from sender to the specified `recipient`.
+/// Standard cw20 transfer. Allowed to execute only for an airdrop contract.
+/// Returns a default object of type [`Response`].
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`]
+///
+/// * **_env** is an object of type [`Env`]
+///
+/// * **info** is an object of type [`MessageInfo`]
+///
+/// * **recipient** is an object of type [`String`]. Address to transfer to.
+///
+/// * **amount** is an object of type [`Uint128`]. Amount to be transferred.
 pub fn execute_transfer(
     deps: DepsMut,
     env: Env,
@@ -188,6 +225,20 @@ pub fn execute_transfer(
     ::cw20_base::contract::execute_transfer(deps, env, info, recipient, amount)
 }
 
+/// Calculates calculated amount that is already unlocked from vesting for sender,
+/// burns this amount of CuNTRN's and sends 1:1 of uNTRNs proportion to the sender.
+///
+/// Available to execute only after `config.when_withdrawable` time.
+///
+/// Returns error if nothing left to withdraw.
+///
+/// Returns a default object of type [`Response`].
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`]
+///
+/// * **env** is an object of type [`Env`]
+///
+/// * **info** is an object of type [`MessageInfo`]
 pub fn execute_withdraw(
     deps: DepsMut,
     env: Env,
@@ -236,7 +287,21 @@ pub fn execute_withdraw(
     burn_and_send(deps, env, info, to_withdraw)
 }
 
-// execute_burn is for airdrop account that will burn through all unclaimed tokens
+/// Withdraws specified `amount` of tokens -
+/// burns CuNTRNs and sends amount in 1:1 proportion of uNTRNs to the sender (airdrop account).
+/// Used by airdrop account for burning unclaimed tokens.
+///
+/// Only available for an airdrop contract account.
+///
+/// Returns a default object of type [`Response`].
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
+///
+/// * **amount** is an object of type [`Uint128`]. Amount to be burned and minted in 1:1 proportion.
 pub fn execute_burn(
     deps: DepsMut,
     env: Env,
@@ -256,6 +321,25 @@ pub fn execute_burn(
     burn_and_send(deps, env, info, amount)
 }
 
+/// Withdraws specified `amount` of tokens from specified `owner` -
+/// burns CuNTRNs and sends amount in 1:1 proportion of uNTRNs to the `owner`.
+///
+/// Used for rewards for lockdrop participation and *skips vesting*.
+/// It also does NOT change amounts available for `withdraw` by user.
+///
+/// Only available for the lockdrop contract account.
+///
+/// Returns a default object of type [`Response`].
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
+///
+/// * **owner** is an object of type [`String`]. Address to burn cuNTRNs from and send NTRN funds to.
+///
+/// * **amount** is an object of type [`Uint128`]. Amount to be burned and minted in 1:1 proportion.
 pub fn execute_burn_from(
     deps: DepsMut,
     env: Env,
@@ -278,6 +362,7 @@ pub fn execute_burn_from(
     burn_and_send(deps, env, info, amount)
 }
 
+// TODO
 pub fn execute_mint(
     deps: DepsMut,
     env: Env,
