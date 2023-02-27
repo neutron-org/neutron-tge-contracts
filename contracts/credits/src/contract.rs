@@ -12,7 +12,7 @@ use cw20_base::state::{BALANCES, TOKEN_INFO};
 
 use crate::msg::{
     AllocationResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
-    TotalSupplyResponse, WithdrawableAmountResponse,
+    TotalSupplyResponse, VestedAmountResponse, WithdrawableAmountResponse,
 };
 use crate::state::{Allocation, Config, Schedule, ALLOCATIONS, CONFIG};
 
@@ -300,6 +300,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawableAmount { address } => {
             to_binary(&query_withdrawable_amount(deps, env, address)?)
         }
+        QueryMsg::VestedAmount { address } => to_binary(&query_vested_amount(deps, env, address)?),
         QueryMsg::Allocation { address } => to_binary(&query_allocation(deps, address)?),
         QueryMsg::Balance { address } => {
             to_binary(&::cw20_base::contract::query_balance(deps, address)?)
@@ -389,7 +390,7 @@ fn query_withdrawable_amount(
 ) -> StdResult<WithdrawableAmountResponse> {
     let owner = deps.api.addr_validate(&address)?;
     let allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
-    let withdrawable_amount = compute_withdrawable_amount(
+    let max_withdrawable_amount = compute_withdrawable_amount(
         allocation.allocated_amount,
         allocation.withdrawn_amount,
         &allocation.schedule,
@@ -398,9 +399,27 @@ fn query_withdrawable_amount(
     // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
     // so we need to withdraw not more than the current balance
     let actual_balance = BALANCES.load(deps.storage, &owner)?;
-    let amount = withdrawable_amount.min(actual_balance);
+    let amount = max_withdrawable_amount.min(actual_balance);
 
     Ok(WithdrawableAmountResponse { amount })
+}
+
+fn query_vested_amount(deps: Deps, env: Env, address: String) -> StdResult<VestedAmountResponse> {
+    let owner = deps.api.addr_validate(&address)?;
+    let allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
+    let max_withdrawable_amount = compute_withdrawable_amount(
+        allocation.allocated_amount,
+        allocation.withdrawn_amount,
+        &allocation.schedule,
+        env.block.time.seconds(),
+    )?;
+    // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
+    // so we need to withdraw not more than the current balance
+    let actual_balance = BALANCES.load(deps.storage, &owner)?;
+    let withdrawable_amount = max_withdrawable_amount.min(actual_balance);
+    let amount = actual_balance - withdrawable_amount;
+
+    Ok(VestedAmountResponse { amount })
 }
 
 fn query_allocation(deps: Deps, address: String) -> StdResult<AllocationResponse> {
@@ -1335,6 +1354,85 @@ mod tests {
                 compute_withdrawable_amount(Uint128::new(100), Uint128::new(25), &schedule, now_3);
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), Uint128::new(25));
+        }
+    }
+
+    mod query_vested_amount {
+        use crate::contract::query_vested_amount;
+        use crate::contract::tests::{_instantiate_vest_to_somebody, _withdraw_rewards};
+        use cosmwasm_std::{StdError, Uint128};
+
+        #[test]
+        fn returns_error_when_non_existent_address_passed() {
+            // instantiate
+            let (deps, env) = _instantiate_vest_to_somebody(10_000_000, 100, None, 1000);
+
+            let query_res = query_vested_amount(deps.as_ref(), env, "noname".to_string());
+            assert_eq!(
+                query_res,
+                Err(StdError::not_found("credits::state::Allocation"))
+            );
+        }
+
+        #[test]
+        fn works_when_no_time_passed() {}
+
+        #[test]
+        fn works_when_time_passed() {
+            // instantiate
+            let (deps, mut env) = _instantiate_vest_to_somebody(10_000_000, 100, None, 1000);
+
+            // at this point `somebody` has vested 100 NTRNs on 1000 seconds
+
+            // pass 3/4 vesting duration (750 seconds)
+            env.block.time = env.block.time.plus_seconds(750);
+
+            let query_res =
+                query_vested_amount(deps.as_ref(), env.clone(), "somebody".to_string()).unwrap();
+            assert_eq!(query_res.amount, Uint128::new(25));
+
+            // pass full vesting duration
+            env.block.time = env.block.time.plus_seconds(250);
+            let query_res =
+                query_vested_amount(deps.as_ref(), env.clone(), "somebody".to_string()).unwrap();
+            assert_eq!(query_res.amount, Uint128::new(0));
+
+            // pass more than vesting duration
+            env.block.time = env.block.time.plus_seconds(100);
+            let query_res =
+                query_vested_amount(deps.as_ref(), env, "somebody".to_string()).unwrap();
+            assert_eq!(query_res.amount, Uint128::new(0));
+        }
+
+        #[test]
+        fn works_when_burn_from_used_previously() {
+            // instantiate
+            let (mut deps, mut env) = _instantiate_vest_to_somebody(10_000_000, 100, None, 1000);
+
+            // withdraw rewards for that account
+            _withdraw_rewards(deps.as_mut(), env.clone(), 10);
+
+            // pass 1/4 vesting duration (750 seconds)
+            env.block.time = env.block.time.plus_seconds(250);
+
+            // vested amount = 100 - 10 (withdrawn rewards) - 25 (possible to withdraw) = 65
+            let query_res =
+                query_vested_amount(deps.as_ref(), env.clone(), "somebody".to_string()).unwrap();
+            assert_eq!(query_res.amount, Uint128::new(65));
+
+            // pass 95% vesting duration
+            env.block.time = env.block.time.plus_seconds(700);
+            // vested amount = 0 because we have already withdrawn 10% of funds without vesting
+            let query_res =
+                query_vested_amount(deps.as_ref(), env.clone(), "somebody".to_string()).unwrap();
+            assert_eq!(query_res.amount, Uint128::new(0));
+
+            // pass full duration (1000 seconds)
+            env.block.time = env.block.time.plus_seconds(50);
+            // vested amount = 0
+            let query_res =
+                query_vested_amount(deps.as_ref(), env, "somebody".to_string()).unwrap();
+            assert_eq!(query_res.amount, Uint128::new(0));
         }
     }
 }

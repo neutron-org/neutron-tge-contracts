@@ -61,7 +61,10 @@ pub enum QueryMsg {
     /// Returns the current vestings of the given address.
     #[returns(WithdrawableAmountResponse)]
     WithdrawableAmount { address: String },
-    /// Returns the current allocation of the given address
+    /// Returns the amount that is left vested of the given address.
+    #[returns(VestedAmountResponse)]
+    VestedAmount { address: String },
+    /// Returns the current allocation of the given address.
     #[returns(AllocationResponse)]
     Allocation { address: String },
     /// Returns the current balance of the given address, 0 if unset.
@@ -135,6 +138,12 @@ pub struct TotalSupplyResponse {
 #[cw_serde]
 pub struct WithdrawableAmountResponse {
     /// Amount that the user can withdraw at this block height.
+    pub amount: Uint128,
+}
+
+#[cw_serde]
+pub struct VestedAmountResponse {
+    /// Amount that is still vested for the user.
     pub amount: Uint128,
 }
 
