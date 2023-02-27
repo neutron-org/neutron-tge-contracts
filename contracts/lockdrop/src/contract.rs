@@ -236,7 +236,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             duration,
             amount,
         } => handle_withdraw_from_lockup(deps, env, info, pool_type, duration, amount),
-        ExecuteMsg::UpdateConfig { new_config } => todo!(),
+        ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config)
     }
 }
 

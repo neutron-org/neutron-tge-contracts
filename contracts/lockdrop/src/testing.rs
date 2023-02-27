@@ -3,8 +3,8 @@ use astroport_periphery::lockdrop::{Config, ExecuteMsg, InstantiateMsg, QueryMsg
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
 use cosmwasm_std::{from_binary, Addr};
 
-const ATOM_LP_TOKEN_ADDR: &str = "atomLp";
-const USDC_LP_TOKEN_ADDR: &str = "usdcLp";
+const ATOM_LP_TOKEN_ADDR: &str = "atom_lp";
+const USDC_LP_TOKEN_ADDR: &str = "usdc_lp";
 
 #[test]
 fn update_owner() {
