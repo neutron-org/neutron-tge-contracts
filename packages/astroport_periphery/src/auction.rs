@@ -2,6 +2,8 @@ use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg}
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::lockdrop::PoolType;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct InstantiateMsg {
     pub owner: Option<String>,
@@ -58,14 +60,14 @@ pub enum ExecuteMsg {
     InitPool {},
     SetPoolSize {},
     LockLp {
-        asset: String,
+        asset: PoolType,
         amount: Uint128,
-        period: u16,
+        period: u64,
     },
     WithdrawLp {
-        asset: String,
+        asset: PoolType,
         amount: Uint128,
-        period: u16,
+        period: u64,
     },
     MigrateToVesting {},
     Callback(CallbackMsg),
@@ -210,21 +212,6 @@ pub enum PriceFeedQuery {
 pub struct PriceFeedResponse {
     pub prices: Vec<u64>,
     pub timestamp: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum LockDropExecute {
-    IncreaseLockupFor {
-        asset: String,
-        amount: Uint128,
-        period: u16,
-    },
-    WithdrawFromLockup {
-        asset: String,
-        amount: Uint128,
-        period: u16,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

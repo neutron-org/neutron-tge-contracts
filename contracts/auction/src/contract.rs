@@ -1,3 +1,4 @@
+use astroport::asset::{Asset, AssetInfo};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
@@ -6,14 +7,15 @@ use cosmwasm_std::{
 };
 
 use astroport_periphery::auction::{
-    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockDropExecute, MigrateMsg, PoolBalance,
-    PoolInfo, PriceFeedQuery, PriceFeedResponse, QueryMsg, State, UpdateConfigMsg,
-    UserInfoResponse, UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolBalance, PoolInfo,
+    PriceFeedQuery, PriceFeedResponse, QueryMsg, State, UpdateConfigMsg, UserInfoResponse,
+    UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
 };
+use astroport_periphery::lockdrop::{ExecuteMsg as LockDropExecuteMsg, PoolType};
+
 use cw20::Cw20ExecuteMsg;
 
 use crate::state::{get_users_store, CONFIG, STATE};
-use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo};
 use astroport::querier::query_token_balance;
 use cw2::set_contract_version;
 
@@ -53,24 +55,19 @@ pub fn instantiate(
     let config = Config {
         owner: msg
             .owner
-            .map(|v| addr_validate_to_lower(deps.api, &v))
+            .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
-        airdrop_contract_address: addr_validate_to_lower(deps.api, &msg.airdrop_contract_address)?,
-        lockdrop_contract_address: addr_validate_to_lower(
-            deps.api,
-            &msg.lockdrop_contract_address,
-        )?,
-        price_feed_contract: addr_validate_to_lower(deps.api, msg.price_feed_contract)?,
-        reserve_contract_address: addr_validate_to_lower(deps.api, &msg.reserve_contract_address)?,
-        vesting_usdc_contract_address: addr_validate_to_lower(
-            deps.api,
-            &msg.vesting_usdc_contract_address,
-        )?,
-        vesting_atom_contract_address: addr_validate_to_lower(
-            deps.api,
-            &msg.vesting_atom_contract_address,
-        )?,
+        airdrop_contract_address: deps.api.addr_validate(&msg.airdrop_contract_address)?,
+        lockdrop_contract_address: deps.api.addr_validate(&msg.lockdrop_contract_address)?,
+        price_feed_contract: deps.api.addr_validate(msg.price_feed_contract.as_str())?,
+        reserve_contract_address: deps.api.addr_validate(&msg.reserve_contract_address)?,
+        vesting_usdc_contract_address: deps
+            .api
+            .addr_validate(&msg.vesting_usdc_contract_address)?,
+        vesting_atom_contract_address: deps
+            .api
+            .addr_validate(&msg.vesting_atom_contract_address)?,
         pool_info: None,
         lp_tokens_lock_window: msg.lp_tokens_lock_window,
         init_timestamp: msg.init_timestamp,
@@ -260,12 +257,12 @@ pub fn execute_update_config(
 
     // UPDATE :: ADDRESSES IF PROVIDED
     if let Some(owner) = new_config.owner {
-        config.owner = addr_validate_to_lower(deps.api, &owner)?;
+        config.owner = deps.api.addr_validate(&owner)?;
         attributes.push(attr("owner", config.owner.to_string()));
     }
 
     if let Some(price_feed_contract) = new_config.price_feed_contract {
-        config.price_feed_contract = addr_validate_to_lower(deps.api, &price_feed_contract)?;
+        config.price_feed_contract = deps.api.addr_validate(&price_feed_contract)?;
         attributes.push(attr(
             "price_feed_contract",
             config.price_feed_contract.to_string(),
@@ -858,9 +855,9 @@ pub fn execute_lock_lp_tokens(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    asset: String,
+    asset: PoolType,
     amount: Uint128,
-    period: u16,
+    duration: u64,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
@@ -875,15 +872,6 @@ pub fn execute_lock_lp_tokens(
         return Err(StdError::generic_err("Lock window is closed!"));
     }
 
-    let (usdc_denom, atom_denom) = (config.usdc_denom.clone(), config.atom_denom.clone());
-
-    if asset != usdc_denom && asset != atom_denom {
-        return Err(StdError::generic_err(format!(
-            "{} is not supported yet!",
-            asset
-        )));
-    }
-
     let user_lp_info = get_user_lp_info(
         user_info.usdc_deposited,
         user_info.atom_deposited,
@@ -893,35 +881,37 @@ pub fn execute_lock_lp_tokens(
         state.atom_lp_size,
     );
 
-    if asset == usdc_denom {
-        if user_info.usdc_deposited.is_zero() {
-            return Err(StdError::generic_err("No USDC deposited!"));
+    match asset {
+        PoolType::USDC => {
+            if user_info.usdc_deposited.is_zero() {
+                return Err(StdError::generic_err("No USDC deposited!"));
+            }
+            if amount > user_lp_info.usdc_lp_amount - user_info.usdc_lp_locked {
+                return Err(StdError::generic_err("Not enough USDC LP!"));
+            }
+            user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_add(amount)?;
+            state.usdc_lp_locked = state.usdc_lp_locked.checked_add(amount)?;
         }
-        if amount > user_lp_info.usdc_lp_amount - user_info.usdc_lp_locked {
-            return Err(StdError::generic_err("Not enough USDC LP!"));
+        PoolType::ATOM => {
+            if user_info.atom_deposited.is_zero() {
+                return Err(StdError::generic_err("No ATOM deposited!"));
+            }
+            if amount > user_lp_info.atom_lp_amount - user_info.atom_lp_locked {
+                return Err(StdError::generic_err("Not enough ATOM LP!"));
+            }
+            user_info.atom_lp_locked += user_info.atom_lp_locked.checked_add(amount)?;
+            state.atom_lp_locked = state.atom_lp_locked.checked_add(amount)?;
         }
-        user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_add(amount)?;
-        state.usdc_lp_locked = state.usdc_lp_locked.checked_add(amount)?;
-    }
-
-    if asset == atom_denom {
-        if user_info.atom_deposited.is_zero() {
-            return Err(StdError::generic_err("No ATOM deposited!"));
-        }
-        if amount > user_lp_info.atom_lp_amount - user_info.atom_lp_locked {
-            return Err(StdError::generic_err("Not enough ATOM LP!"));
-        }
-        user_info.atom_lp_locked += user_info.atom_lp_locked.checked_add(amount)?;
-        state.atom_lp_locked = state.atom_lp_locked.checked_add(amount)?;
     }
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.lockdrop_contract_address.to_string(),
         funds: vec![],
-        msg: to_binary(&LockDropExecute::IncreaseLockupFor {
-            asset: asset.clone(),
+        msg: to_binary(&LockDropExecuteMsg::IncreaseLockupFor {
+            user_address: info.sender.to_string(),
+            pool_type: asset,
             amount,
-            period,
+            duration,
         })?,
     });
 
@@ -932,7 +922,7 @@ pub fn execute_lock_lp_tokens(
         attr("action", "lock_lp_tokens"),
         attr("asset", asset),
         attr("amount", amount),
-        attr("period", period.to_string()),
+        attr("period", duration.to_string()),
     ]))
 }
 
@@ -947,9 +937,9 @@ pub fn execute_withdraw_lp_tokens(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    asset: String,
+    asset: PoolType,
     amount: Uint128,
-    period: u16,
+    duration: u64,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
@@ -964,32 +954,24 @@ pub fn execute_withdraw_lp_tokens(
         return Err(StdError::generic_err("Lock window is closed!"));
     }
 
-    let (usdc_denom, atom_denom) = (config.usdc_denom.clone(), config.atom_denom.clone());
-
-    if asset != usdc_denom && asset != atom_denom {
-        return Err(StdError::generic_err(format!(
-            "{} is not supported yet!",
-            asset
-        )));
-    }
-
-    if asset == usdc_denom {
-        user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_sub(amount)?;
-        state.usdc_lp_locked = state.usdc_lp_locked.checked_sub(amount)?;
-    }
-
-    if asset == atom_denom {
-        user_info.atom_lp_locked += user_info.atom_lp_locked.checked_sub(amount)?;
-        state.atom_lp_locked = state.atom_lp_locked.checked_sub(amount)?;
+    match asset {
+        PoolType::USDC => {
+            user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_sub(amount)?;
+            state.usdc_lp_locked = state.usdc_lp_locked.checked_sub(amount)?;
+        }
+        PoolType::ATOM => {
+            user_info.atom_lp_locked += user_info.atom_lp_locked.checked_sub(amount)?;
+            state.atom_lp_locked = state.atom_lp_locked.checked_sub(amount)?;
+        }
     }
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: config.lockdrop_contract_address.to_string(),
         funds: vec![],
-        msg: to_binary(&LockDropExecute::IncreaseLockupFor {
-            asset: asset.clone(),
+        msg: to_binary(&LockDropExecuteMsg::WithdrawFromLockup {
+            pool_type: asset,
             amount,
-            period,
+            duration,
         })?,
     });
 
@@ -1000,7 +982,7 @@ pub fn execute_withdraw_lp_tokens(
         attr("action", "withdraw_lp_tokens"),
         attr("asset", asset),
         attr("amount", amount),
-        attr("period", period.to_string()),
+        attr("period", duration.to_string()),
     ]))
 }
 
@@ -1032,7 +1014,7 @@ fn is_lock_window_closed(current_timestamp: u64, config: &Config) -> bool {
 fn query_user_info(deps: Deps, _env: Env, user_address: String) -> StdResult<UserInfoResponse> {
     let state = STATE.load(deps.storage)?;
     let users_store = get_users_store();
-    let user_address = addr_validate_to_lower(deps.api, &user_address)?;
+    let user_address = deps.api.addr_validate(&user_address)?;
     let user_info = users_store
         .may_load(deps.storage, &user_address)?
         .unwrap_or_default();
