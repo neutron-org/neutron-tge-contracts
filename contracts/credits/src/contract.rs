@@ -104,7 +104,8 @@ pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response
     Ok(Response::default())
 }
 
-/// Updates cotract airdrop address and lockdrop address. Returns a default object of type [`Response`]
+/// Updates contract airdrop address and lockdrop address. Returns a default object of type [`Response`]
+///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -136,6 +137,7 @@ pub fn execute_update_config(
 /// Adds vesting settings for the specified `address` and `amount` for `duration`.
 /// `amount` expected to be equal to amount on a user balance.
 /// Returns a default object of type [`Response`].
+///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -195,6 +197,7 @@ pub fn execute_add_vesting(
 /// Transfers specified `amount` from sender to the specified `recipient`.
 /// Standard cw20 transfer. Allowed to execute only for an airdrop contract.
 /// Returns a default object of type [`Response`].
+///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`]
 ///
@@ -233,6 +236,7 @@ pub fn execute_transfer(
 /// Returns error if nothing left to withdraw.
 ///
 /// Returns a default object of type [`Response`].
+///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`]
 ///
@@ -294,6 +298,7 @@ pub fn execute_withdraw(
 /// Only available for an airdrop contract account.
 ///
 /// Returns a default object of type [`Response`].
+///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -330,6 +335,7 @@ pub fn execute_burn(
 /// Only available for the lockdrop contract account.
 ///
 /// Returns a default object of type [`Response`].
+///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -441,6 +447,11 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
+/// Returns current contract config.
+/// Returns an object of type [`StdResult<ConfigResponse>`].
+///
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
 fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let config = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
@@ -451,6 +462,16 @@ fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     })
 }
 
+/// Returns total token supply at a specified `maybe_height`. If height is not present, returns current total supply.
+/// Returns an object of type [`StdResult<TotalSupplyResponse>`].
+///
+/// Returns `0` if no total supply found (should be impossible).
+///
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **maybe_height** is an object of type [`Option<u64>`].
+/// Use `Some(height)` for getting total supply at some height, `None` for getting current total supply.
 fn query_total_supply_at_height(
     deps: Deps,
     maybe_height: Option<u64>,
@@ -465,6 +486,17 @@ fn query_total_supply_at_height(
     Ok(TotalSupplyResponse { total_supply })
 }
 
+/// Returns balance at a specified `maybe_height` for specified `address`. If height is not present, returns current balance.
+/// Returns an object of type [`StdResult<BalanceResponse>`].
+/// Returns `0` if no balance for such user exists at this height.
+///
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+//
+/// * **address** is an object of type [`String`]. Address of the user to get balance for.
+///
+/// * **maybe_height** is an object of type [`Option<u64>`].
+/// Use `Some(height)` for getting balance at some height, `None` for getting current balance.
 fn query_balance_at_height(
     deps: Deps,
     address: String,
@@ -481,6 +513,16 @@ fn query_balance_at_height(
     Ok(BalanceResponse { balance })
 }
 
+/// Returns amount for specified `address` that is available to `withdraw` from balance.
+/// Returns an object of type [`StdResult<WithdrawableAmountResponse>`].
+/// Returns an error if no vesting was set up or no balance for such user exists.
+///
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **address** is an object of type [`String`]. Address of the user we want to query withdrawable amount.
 fn query_withdrawable_amount(
     deps: Deps,
     env: Env,
@@ -502,6 +544,17 @@ fn query_withdrawable_amount(
     Ok(WithdrawableAmountResponse { amount })
 }
 
+/// Returns amount for specified `address` that is still vested and user cannot withdraw yet.
+/// It's equal to (user balance) - (user withdrawable amount)
+/// Returns an object of type [`StdResult<VestedAmountResponse>`].
+/// Returns an error if no vesting was set up or no balance for such user exists.
+///
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **address** is an object of type [`String`]. Address of the user we want to query withdrawable amount.
 fn query_vested_amount(deps: Deps, env: Env, address: String) -> StdResult<VestedAmountResponse> {
     let owner = deps.api.addr_validate(&address)?;
     let allocation: Allocation = ALLOCATIONS.load(deps.storage, &owner)?;
@@ -520,6 +573,16 @@ fn query_vested_amount(deps: Deps, env: Env, address: String) -> StdResult<Veste
     Ok(VestedAmountResponse { amount })
 }
 
+/// Returns current vesting allocation for specified `address`.
+/// Note that `allocation.withdrawn_amount` does not take burned rewards from `BurnFrom` into account.
+/// That means that `allocation.allocated_amount - allocation.withdrawn_amount` is not always equal to `withdrawable amount`
+/// Returns an object of type [`StdResult<VestedAmountResponse>`].
+/// Returns an error if no vesting was set up or no balance for such user exists.
+///
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **address** is an object of type [`String`]. Address of the user we want to query withdrawable amount.
 fn query_allocation(deps: Deps, address: String) -> StdResult<AllocationResponse> {
     let owner = deps.api.addr_validate(&address)?;
     let allocation = ALLOCATIONS.load(deps.storage, &owner)?;
