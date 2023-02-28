@@ -181,9 +181,9 @@ pub fn execute_add_vesting(
         &vested_to,
         |o: Option<Allocation>| -> Result<Allocation, Cw20ContractError> {
             match o {
-                Some(_) => Err(Cw20ContractError::Std(StdError::generic_err(
-                    "cannot add vesting two times",
-                ))),
+                Some(_) => Err(Cw20ContractError::Std(StdError::generic_err(format!(
+                    "vesting for address {address:?} already exists"
+                )))),
                 None => Ok(Allocation {
                     allocated_amount: amount,
                     withdrawn_amount: Uint128::zero(),

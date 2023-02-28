@@ -365,7 +365,9 @@ mod add_vesting {
         );
         assert_eq!(
             res,
-            Err(Std(StdError::generic_err("cannot add vesting two times")))
+            Err(Std(StdError::generic_err(
+                "vesting for address \"address\" already exists"
+            )))
         );
     }
 }
