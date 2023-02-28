@@ -362,7 +362,20 @@ pub fn execute_burn_from(
     burn_and_send(deps, env, info, amount)
 }
 
-// TODO
+/// Mints cuntrn tokens in 1:1 proportion to sent untrn ones
+/// Uses cw20 standard mint, but only can mint to the airdrop contract balance
+/// Returns a default object of type [`Response`].
+///
+/// Only available to dao contract to call (permission set up in initialization in `TokenInfo.mint.minter` field
+///
+/// Returns error if no untrn funds were sent.
+///
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
 pub fn execute_mint(
     deps: DepsMut,
     env: Env,
