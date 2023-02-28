@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InstantiateMsg",
+  "type": "object",
+  "required": [
+    "airdrop_contract_address",
+    "astro_token_address",
+    "deposit_window",
+    "init_timestamp",
+    "lockdrop_contract_address",
+    "lp_tokens_vesting_duration",
+    "withdrawal_window"
+  ],
+  "properties": {
+    "airdrop_contract_address": {
+      "type": "string"
+    },
+    "astro_token_address": {
+      "type": "string"
+    },
+    "deposit_window": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "init_timestamp": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "lockdrop_contract_address": {
+      "type": "string"
+    },
+    "lp_tokens_vesting_duration": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "withdrawal_window": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  }
+}

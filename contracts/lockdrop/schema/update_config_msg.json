@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UpdateConfigMsg",
+  "type": "object",
+  "properties": {
+    "astro_token_address": {
+      "description": "Astroport token address",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "auction_contract_address": {
+      "description": "Bootstrap Auction contract address",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "generator_address": {
+      "description": "Generator (Staking for dual rewards) contract address",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

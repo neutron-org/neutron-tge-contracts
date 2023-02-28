@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InstantiateMsg",
+  "type": "object",
+  "required": [
+    "deposit_window",
+    "init_timestamp",
+    "max_lock_duration",
+    "max_positions_per_user",
+    "min_lock_duration",
+    "weekly_divider",
+    "weekly_multiplier",
+    "withdrawal_window"
+  ],
+  "properties": {
+    "deposit_window": {
+      "description": "Number of seconds during which lockup deposits will be accepted",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "init_timestamp": {
+      "description": "Timestamp when Contract will start accepting LP Token deposits",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "max_lock_duration": {
+      "description": "Max. no. of weeks allowed for lockup",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "max_positions_per_user": {
+      "description": "Max lockup positions a user can have",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "min_lock_duration": {
+      "description": "Min. no. of weeks allowed for lockup",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "owner": {
+      "description": "Account which can update config",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "weekly_divider": {
+      "description": "Lockdrop Reward divider",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "weekly_multiplier": {
+      "description": "Lockdrop Reward multiplier",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "withdrawal_window": {
+      "description": "Withdrawal Window Length :: Post the deposit window",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  }
+}
