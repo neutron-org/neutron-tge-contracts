@@ -4,8 +4,6 @@ use cosmwasm_std::{Addr, Timestamp, Uint128};
 
 #[cw_serde]
 pub struct InstantiateMsg {
-    /// DAO contract address
-    pub dao_address: String,
     /// Airdrop contract address
     pub airdrop_address: Option<String>,
     /// Lockdrop contract address,

@@ -40,13 +40,13 @@ const VESTING_CLIFF: u64 = 0;
 pub fn instantiate(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, Cw20ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     let mut config = Config {
-        dao_address: deps.api.addr_validate(&msg.dao_address)?,
+        dao_address: info.sender,
         airdrop_address: None,
         lockdrop_address: None,
         when_withdrawable: msg.when_withdrawable,
@@ -732,7 +732,6 @@ mod tests {
     fn _do_simple_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env) {
         _do_instantiate(
             deps,
-            "dao_address".to_string(),
             Some("airdrop_address".to_string()),
             Some("lockdrop_address".to_string()),
             funds,
@@ -742,19 +741,17 @@ mod tests {
 
     fn _do_instantiate(
         mut deps: DepsMut,
-        dao_address: String,
         airdrop_address: Option<String>,
         lockdrop_address: Option<String>,
         funds: Option<Vec<Coin>>,
         when_withdrawable: Timestamp,
     ) -> (MessageInfo, Env) {
         let instantiate_msg = InstantiateMsg {
-            dao_address,
             airdrop_address,
             lockdrop_address,
             when_withdrawable,
         };
-        let info = mock_info("creator", &funds.unwrap_or_default());
+        let info = mock_info("dao_address", &funds.unwrap_or_default());
         let env = mock_env();
         let res = instantiate(deps.branch(), env.clone(), info.clone(), instantiate_msg).unwrap();
         assert_eq!(0, res.messages.len());
@@ -854,7 +851,6 @@ mod tests {
             let mut deps = mock_dependencies();
             let (_info, _env) = _do_instantiate(
                 deps.as_mut(),
-                "dao_address".to_string(),
                 Some("airdrop_address".to_string()),
                 Some("lockdrop_address".to_string()),
                 None,
@@ -896,14 +892,8 @@ mod tests {
         #[test]
         fn works_without_initial_addresses() {
             let mut deps = mock_dependencies();
-            let (_info, _env) = _do_instantiate(
-                deps.as_mut(),
-                "dao_address".to_string(),
-                None,
-                None,
-                None,
-                Timestamp::from_seconds(0),
-            );
+            let (_info, _env) =
+                _do_instantiate(deps.as_mut(), None, None, None, Timestamp::from_seconds(0));
             let config = query_config(deps.as_ref()).unwrap();
             assert_eq!(config.dao_address, "dao_address".to_string());
             assert_eq!(config.lockdrop_address, None);
@@ -1234,7 +1224,6 @@ mod tests {
             let mut deps = mock_dependencies();
             let (_info, env) = _do_instantiate(
                 deps.as_mut(),
-                "dao_address".to_string(),
                 None,
                 None,
                 None,
