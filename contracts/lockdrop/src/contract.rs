@@ -481,9 +481,8 @@ pub fn handle_increasing_ntrn_incentives(
     let amount = if let Some(coin) = incentive {
         coin.amount
     } else {
-        return Err(StdError::GenericErr {
-            msg: format!("{} is not found", UNTRN_DENOM),
-        });
+        return Err(StdError::generic_err(
+            format!("{} is not found", UNTRN_DENOM)));
     };
     // Anyone can increase ntrn incentives
     config.lockdrop_incentives = config.lockdrop_incentives.checked_add(amount)?;
