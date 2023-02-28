@@ -284,7 +284,7 @@ pub fn execute_withdraw(
     let actual_balance = BALANCES.load(deps.storage, &owner)?;
     let to_withdraw = max_withdrawable_amount.min(actual_balance);
 
-    // check that zero
+    // Check that not zero
     if to_withdraw.is_zero() {
         return Err(Cw20ContractError::Std(StdError::generic_err(
             "no funds to claim",
