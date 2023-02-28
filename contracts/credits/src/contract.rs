@@ -25,7 +25,7 @@ const CONTRACT_NAME: &str = "crates.io:credits";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub const TOKEN_NAME: &str = "cNTRN";
-pub const TOKEN_SYMBOL: &str = "cntrn";
+pub const TOKEN_SYMBOL: &str = "cNTRN";
 pub const TOKEN_DECIMALS: u8 = 6;
 pub const DEPOSITED_SYMBOL: &str = "untrn";
 
