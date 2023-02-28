@@ -38,7 +38,7 @@ pub enum ExecuteMsg {
     /// [Permissionless]
     Withdraw {},
     /// Burn is a message only for airdrop account to destroy
-    /// certain amount of cNTRN's forever and send NTRN tokens in 1:1 proportion.
+    /// certain amount of cntrn tokens forever and send untrn tokens in 1:1 proportion.
     /// [Permissioned - Airdrop address]
     Burn { amount: Uint128 },
     /// BurnFrom is a message only for lockdrop contract
@@ -46,10 +46,8 @@ pub enum ExecuteMsg {
     /// Used to skip vesting as a reward for participating in the lockdrop.
     /// [Permissioned - Lockdrop address]
     BurnFrom { owner: String, amount: Uint128 },
-    /// If authorized (only dao can call),
-    /// locks the NTRN tokens and mints cNTRN tokens in 1:1 amount
-    /// and adds to the dao balance.
-    /// [Permissioned - DAO] (Dao set in initialize func as cw20 minter)
+    /// Locks the untrn tokens and mints ucntrn tokens in 1:1 amount to the airdrop balance.
+    /// [Permissioned - DAO] (DAO address set in initialize func as cw20 minter)
     Mint {},
 }
 

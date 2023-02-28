@@ -278,7 +278,7 @@ pub fn execute_withdraw(
 
     // Guard against the case where actual balance is smaller than max withdrawable amount.
     // That can happen if user already withdrawn some funds as rewards for lockdrop participation through burn_from (skipping vesting).
-    // Example: user had 100 cNTRN on balance, and burned 100 cNTRN through burn_from.
+    // Example: user had 100 ucntrn on balance, and burned 100 cNTRN through burn_from.
     // Suppose vesting period fully ended. In that case `compute_withdrawable_amount()` will return 100 NTRN,
     // although he has 0 on balance.
     let actual_balance = BALANCES.load(deps.storage, &owner)?;
