@@ -12,12 +12,13 @@ use astroport_periphery::auction::{
     UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
 };
 use astroport_periphery::lockdrop::{ExecuteMsg as LockDropExecuteMsg, PoolType};
-
-use cw20::Cw20ExecuteMsg;
+use neutron_price_feed::state::PriceFeedRate;
 
 use crate::state::{get_users_store, CONFIG, STATE};
 use astroport::querier::query_token_balance;
 use cw2::set_contract_version;
+use cw20::Cw20ExecuteMsg;
+use neutron_price_feed::msg::QueryMsg as PriceFeedQueryMsg;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "auction";
@@ -484,14 +485,12 @@ pub fn execute_set_pool_size(
         &config.ntrn_denom,
     )?;
 
-    let exchange_data: PriceFeedResponse = deps.querier.query_wasm_smart(
-        config.price_feed_contract,
-        &PriceFeedQuery::GetPrice {
-            symbols: vec!["USDC".to_string(), "ATOM".to_string()],
-        },
-    )?;
+    let exchange_data: Vec<PriceFeedRate> = deps
+        .querier
+        .query_wasm_smart(config.price_feed_contract, &PriceFeedQueryMsg::GetRate {})?;
 
-    if exchange_data.timestamp < env.block.time.seconds() - config.min_exchange_rate_age {
+    if exchange_data[0].resolve_time.u64() < env.block.time.seconds() - config.min_exchange_rate_age
+    {
         return Err(StdError::generic_err("Price feed data is too old"));
     }
 
@@ -502,7 +501,7 @@ pub fn execute_set_pool_size(
         )));
     }
 
-    let usdc_to_atom_rate = Decimal::from_ratio(exchange_data.prices[0], exchange_data.prices[1]);
+    let usdc_to_atom_rate = Decimal::from_ratio(exchange_data[0].rate, exchange_data[1].rate);
     let all_in_usdc = Uint128::checked_add(usdc_amount, atom_amount * usdc_to_atom_rate)?;
     let div_ratio = Decimal::from_ratio(usdc_amount, all_in_usdc);
     let usdc_ntrn_size = ntrn_amount * div_ratio;
