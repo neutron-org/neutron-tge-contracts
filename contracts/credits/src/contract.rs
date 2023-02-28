@@ -20,8 +20,8 @@ use crate::state::{Allocation, Config, Schedule, ALLOCATIONS, CONFIG};
 const CONTRACT_NAME: &str = "crates.io:credits";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const TOKEN_NAME: &str = "CNTRN";
-const TOKEN_SYMBOL: &str = "cuntrn";
+const TOKEN_NAME: &str = "cNTRN";
+const TOKEN_SYMBOL: &str = "ucntrn";
 const TOKEN_DECIMALS: u8 = 6;
 const DEPOSITED_SYMBOL: &str = "untrn";
 
@@ -234,8 +234,8 @@ pub fn execute_transfer(
     ::cw20_base::contract::execute_transfer(deps, env, info, recipient, amount)
 }
 
-/// Calculates calculated amount that is already unlocked from vesting for sender,
-/// burns this amount of CuNTRN's and sends 1:1 of uNTRNs proportion to the sender.
+/// Calculates amount that is already unlocked from vesting for sender,
+/// burns this amount of ucntrn tokens and sends 1:1 of untrn tokens proportion to the sender.
 ///
 /// Available to execute only after `config.when_withdrawable` time.
 ///
@@ -272,13 +272,13 @@ pub fn execute_withdraw(
 
     if max_withdrawable_amount.is_zero() {
         return Err(Cw20ContractError::Std(StdError::generic_err(
-            "nothing to claim yet",
+            "no funds to claim",
         )));
     }
 
     // Guard against the case where actual balance is smaller than max withdrawable amount.
     // That can happen if user already withdrawn some funds as rewards for lockdrop participation through burn_from (skipping vesting).
-    // Example: user had 100 CNTRN on balance, and burned 100 CNTRN through burn_from.
+    // Example: user had 100 cNTRN on balance, and burned 100 cNTRN through burn_from.
     // Suppose vesting period fully ended. In that case `compute_withdrawable_amount()` will return 100 NTRN,
     // although he has 0 on balance.
     let actual_balance = BALANCES.load(deps.storage, &owner)?;
@@ -287,7 +287,7 @@ pub fn execute_withdraw(
     // check that zero
     if to_withdraw.is_zero() {
         return Err(Cw20ContractError::Std(StdError::generic_err(
-            "nothing to claim",
+            "no funds to claim",
         )));
     }
 
@@ -298,7 +298,7 @@ pub fn execute_withdraw(
 }
 
 /// Withdraws specified `amount` of tokens -
-/// burns CuNTRNs and sends amount in 1:1 proportion of uNTRNs to the sender (airdrop account).
+/// burns ucntrn tokens and sends amount in 1:1 proportion of untrn tokens to the sender (airdrop account).
 /// Used by airdrop account for burning unclaimed tokens.
 ///
 /// Only available for an airdrop contract account.
@@ -333,7 +333,7 @@ pub fn execute_burn(
 }
 
 /// Withdraws specified `amount` of tokens from specified `owner` -
-/// burns CuNTRNs and sends amount in 1:1 proportion of uNTRNs to the `owner`.
+/// burns ucntrn tokens and sends amount in 1:1 proportion of untrn tokens to the `owner`.
 ///
 /// Used for rewards for lockdrop participation and *skips vesting*.
 /// It also does NOT change amounts available for `withdraw` by user.
@@ -349,7 +349,7 @@ pub fn execute_burn(
 ///
 /// * **info** is an object of type [`MessageInfo`].
 ///
-/// * **owner** is an object of type [`String`]. Address to burn cuNTRNs from and send NTRN funds to.
+/// * **owner** is an object of type [`String`]. Address to burn ucntrn tokens from and send untrn tokens to.
 ///
 /// * **amount** is an object of type [`Uint128`]. Amount to be burned and minted in 1:1 proportion.
 pub fn execute_burn_from(
@@ -374,7 +374,7 @@ pub fn execute_burn_from(
     burn_and_send(deps, env, info, amount)
 }
 
-/// Mints cuntrn tokens in 1:1 proportion to sent untrn ones
+/// Mints ucntrn tokens in 1:1 proportion to sent untrn ones
 /// Uses cw20 standard mint, but only can mint to the airdrop contract balance
 /// Returns a default object of type [`Response`].
 ///
@@ -582,7 +582,7 @@ fn query_vested_amount(deps: Deps, env: Env, address: String) -> StdResult<Veste
 /// Returns current vesting allocation for specified `address`.
 /// Note that `allocation.withdrawn_amount` does not take burned rewards from `BurnFrom` into account.
 /// That means that `allocation.allocated_amount - allocation.withdrawn_amount` is not always equal to `withdrawable amount`
-/// Returns an object of type [`StdResult<VestedAmountResponse>`].
+/// Returns an object of type [`StdResult<AllocationResponse>`].
 /// Returns an error if no vesting was set up or no balance for such user exists.
 ///
 /// ## Params
@@ -610,7 +610,7 @@ fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
     Ok(token.amount)
 }
 
-// burns cuntrns and send untrns to the sender
+// burns ucntrn tokens and send untrn tokens to the sender
 fn burn_and_send(
     deps: DepsMut,
     env: Env,
@@ -1201,7 +1201,7 @@ mod tests {
             assert_eq!(
                 res,
                 Err(ContractError::Std(StdError::generic_err(
-                    "nothing to claim yet"
+                    "no funds to claim"
                 ))),
             );
         }
@@ -1223,7 +1223,7 @@ mod tests {
             assert_eq!(
                 res,
                 Err(ContractError::Std(StdError::generic_err(
-                    "nothing to claim yet"
+                    "no funds to claim"
                 ))),
             );
         }

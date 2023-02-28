@@ -35,21 +35,21 @@ pub enum ExecuteMsg {
     /// Transfer is a base message to move tokens to another account without triggering actions.
     /// [Permissioned - Airdrop address]
     Transfer { recipient: String, amount: Uint128 },
-    /// Withdraw is a message that burns all vested CNTRN tokens
+    /// Withdraw is a message that burns all vested cNTRN tokens
     /// on the sender and sends NTRN tokens in 1:1 proportion.
     /// [Permissionless]
     Withdraw {},
     /// Burn is a message only for airdrop account to destroy
-    /// certain amount of CNTRN's forever and send NTRN tokens in 1:1 proportion.
+    /// certain amount of cNTRN's forever and send NTRN tokens in 1:1 proportion.
     /// [Permissioned - Airdrop address]
     Burn { amount: Uint128 },
     /// BurnFrom is a message only for lockdrop contract
-    /// to burn owner's CNTRN tokens and mint NTRN tokens in 1:1 proportion certain amount for owner.
+    /// to burn owner's cNTRN tokens and mint NTRN tokens in 1:1 proportion certain amount for owner.
     /// Used to skip vesting as a reward for participating in the lockdrop.
     /// [Permissioned - Lockdrop address]
     BurnFrom { owner: String, amount: Uint128 },
     /// If authorized (only dao can call),
-    /// locks the NTRN tokens and mints CNTRN tokens in 1:1 amount
+    /// locks the NTRN tokens and mints cNTRN tokens in 1:1 amount
     /// and adds to the dao balance.
     /// [Permissioned - DAO] (Dao set in initialize func as cw20 minter)
     Mint {},
@@ -131,7 +131,7 @@ pub struct ConfigResponse {
 
 #[cw_serde]
 pub struct TotalSupplyResponse {
-    // Total supply of CUNTRNs for specified block height
+    // Total supply of ucntrn for specified block height
     pub total_supply: Uint128,
 }
 
