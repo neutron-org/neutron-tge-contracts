@@ -7,9 +7,8 @@ use cosmwasm_std::{
 };
 
 use astroport_periphery::auction::{
-    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolBalance, PoolInfo,
-    PriceFeedQuery, PriceFeedResponse, QueryMsg, State, UpdateConfigMsg, UserInfoResponse,
-    UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolBalance, PoolInfo, QueryMsg,
+    State, UpdateConfigMsg, UserInfoResponse, UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
 };
 use astroport_periphery::lockdrop::{ExecuteMsg as LockDropExecuteMsg, PoolType};
 use neutron_price_feed::state::PriceFeedRate;
