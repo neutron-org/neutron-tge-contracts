@@ -11,8 +11,8 @@ use cw20_base::state as Cw20State;
 use cw20_base::state::{BALANCES, TOKEN_INFO};
 
 use crate::msg::{
-    AllocationResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg,
-    TotalSupplyResponse, VestedAmountResponse, WithdrawableAmountResponse,
+    ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, TotalSupplyResponse, VestedAmountResponse,
+    WithdrawableAmountResponse,
 };
 use crate::state::{Allocation, Config, Schedule, ALLOCATIONS, CONFIG};
 
@@ -454,18 +454,12 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 /// Returns current contract config.
-/// Returns an object of type [`StdResult<ConfigResponse>`].
+/// Returns an object of type [`StdResult<Config>`].
 ///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
-pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
-    let config = CONFIG.load(deps.storage)?;
-    Ok(ConfigResponse {
-        dao_address: config.dao_address,
-        airdrop_address: config.airdrop_address,
-        lockdrop_address: config.lockdrop_address,
-        when_withdrawable: config.when_withdrawable,
-    })
+pub fn query_config(deps: Deps) -> StdResult<Config> {
+    CONFIG.load(deps.storage)
 }
 
 /// Returns total token supply at a specified `maybe_height`. If height is not present, returns current total supply.
@@ -586,17 +580,16 @@ pub fn query_vested_amount(
 /// Returns current vesting allocation for specified `address`.
 /// Note that `allocation.withdrawn_amount` does not take burned rewards from `BurnFrom` into account.
 /// That means that `allocation.allocated_amount - allocation.withdrawn_amount` is not always equal to `withdrawable amount`
-/// Returns an object of type [`StdResult<AllocationResponse>`].
+/// Returns an object of type [`StdResult<Allocation>`].
 /// Returns an error if no vesting was set up or no balance for such user exists.
 ///
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
 /// * **address** is an object of type [`String`]. Address of the user we want to query withdrawable amount.
-fn query_allocation(deps: Deps, address: String) -> StdResult<AllocationResponse> {
+fn query_allocation(deps: Deps, address: String) -> StdResult<Allocation> {
     let owner = deps.api.addr_validate(&address)?;
-    let allocation = ALLOCATIONS.load(deps.storage, &owner)?;
-    Ok(AllocationResponse { allocation })
+    ALLOCATIONS.load(deps.storage, &owner)
 }
 
 fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
@@ -652,23 +645,19 @@ fn burn_and_send(
 pub fn compute_withdrawable_amount(
     allocated_amount: Uint128,
     withdrawn_amount: Uint128,
-    vest_schedule: &Schedule,
+    schedule: &Schedule,
     current_time: u64,
 ) -> StdResult<Uint128> {
-    let f = |schedule: &Schedule| {
-        // Before the end of cliff period, no token will be vested/unlocked
-        if current_time < schedule.start_time + schedule.cliff {
-            Uint128::zero()
-            // After the end of cliff, tokens vest/unlock linearly between start time and end time
-        } else if current_time < schedule.start_time + schedule.duration {
-            allocated_amount.multiply_ratio(current_time - schedule.start_time, schedule.duration)
-            // After end time, all tokens are fully vested/unlocked
-        } else {
-            allocated_amount
-        }
+    // Before the end of cliff period, no token will be vested/unlocked
+    let vested_amount = if current_time < schedule.start_time + schedule.cliff {
+        Uint128::zero()
+        // After the end of cliff, tokens vest/unlock linearly between start time and end time
+    } else if current_time < schedule.start_time + schedule.duration {
+        allocated_amount.multiply_ratio(current_time - schedule.start_time, schedule.duration)
+        // After end time, all tokens are fully vested/unlocked
+    } else {
+        allocated_amount
     };
-
-    let vested_amount = f(vest_schedule);
 
     vested_amount
         .checked_sub(withdrawn_amount)

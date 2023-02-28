@@ -1,4 +1,3 @@
-use crate::state::Allocation;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Timestamp, Uint128};
 
@@ -37,8 +36,8 @@ pub enum ExecuteMsg {
     /// on the sender and sends NTRN tokens in 1:1 proportion.
     /// [Permissionless]
     Withdraw {},
-    /// Burn is a message only for airdrop account to destroy
-    /// certain amount of cntrn tokens forever and send untrn tokens in 1:1 proportion.
+    /// Burn is a message only for airdrop account to burn
+    /// certain amount of cntrn tokens and send untrn tokens in 1:1 proportion.
     /// [Permissioned - Airdrop address]
     Burn { amount: Uint128 },
     /// BurnFrom is a message only for lockdrop contract
@@ -61,7 +60,7 @@ pub enum QueryMsg {
     #[returns(VestedAmountResponse)]
     VestedAmount { address: String },
     /// Returns the current allocation of the given address.
-    #[returns(AllocationResponse)]
+    #[returns(crate::state::Allocation)]
     Allocation { address: String },
     /// Returns the current balance of the given address, 0 if unset.
     #[returns(cw20::BalanceResponse)]
@@ -106,7 +105,7 @@ pub enum QueryMsg {
         limit: Option<u32>,
     },
     /// Returns current config of Credits contract
-    #[returns(ConfigResponse)]
+    #[returns(crate::state::Config)]
     Config {},
 }
 
@@ -141,10 +140,4 @@ pub struct WithdrawableAmountResponse {
 pub struct VestedAmountResponse {
     /// Amount that is still vested for the user.
     pub amount: Uint128,
-}
-
-#[cw_serde]
-pub struct AllocationResponse {
-    /// Current allocation for a user
-    pub allocation: Allocation,
 }
