@@ -1,9 +1,13 @@
+use crate::error::ContractError;
+use crate::error::ContractError::{
+    AlreadyVested, Cw20Error, IncorrectFundsSupplied, NoFundsSupplied, Unauthorized,
+    UninitializedConfig,
+};
 use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
-    StdResult, Uint128,
+    to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
 };
 use cw2::set_contract_version;
 use cw20::BalanceResponse;
@@ -82,7 +86,7 @@ pub fn execute(
     env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response, Cw20ContractError> {
+) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::UpdateConfig {
             airdrop_address,
@@ -126,10 +130,10 @@ pub fn execute_update_config(
     info: MessageInfo,
     airdrop_address: String,
     lockdrop_address: String,
-) -> Result<Response, Cw20ContractError> {
+) -> Result<Response, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
     if info.sender != config.dao_address {
-        return Err(Cw20ContractError::Unauthorized {});
+        return Err(Unauthorized);
     }
 
     config.airdrop_address = Some(deps.api.addr_validate(&airdrop_address)?);
@@ -164,14 +168,10 @@ pub fn execute_add_vesting(
     amount: Uint128,
     start_time: u64,
     duration: u64,
-) -> Result<Response, Cw20ContractError> {
+) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender
-        != config
-            .airdrop_address
-            .ok_or_else(|| StdError::generic_err("uninitialized"))?
-    {
-        return Err(Cw20ContractError::Unauthorized {});
+    if info.sender != config.airdrop_address.ok_or_else(UninitializedConfig)? {
+        return Err(Unauthorized);
     }
 
     let vested_to = deps.api.addr_validate(&address)?;
@@ -179,11 +179,9 @@ pub fn execute_add_vesting(
     ALLOCATIONS.update(
         deps.storage,
         &vested_to,
-        |o: Option<Allocation>| -> Result<Allocation, Cw20ContractError> {
+        |o: Option<Allocation>| -> Result<Allocation, ContractError> {
             match o {
-                Some(_) => Err(Cw20ContractError::Std(StdError::generic_err(format!(
-                    "vesting for address {address:?} already exists"
-                )))),
+                Some(_) => Err(AlreadyVested { address }),
                 None => Ok(Allocation {
                     allocated_amount: amount,
                     withdrawn_amount: Uint128::zero(),
@@ -220,18 +218,14 @@ pub fn execute_transfer(
     info: MessageInfo,
     recipient: String,
     amount: Uint128,
-) -> Result<Response, Cw20ContractError> {
+) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
-    if info.sender
-        != config
-            .airdrop_address
-            .ok_or_else(|| StdError::generic_err("uninitialized"))?
-    {
-        return Err(Cw20ContractError::Unauthorized {});
+    if info.sender != config.airdrop_address.ok_or_else(UninitializedConfig)? {
+        return Err(Unauthorized);
     }
 
-    ::cw20_base::contract::execute_transfer(deps, env, info, recipient, amount)
+    ::cw20_base::contract::execute_transfer(deps, env, info, recipient, amount).map_err(Cw20Error)
 }
 
 /// Calculates amount that is already unlocked from vesting for sender,
@@ -253,12 +247,10 @@ pub fn execute_withdraw(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-) -> Result<Response, Cw20ContractError> {
+) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     if config.when_withdrawable > env.block.time {
-        return Err(Cw20ContractError::Std(StdError::generic_err(
-            "too early to claim",
-        )));
+        return Err(ContractError::TooEarlyToClaim);
     }
 
     let owner = info.sender.clone();
@@ -271,9 +263,7 @@ pub fn execute_withdraw(
     )?;
 
     if max_withdrawable_amount.is_zero() {
-        return Err(Cw20ContractError::Std(StdError::generic_err(
-            "no funds to claim",
-        )));
+        return Err(ContractError::NoFundsToClaim);
     }
 
     // Guard against the case where actual balance is smaller than max withdrawable amount.
@@ -286,9 +276,7 @@ pub fn execute_withdraw(
 
     // Check that not zero
     if to_withdraw.is_zero() {
-        return Err(Cw20ContractError::Std(StdError::generic_err(
-            "no funds to claim",
-        )));
+        return Err(ContractError::NoFundsToClaim);
     }
 
     allocation.withdrawn_amount += to_withdraw;
@@ -318,15 +306,11 @@ pub fn execute_burn(
     env: Env,
     info: MessageInfo,
     amount: Uint128,
-) -> Result<Response, Cw20ContractError> {
+) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
-    if info.sender
-        != config
-            .airdrop_address
-            .ok_or_else(|| StdError::generic_err("uninitialized"))?
-    {
-        return Err(Cw20ContractError::Unauthorized {});
+    if info.sender != config.airdrop_address.ok_or_else(UninitializedConfig)? {
+        return Err(Unauthorized);
     }
 
     burn_and_send(deps, env, info, amount)
@@ -358,14 +342,10 @@ pub fn execute_burn_from(
     mut info: MessageInfo,
     owner: String,
     amount: Uint128,
-) -> Result<Response, Cw20ContractError> {
+) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender
-        != config
-            .lockdrop_address
-            .ok_or_else(|| StdError::generic_err("uninitialized"))?
-    {
-        return Err(Cw20ContractError::Unauthorized {});
+    if info.sender != config.lockdrop_address.ok_or_else(UninitializedConfig)? {
+        return Err(Unauthorized);
     }
 
     // burn funds of `owner`, but skip the vesting stage
@@ -388,20 +368,15 @@ pub fn execute_burn_from(
 /// * **env** is an object of type [`Env`].
 ///
 /// * **info** is an object of type [`MessageInfo`].
-pub fn execute_mint(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-) -> Result<Response, Cw20ContractError> {
+pub fn execute_mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, ContractError> {
     // mint in 1:1 proportion to locked ntrn funds
     let untrn_amount = try_find_untrns(info.funds.clone())?;
 
     let config = CONFIG.load(deps.storage)?;
-    let recipient = config
-        .airdrop_address
-        .ok_or_else(|| StdError::generic_err("uninitialized"))?;
+    let recipient = config.airdrop_address.ok_or_else(UninitializedConfig)?;
 
     ::cw20_base::contract::execute_mint(deps, env, info, recipient.to_string(), untrn_amount)
+        .map_err(Cw20Error)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -592,16 +567,10 @@ fn query_allocation(deps: Deps, address: String) -> StdResult<Allocation> {
     ALLOCATIONS.load(deps.storage, &owner)
 }
 
-fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, Cw20ContractError> {
-    let token = funds.first().ok_or_else(|| {
-        Cw20ContractError::Std(StdError::generic_err(format!(
-            "no untrn funds supplied to lock: {funds:?}"
-        )))
-    })?;
+fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, ContractError> {
+    let token = funds.first().ok_or_else(NoFundsSupplied)?;
     if token.denom != DEPOSITED_SYMBOL {
-        return Err(Cw20ContractError::Std(StdError::generic_err(
-            "need untrn supply to lock",
-        )));
+        return Err(IncorrectFundsSupplied);
     }
 
     Ok(token.amount)
@@ -613,7 +582,7 @@ fn burn_and_send(
     env: Env,
     info: MessageInfo,
     amount: Uint128,
-) -> Result<Response, Cw20ContractError> {
+) -> Result<Response, ContractError> {
     let to_address = info.sender.to_string();
     let burn_response = ::cw20_base::contract::execute_burn(deps, env, info, amount)?;
     let send = BankMsg::Send {

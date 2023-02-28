@@ -14,6 +14,7 @@ use crate::contract::{
     execute_add_vesting, execute_burn_from, execute_mint, execute_transfer, instantiate,
     DEPOSITED_SYMBOL,
 };
+use crate::error::ContractError;
 use crate::msg::InstantiateMsg;
 use crate::state::ALLOCATIONS;
 use cosmwasm_std::testing::{
@@ -24,7 +25,6 @@ use cosmwasm_std::{
     Uint128,
 };
 use cw20_base::state::{BALANCES, TOKEN_INFO};
-use cw20_base::ContractError;
 
 // instantiates the contracts, mints the money, transfers `amount` to `somebody` address
 fn _instantiate_vest_to_somebody(
@@ -238,11 +238,11 @@ mod instantiate {
 
 mod update_config {
     use crate::contract::execute_update_config;
+    use crate::error::ContractError::Unauthorized;
     use crate::state::CONFIG;
     use crate::testing::tests::_do_simple_instantiate;
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
     use cosmwasm_std::Addr;
-    use cw20_base::ContractError;
 
     #[test]
     fn update_config_works() {
@@ -274,18 +274,18 @@ mod update_config {
             "airdrop".to_string(),
             "lockdrop".to_string(),
         );
-        assert_eq!(res, Err(ContractError::Unauthorized {}));
+        assert_eq!(res, Err(Unauthorized));
     }
 }
 
 mod add_vesting {
     use crate::contract::{execute_add_vesting, VESTING_CLIFF};
+    use crate::error::ContractError;
+    use crate::error::ContractError::Unauthorized;
     use crate::state::{Schedule, ALLOCATIONS};
     use crate::testing::tests::_do_simple_instantiate;
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
-    use cosmwasm_std::{Addr, StdError, Uint128};
-    use cw20_base::ContractError;
-    use cw20_base::ContractError::Std;
+    use cosmwasm_std::{Addr, Uint128};
 
     #[test]
     fn adds_vesting_for_account_with_correct_settings() {
@@ -334,7 +334,7 @@ mod add_vesting {
             15,
             1000,
         );
-        assert_eq!(res, Err(ContractError::Unauthorized {}));
+        assert_eq!(res, Err(Unauthorized));
     }
 
     #[test]
@@ -365,21 +365,21 @@ mod add_vesting {
         );
         assert_eq!(
             res,
-            Err(Std(StdError::generic_err(
-                "vesting for address \"address\" already exists"
-            )))
+            Err(ContractError::AlreadyVested {
+                address: "address".to_string()
+            })
         );
     }
 }
 
 mod transfer {
     use crate::contract::{execute_mint, execute_transfer, DEPOSITED_SYMBOL};
+    use crate::error::ContractError::{Cw20Error, Unauthorized};
     use crate::testing::tests::_do_simple_instantiate;
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
     use cosmwasm_std::OverflowOperation::Sub;
     use cosmwasm_std::{coins, Addr, OverflowError, StdError, Uint128};
     use cw20_base::state::BALANCES;
-    use cw20_base::ContractError;
     use cw20_base::ContractError::Std;
 
     #[test]
@@ -430,11 +430,11 @@ mod transfer {
         );
         assert_eq!(
             res,
-            Err(Std(StdError::overflow(OverflowError {
+            Err(Cw20Error(Std(StdError::overflow(OverflowError {
                 operation: Sub,
                 operand1: "0".to_string(),
                 operand2: "1000".to_string()
-            })))
+            }))))
         );
     }
 
@@ -452,19 +452,19 @@ mod transfer {
             "somebody".to_string(),
             Uint128::new(1_000),
         );
-        assert_eq!(res, Err(ContractError::Unauthorized {}));
+        assert_eq!(res, Err(Unauthorized));
     }
 }
 
 mod withdraw {
     use crate::contract::execute_withdraw;
+    use crate::error::ContractError::{NoFundsToClaim, Std, TooEarlyToClaim};
     use crate::testing::tests::{
         _assert_withdrawn, _do_instantiate, _do_simple_instantiate, _instantiate_vest_to_somebody,
         _withdraw_rewards,
     };
     use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
     use cosmwasm_std::StdError;
-    use cw20_base::ContractError;
 
     // withdrawing rewards (burn_from) should not fail withdrawing all funds later
     #[test]
@@ -525,12 +525,7 @@ mod withdraw {
 
         // call at 0% progress of vesting returns error
         let res = execute_withdraw(deps.as_mut(), env, mock_info("somebody", &[]));
-        assert_eq!(
-            res,
-            Err(ContractError::Std(StdError::generic_err(
-                "no funds to claim"
-            ))),
-        );
+        assert_eq!(res, Err(NoFundsToClaim));
     }
 
     #[test]
@@ -547,12 +542,7 @@ mod withdraw {
 
         // call at 0% progress of vesting returns error
         let res = execute_withdraw(deps.as_mut(), env, mock_info("somebody", &[]));
-        assert_eq!(
-            res,
-            Err(ContractError::Std(StdError::generic_err(
-                "no funds to claim"
-            ))),
-        );
+        assert_eq!(res, Err(NoFundsToClaim));
     }
 
     #[test]
@@ -568,12 +558,7 @@ mod withdraw {
         );
         let somebody_info = mock_info("somebody", &[]);
         let res = execute_withdraw(deps.as_mut(), env, somebody_info);
-        assert_eq!(
-            res,
-            Err(ContractError::Std(StdError::generic_err(
-                "too early to claim"
-            ))),
-        );
+        assert_eq!(res, Err(TooEarlyToClaim));
     }
 
     #[test]
@@ -587,20 +572,18 @@ mod withdraw {
         let res = execute_withdraw(deps.as_mut(), env, somebody_info);
         assert_eq!(
             res,
-            Err(ContractError::Std(StdError::not_found(
-                "credits::state::Allocation"
-            )))
+            Err(Std(StdError::not_found("credits::state::Allocation")))
         );
     }
 }
 
 mod burn {
     use crate::contract::{execute_burn, execute_mint, DEPOSITED_SYMBOL};
+    use crate::error::ContractError::Unauthorized;
     use crate::testing::tests::_do_simple_instantiate;
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
     use cosmwasm_std::{coins, Addr, BankMsg, Uint128};
     use cw20_base::state::{BALANCES, TOKEN_INFO};
-    use cw20_base::ContractError;
 
     #[test]
     fn works_with_correct_params_for_airdrop() {
@@ -651,12 +634,13 @@ mod burn {
         // burn amount
         let airdrop_info = mock_info("non_airdrop_address", &[]);
         let res = execute_burn(deps.as_mut(), env, airdrop_info, Uint128::new(10000));
-        assert_eq!(res, Err(ContractError::Unauthorized {}))
+        assert_eq!(res, Err(Unauthorized))
     }
 }
 
 mod burn_from {
     use crate::contract::{execute_burn_from, execute_mint, execute_transfer, DEPOSITED_SYMBOL};
+    use crate::error::ContractError::Cw20Error;
     use crate::testing::tests::_do_simple_instantiate;
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
     use cosmwasm_std::OverflowOperation::Sub;
@@ -741,22 +725,22 @@ mod burn_from {
         );
         assert_eq!(
             res,
-            Err(Std(StdError::overflow(OverflowError {
+            Err(Cw20Error(Std(StdError::overflow(OverflowError {
                 operation: Sub,
                 operand1: "100".to_string(),
                 operand2: "20000".to_string()
-            })))
+            }))))
         );
     }
 }
 
 mod mint {
     use crate::contract::{execute_mint, DEPOSITED_SYMBOL};
+    use crate::error::ContractError::{Cw20Error, NoFundsSupplied};
     use crate::testing::tests::_do_simple_instantiate;
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
-    use cosmwasm_std::{Addr, Coin, StdError, Uint128};
+    use cosmwasm_std::{Addr, Coin, Uint128};
     use cw20_base::state::{BALANCES, TOKEN_INFO};
-    use cw20_base::ContractError;
 
     #[test]
     fn does_not_work_without_funds_sent() {
@@ -765,12 +749,7 @@ mod mint {
         let dao_info = mock_info("dao_address", &[]);
 
         let res = execute_mint(deps.as_mut(), env, dao_info);
-        assert_eq!(
-            res,
-            Err(ContractError::Std(StdError::generic_err(
-                "no untrn funds supplied to lock: []"
-            )))
-        );
+        assert_eq!(res, Err(NoFundsSupplied()));
     }
 
     #[test]
@@ -781,7 +760,10 @@ mod mint {
         let funds = vec![Coin::new(500, DEPOSITED_SYMBOL)];
         let non_dao_info = mock_info("non dao", &funds);
         let res = execute_mint(deps.as_mut(), env, non_dao_info);
-        assert_eq!(res, Err(ContractError::Unauthorized {}));
+        assert_eq!(
+            res,
+            Err(Cw20Error(cw20_base::ContractError::Unauthorized {}))
+        );
     }
 
     #[test]
