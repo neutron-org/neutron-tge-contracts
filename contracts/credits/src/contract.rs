@@ -30,6 +30,12 @@ const DEPOSITED_SYMBOL: &str = "untrn";
 // 0 cliff means no cliff
 const VESTING_CLIFF: u64 = 0;
 
+/// Instantiates the contract.
+/// Configures cw20 token info.
+/// Can specify addresses for dao, airdrop and lockdrop contracts.
+/// Specifies when all users can start withdraw their vesting funds.
+/// Specifies dao contract as a minter.
+/// Does not mint any tokens here.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
@@ -626,11 +632,24 @@ fn burn_and_send(
 /// The withdrawable amount is vesting amount minus the amount already withdrawn.
 /// Implementation copied from mars-protocol mars-vesting contract:
 /// https://github.com/mars-protocol/v1-core/tree/master/contracts/mars-vesting
+///
+/// Note that is does not take withdrawn rewards into account,
+/// so returned amount can be greater than the current user balance.
+///
+/// ## Params
+/// * **allocated_amount** is an object of type [`Uint128`]. Total allocated amount to be vested.
+///
+/// * **withdrawn_amount** is an object of type [`Uint128`]. Already withdrawn amount (see `withdraw`).
+/// Note that it does not count reward withdraws that skip vesting.
+///
+/// * **vest_schedule** is an object of type [`&Schedule`]. Vesting schedule.
+///
+/// * **current_time** is an object of type [`u64`]. Current UNIX time in seconds.
 pub fn compute_withdrawable_amount(
     allocated_amount: Uint128,
     withdrawn_amount: Uint128,
     vest_schedule: &Schedule,
-    current_time: u64, // in seconds
+    current_time: u64,
 ) -> StdResult<Uint128> {
     let f = |schedule: &Schedule| {
         // Before the end of cliff period, no token will be vested/unlocked
