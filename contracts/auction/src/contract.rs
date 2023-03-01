@@ -1,4 +1,4 @@
-use astroport::asset::{Asset, AssetInfo};
+use astroport::asset::{Asset, AssetInfo, MINIMUM_LIQUIDITY_AMOUNT};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
@@ -411,6 +411,7 @@ fn allowed_withdrawal_percent(current_timestamp: u64, config: &Config) -> Decima
 
 pub fn get_lp_size(token1: Uint128, token2: Uint128) -> Uint128 {
     Decimal::sqrt(&Decimal::from_ratio(token1 * token2, Uint128::one())).to_uint_floor()
+        - MINIMUM_LIQUIDITY_AMOUNT
 }
 
 pub fn get_contract_balances(
