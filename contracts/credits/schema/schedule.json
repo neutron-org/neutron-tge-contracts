@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Schedule",
+  "type": "object",
+  "required": [
+    "cliff",
+    "duration",
+    "start_time"
+  ],
+  "properties": {
+    "cliff": {
+      "description": "Specified in seconds. Tokens start to get unlocked at `start_time + cliff` time.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "duration": {
+      "description": "Duration of the vesting/unlocking process. At time `start_time + duration`, 100% of the tokens are vested/unlocked in full.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "start_time": {
+      "description": "Timestamp in UNIX seconds when vesting/unlocking starts",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  }
+}

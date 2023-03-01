@@ -364,19 +364,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             owner,
             start_after,
             limit,
-        } => to_binary(&::cw20_base::enumerable::query_owner_allowances(
+        } => to_binary(&::cw20_base::enumerable::query_all_allowances(
             deps,
             owner,
-            start_after,
-            limit,
-        )?),
-        QueryMsg::AllSpenderAllowances {
-            spender,
-            start_after,
-            limit,
-        } => to_binary(&::cw20_base::enumerable::query_spender_allowances(
-            deps,
-            spender,
             start_after,
             limit,
         )?),

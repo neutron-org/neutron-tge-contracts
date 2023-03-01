@@ -1,7 +1,9 @@
-use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Timestamp, Uint128};
+use cosmwasm_std::{Timestamp, Uint128};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct InstantiateMsg {
     /// Airdrop contract address
     pub airdrop_address: String,
@@ -11,7 +13,8 @@ pub struct InstantiateMsg {
     pub when_withdrawable: Timestamp,
 }
 
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     /// AddVesting is a message that allows address to claim particular amount of NTRNs at particular time.
     /// Can only store one vesting amount per address.
@@ -43,93 +46,66 @@ pub enum ExecuteMsg {
     Mint {},
 }
 
-#[cw_serde]
-#[derive(QueryResponses)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     /// Returns the current vestings of the given address.
-    #[returns(WithdrawableAmountResponse)]
     WithdrawableAmount { address: String },
     /// Returns the amount that is left vested of the given address.
-    #[returns(VestedAmountResponse)]
     VestedAmount { address: String },
     /// Returns the current allocation of the given address.
-    #[returns(crate::state::Allocation)]
     Allocation { address: String },
     /// Returns the current balance of the given address, 0 if unset.
-    #[returns(cw20::BalanceResponse)]
     Balance { address: String },
     /// Returns the total supply at provided height, or current total supply if `height` is unset.
-    #[returns(TotalSupplyResponse)]
     TotalSupplyAtHeight { height: Option<u64> },
     /// Returns the balance of the given address at a given block height or current balance if `height` is unset.
     /// Returns 0 if no balance found.
-    #[returns(cw20::BalanceResponse)]
     BalanceAtHeight {
         address: String,
         height: Option<u64>,
     },
     /// Returns metadata on the contract - name, decimals, supply, etc.
-    #[returns(cw20::TokenInfoResponse)]
     TokenInfo {},
     /// Returns who can mint and the hard cap on maximum tokens after minting.
-    #[returns(cw20::MinterResponse)]
     Minter {},
     /// Returns how much spender can use from owner account, 0 if unset.
-    #[returns(cw20::AllowanceResponse)]
     Allowance { owner: String, spender: String },
     /// Returns all allowances this owner has approved. Supports pagination.
-    #[returns(cw20::AllAllowancesResponse)]
     AllAllowances {
         owner: String,
         start_after: Option<String>,
         limit: Option<u32>,
     },
-    /// Returns all allowances this spender has been granted. Supports pagination.
-    #[returns(cw20::AllSpenderAllowancesResponse)]
-    AllSpenderAllowances {
-        spender: String,
-        start_after: Option<String>,
-        limit: Option<u32>,
-    },
     /// Returns all accounts that have balances. Supports pagination.
-    #[returns(cw20::AllAccountsResponse)]
     AllAccounts {
         start_after: Option<String>,
         limit: Option<u32>,
     },
     /// Returns current config of Credits contract
-    #[returns(crate::state::Config)]
     Config {},
 }
 
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {}
 
-#[cw_serde]
-pub struct ConfigResponse {
-    /// DAO contract address
-    pub dao_address: Addr,
-    /// Airdrop contract address
-    pub airdrop_address: Option<Addr>,
-    /// Lockdrop contract address,
-    pub lockdrop_address: Option<Addr>,
-    /// When can start withdrawing NTRN funds
-    pub when_withdrawable: Timestamp,
-}
-
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct TotalSupplyResponse {
     // Total supply of ucntrn for specified block height
     pub total_supply: Uint128,
 }
 
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct WithdrawableAmountResponse {
     /// Amount that the user can withdraw at this block height.
     pub amount: Uint128,
 }
 
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct VestedAmountResponse {
     /// Amount that is still vested for the user.
     pub amount: Uint128,

@@ -1,8 +1,10 @@
-use cosmwasm_schema::cw_serde;
 use cosmwasm_std::{Addr, Timestamp, Uint128};
 use cw_storage_plus::{Item, Map};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct Config {
     /// DAO contract address
     pub dao_address: Addr,
@@ -14,7 +16,8 @@ pub struct Config {
     pub when_withdrawable: Timestamp,
 }
 
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct Allocation {
     /// Total allocated amount that can be withdrawn
     pub allocated_amount: Uint128,
@@ -24,7 +27,8 @@ pub struct Allocation {
     pub schedule: Schedule,
 }
 
-#[cw_serde]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct Schedule {
     /// Timestamp in UNIX seconds when vesting/unlocking starts
     pub start_time: u64,
