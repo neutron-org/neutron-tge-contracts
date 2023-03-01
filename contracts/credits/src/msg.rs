@@ -32,12 +32,10 @@ pub enum ExecuteMsg {
     /// on the sender and sends NTRN tokens in 1:1 proportion.
     /// [Permissionless]
     Withdraw {},
-    /// Burn is a message only for airdrop account to burn
-    /// certain amount of cntrn tokens and send untrn tokens in 1:1 proportion.
+    /// Burns is a message that burns certain amount of cntrn tokens and sends untrn tokens in 1:1 proportion.
     /// [Permissioned - Airdrop address]
     Burn { amount: Uint128 },
-    /// BurnFrom is a message only for lockdrop contract
-    /// to burn owner's cNTRN tokens and mint NTRN tokens in 1:1 proportion certain amount for owner.
+    /// BurnFrom burns owner's cNTRN tokens and mints NTRN tokens in 1:1 proportion certain amount for owner.
     /// Used to skip vesting as a reward for participating in the lockdrop.
     /// [Permissioned - Lockdrop address]
     BurnFrom { owner: String, amount: Uint128 },
