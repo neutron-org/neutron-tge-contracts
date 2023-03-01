@@ -69,8 +69,8 @@ fn _instantiate_vest_to_somebody(
 fn _do_simple_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env) {
     _do_instantiate(
         deps,
-        Some("airdrop_address".to_string()),
-        Some("lockdrop_address".to_string()),
+        "airdrop_address".to_string(),
+        "lockdrop_address".to_string(),
         funds,
         Timestamp::from_seconds(0),
     )
@@ -78,8 +78,8 @@ fn _do_simple_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageIn
 
 fn _do_instantiate(
     mut deps: DepsMut,
-    airdrop_address: Option<String>,
-    lockdrop_address: Option<String>,
+    airdrop_address: String,
+    lockdrop_address: String,
     funds: Option<Vec<Coin>>,
     when_withdrawable: Timestamp,
 ) -> (MessageInfo, Env) {
@@ -177,7 +177,7 @@ mod instantiate {
     use super::*;
     use crate::contract::{query_config, TOKEN_DECIMALS, TOKEN_NAME, TOKEN_SYMBOL};
     use cosmwasm_std::testing::mock_dependencies;
-    use cosmwasm_std::{Addr, Uint128};
+    use cosmwasm_std::Uint128;
     use cw20_base::contract::{query_minter, query_token_info};
     use cw20_base::enumerable::query_all_accounts;
 
@@ -186,21 +186,15 @@ mod instantiate {
         let mut deps = mock_dependencies();
         let (_info, _env) = _do_instantiate(
             deps.as_mut(),
-            Some("airdrop_address".to_string()),
-            Some("lockdrop_address".to_string()),
+            "airdrop_address".to_string(),
+            "lockdrop_address".to_string(),
             None,
             Timestamp::from_seconds(0),
         );
         let config = query_config(deps.as_ref()).unwrap();
         assert_eq!(config.dao_address, "dao_address".to_string());
-        assert_eq!(
-            config.lockdrop_address,
-            Some(Addr::unchecked("lockdrop_address".to_string()))
-        );
-        assert_eq!(
-            config.airdrop_address,
-            Some(Addr::unchecked("airdrop_address".to_string()))
-        );
+        assert_eq!(config.lockdrop_address, "lockdrop_address".to_string());
+        assert_eq!(config.airdrop_address, "airdrop_address".to_string());
 
         // no accounts since we don't mint anything
         assert_eq!(
@@ -222,59 +216,6 @@ mod instantiate {
         assert_eq!(token_info.name, TOKEN_NAME);
         assert_eq!(token_info.symbol, TOKEN_SYMBOL);
         assert_eq!(token_info.total_supply, Uint128::zero());
-    }
-
-    #[test]
-    fn works_without_initial_addresses() {
-        let mut deps = mock_dependencies();
-        let (_info, _env) =
-            _do_instantiate(deps.as_mut(), None, None, None, Timestamp::from_seconds(0));
-        let config = query_config(deps.as_ref()).unwrap();
-        assert_eq!(config.dao_address, "dao_address".to_string());
-        assert_eq!(config.lockdrop_address, None);
-        assert_eq!(config.airdrop_address, None);
-    }
-}
-
-mod update_config {
-    use crate::contract::execute_update_config;
-    use crate::error::ContractError::Unauthorized;
-    use crate::state::CONFIG;
-    use crate::testing::tests::_do_simple_instantiate;
-    use cosmwasm_std::testing::{mock_dependencies, mock_info};
-    use cosmwasm_std::Addr;
-
-    #[test]
-    fn update_config_works() {
-        let mut deps = mock_dependencies();
-        let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
-        let dao_info = mock_info("dao_address", &[]);
-        let res = execute_update_config(
-            deps.as_mut(),
-            env,
-            dao_info,
-            "air".to_string(),
-            "lock".to_string(),
-        );
-        assert!(res.is_ok());
-        let config = CONFIG.load(&deps.storage).unwrap();
-        assert_eq!(config.airdrop_address, Some(Addr::unchecked("air")));
-        assert_eq!(config.lockdrop_address, Some(Addr::unchecked("lock")));
-    }
-
-    #[test]
-    fn only_admin_can_update_config() {
-        let mut deps = mock_dependencies();
-        let (_info, env) = _do_simple_instantiate(deps.as_mut(), None);
-        let somebody_info = mock_info("somebody", &[]);
-        let res = execute_update_config(
-            deps.as_mut(),
-            env,
-            somebody_info,
-            "airdrop".to_string(),
-            "lockdrop".to_string(),
-        );
-        assert_eq!(res, Err(Unauthorized));
     }
 }
 
@@ -551,8 +492,8 @@ mod withdraw {
         let mut deps = mock_dependencies();
         let (_info, env) = _do_instantiate(
             deps.as_mut(),
-            None,
-            None,
+            "airdrop_address".to_string(),
+            "lockdrop_address".to_string(),
             None,
             mock_env().block.time.plus_seconds(1_000_000),
         );

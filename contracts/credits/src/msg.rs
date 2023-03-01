@@ -4,22 +4,15 @@ use cosmwasm_std::{Addr, Timestamp, Uint128};
 #[cw_serde]
 pub struct InstantiateMsg {
     /// Airdrop contract address
-    pub airdrop_address: Option<String>,
+    pub airdrop_address: String,
     /// Lockdrop contract address,
-    pub lockdrop_address: Option<String>,
+    pub lockdrop_address: String,
     /// When can start withdrawing NTRN funds
     pub when_withdrawable: Timestamp,
 }
 
 #[cw_serde]
 pub enum ExecuteMsg {
-    /// UpdateConfig is a message to initialize all addresses.
-    /// Needed because there are circle deps between contracts.
-    /// [Permissioned - DAO]
-    UpdateConfig {
-        airdrop_address: String,
-        lockdrop_address: String,
-    },
     /// AddVesting is a message that allows address to claim particular amount of NTRNs at particular time.
     /// Can only store one vesting amount per address.
     /// [Permissioned - Airdrop address]

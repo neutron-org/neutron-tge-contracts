@@ -3,22 +3,18 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
+    "airdrop_address",
+    "lockdrop_address",
     "when_withdrawable"
   ],
   "properties": {
     "airdrop_address": {
       "description": "Airdrop contract address",
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": "string"
     },
     "lockdrop_address": {
       "description": "Lockdrop contract address,",
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": "string"
     },
     "when_withdrawable": {
       "description": "When can start withdrawing NTRN funds",

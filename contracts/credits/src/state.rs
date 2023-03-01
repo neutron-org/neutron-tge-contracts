@@ -7,9 +7,9 @@ pub struct Config {
     /// DAO contract address
     pub dao_address: Addr,
     /// Airdrop contract address
-    pub airdrop_address: Option<Addr>,
+    pub airdrop_address: Addr,
     /// Lockdrop contract address
-    pub lockdrop_address: Option<Addr>,
+    pub lockdrop_address: Addr,
     /// When can start withdrawing NTRN funds
     pub when_withdrawable: Timestamp,
 }

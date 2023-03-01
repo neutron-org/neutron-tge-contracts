@@ -3,18 +3,17 @@
   "title": "Config",
   "type": "object",
   "required": [
+    "airdrop_address",
     "dao_address",
+    "lockdrop_address",
     "when_withdrawable"
   ],
   "properties": {
     "airdrop_address": {
       "description": "Airdrop contract address",
-      "anyOf": [
+      "allOf": [
         {
           "$ref": "#/definitions/Addr"
-        },
-        {
-          "type": "null"
         }
       ]
     },
@@ -28,12 +27,9 @@
     },
     "lockdrop_address": {
       "description": "Lockdrop contract address",
-      "anyOf": [
+      "allOf": [
         {
           "$ref": "#/definitions/Addr"
-        },
-        {
-          "type": "null"
         }
       ]
     },

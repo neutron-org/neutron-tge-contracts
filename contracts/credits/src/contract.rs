@@ -1,7 +1,6 @@
 use crate::error::ContractError;
 use crate::error::ContractError::{
     AlreadyVested, Cw20Error, IncorrectFundsSupplied, NoFundsSupplied, Unauthorized,
-    UninitializedConfig,
 };
 use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
@@ -49,19 +48,13 @@ pub fn instantiate(
 ) -> Result<Response, Cw20ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    let mut config = Config {
+    let config = Config {
         dao_address: info.sender,
-        airdrop_address: None,
-        lockdrop_address: None,
+        airdrop_address: deps.api.addr_validate(&msg.airdrop_address)?,
+        lockdrop_address: deps.api.addr_validate(&msg.lockdrop_address)?,
         when_withdrawable: msg.when_withdrawable,
     };
 
-    if let Some(addr) = msg.airdrop_address {
-        config.airdrop_address = Some(deps.api.addr_validate(&addr)?);
-    }
-    if let Some(addr) = msg.lockdrop_address {
-        config.lockdrop_address = Some(deps.api.addr_validate(&addr)?);
-    }
     CONFIG.save(deps.storage, &config)?;
 
     // store token info
@@ -88,10 +81,6 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::UpdateConfig {
-            airdrop_address,
-            lockdrop_address,
-        } => execute_update_config(deps, env, info, airdrop_address, lockdrop_address),
         ExecuteMsg::AddVesting {
             address,
             amount,
@@ -111,36 +100,6 @@ pub fn execute(
 #[entry_point]
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    Ok(Response::default())
-}
-
-/// Updates contract airdrop address and lockdrop address. Returns a default object of type [`Response`]
-///
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **airdrop_address** is an object of type [`String`]. New airdrop contract address for config.
-///
-/// * **lockdrop_address** is an object of type [`String`]. New lockdrop contract address for config.
-pub fn execute_update_config(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    airdrop_address: String,
-    lockdrop_address: String,
-) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
-    if info.sender != config.dao_address {
-        return Err(Unauthorized);
-    }
-
-    config.airdrop_address = Some(deps.api.addr_validate(&airdrop_address)?);
-    config.lockdrop_address = Some(deps.api.addr_validate(&lockdrop_address)?);
-
-    CONFIG.save(deps.storage, &config)?;
-
     Ok(Response::default())
 }
 
@@ -170,7 +129,7 @@ pub fn execute_add_vesting(
     duration: u64,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender != config.airdrop_address.ok_or_else(UninitializedConfig)? {
+    if info.sender != config.airdrop_address {
         return Err(Unauthorized);
     }
 
@@ -221,7 +180,7 @@ pub fn execute_transfer(
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
-    if info.sender != config.airdrop_address.ok_or_else(UninitializedConfig)? {
+    if info.sender != config.airdrop_address {
         return Err(Unauthorized);
     }
 
@@ -309,7 +268,7 @@ pub fn execute_burn(
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
 
-    if info.sender != config.airdrop_address.ok_or_else(UninitializedConfig)? {
+    if info.sender != config.airdrop_address {
         return Err(Unauthorized);
     }
 
@@ -344,7 +303,7 @@ pub fn execute_burn_from(
     amount: Uint128,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender != config.lockdrop_address.ok_or_else(UninitializedConfig)? {
+    if info.sender != config.lockdrop_address {
         return Err(Unauthorized);
     }
 
@@ -373,7 +332,7 @@ pub fn execute_mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respon
     let untrn_amount = try_find_untrns(info.funds.clone())?;
 
     let config = CONFIG.load(deps.storage)?;
-    let recipient = config.airdrop_address.ok_or_else(UninitializedConfig)?;
+    let recipient = config.airdrop_address;
 
     ::cw20_base::contract::execute_mint(deps, env, info, recipient.to_string(), untrn_amount)
         .map_err(Cw20Error)

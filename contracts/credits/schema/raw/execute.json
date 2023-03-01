@@ -3,32 +3,6 @@
   "title": "ExecuteMsg",
   "oneOf": [
     {
-      "description": "UpdateConfig is a message to initialize all addresses. Needed because there are circle deps between contracts. [Permissioned - DAO]",
-      "type": "object",
-      "required": [
-        "update_config"
-      ],
-      "properties": {
-        "update_config": {
-          "type": "object",
-          "required": [
-            "airdrop_address",
-            "lockdrop_address"
-          ],
-          "properties": {
-            "airdrop_address": {
-              "type": "string"
-            },
-            "lockdrop_address": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
       "description": "AddVesting is a message that allows address to claim particular amount of NTRNs at particular time. Can only store one vesting amount per address. [Permissioned - Airdrop address]",
       "type": "object",
       "required": [

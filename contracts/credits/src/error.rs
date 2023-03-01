@@ -10,9 +10,6 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized,
 
-    #[error("Config haven't been initialized with contract addresses")]
-    UninitializedConfig(),
-
     #[error("Too early to claim")]
     TooEarlyToClaim,
 

@@ -7,22 +7,18 @@
     "title": "InstantiateMsg",
     "type": "object",
     "required": [
+      "airdrop_address",
+      "lockdrop_address",
       "when_withdrawable"
     ],
     "properties": {
       "airdrop_address": {
         "description": "Airdrop contract address",
-        "type": [
-          "string",
-          "null"
-        ]
+        "type": "string"
       },
       "lockdrop_address": {
         "description": "Lockdrop contract address,",
-        "type": [
-          "string",
-          "null"
-        ]
+        "type": "string"
       },
       "when_withdrawable": {
         "description": "When can start withdrawing NTRN funds",
@@ -53,32 +49,6 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "ExecuteMsg",
     "oneOf": [
-      {
-        "description": "UpdateConfig is a message to initialize all addresses. Needed because there are circle deps between contracts. [Permissioned - DAO]",
-        "type": "object",
-        "required": [
-          "update_config"
-        ],
-        "properties": {
-          "update_config": {
-            "type": "object",
-            "required": [
-              "airdrop_address",
-              "lockdrop_address"
-            ],
-            "properties": {
-              "airdrop_address": {
-                "type": "string"
-              },
-              "lockdrop_address": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
       {
         "description": "AddVesting is a message that allows address to claim particular amount of NTRNs at particular time. Can only store one vesting amount per address. [Permissioned - Airdrop address]",
         "type": "object",
@@ -965,18 +935,17 @@
       "title": "Config",
       "type": "object",
       "required": [
+        "airdrop_address",
         "dao_address",
+        "lockdrop_address",
         "when_withdrawable"
       ],
       "properties": {
         "airdrop_address": {
           "description": "Airdrop contract address",
-          "anyOf": [
+          "allOf": [
             {
               "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
             }
           ]
         },
@@ -990,12 +959,9 @@
         },
         "lockdrop_address": {
           "description": "Lockdrop contract address",
-          "anyOf": [
+          "allOf": [
             {
               "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
             }
           ]
         },
