@@ -39,7 +39,7 @@ pub enum ExecuteMsg {
     /// Used to skip vesting as a reward for participating in the lockdrop.
     /// [Permissioned - Lockdrop address]
     BurnFrom { owner: String, amount: Uint128 },
-    /// Locks the untrn tokens and mints ucntrn tokens in 1:1 amount to the airdrop balance.
+    /// Locks the untrn tokens and mints cntrn tokens in 1:1 amount to the airdrop balance.
     /// [Permissioned - DAO] (DAO address set in initialize func as cw20 minter)
     Mint {},
 }
@@ -91,7 +91,7 @@ pub struct MigrateMsg {}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct TotalSupplyResponse {
-    // Total supply of ucntrn for specified block height
+    // Total supply of cntrn for specified block height
     pub total_supply: Uint128,
 }
 

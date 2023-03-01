@@ -42,5 +42,5 @@ pub struct Schedule {
 pub const CONFIG: Item<Config> = Item::new("config");
 
 /// Assume that we cannot set vesting multiple times for same address
-/// Vested allocations of ucntrn
+/// Vested allocations of cntrn
 pub const ALLOCATIONS: Map<&Addr, Allocation> = Map::new("allocations");
