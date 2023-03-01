@@ -3,16 +3,26 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
+    "atom_token",
+    "credit_contract",
     "deposit_window",
     "init_timestamp",
+    "lockup_rewards_info",
     "max_lock_duration",
     "max_positions_per_user",
     "min_lock_duration",
-    "weekly_divider",
-    "weekly_multiplier",
+    "usdc_token",
     "withdrawal_window"
   ],
   "properties": {
+    "atom_token": {
+      "description": "Address of ATOM/NTRN token",
+      "type": "string"
+    },
+    "credit_contract": {
+      "description": "Credit cintract address",
+      "type": "string"
+    },
     "deposit_window": {
       "description": "Number of seconds during which lockup deposits will be accepted",
       "type": "integer",
@@ -24,6 +34,13 @@
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
+    },
+    "lockup_rewards_info": {
+      "description": "Describes rewards coefficients for each lockup duration",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/LockupRewardsInfo"
+      }
     },
     "max_lock_duration": {
       "description": "Max. no. of weeks allowed for lockup",
@@ -50,23 +67,38 @@
         "null"
       ]
     },
-    "weekly_divider": {
-      "description": "Lockdrop Reward divider",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
-    },
-    "weekly_multiplier": {
-      "description": "Lockdrop Reward multiplier",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
+    "usdc_token": {
+      "description": "Address of USDC/NTRN token",
+      "type": "string"
     },
     "withdrawal_window": {
       "description": "Withdrawal Window Length :: Post the deposit window",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
+    }
+  },
+  "definitions": {
+    "Decimal256": {
+      "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal256(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 115792089237316195423570985008687907853269984665640564039457.584007913129639935 (which is (2^256 - 1) / 10^18)",
+      "type": "string"
+    },
+    "LockupRewardsInfo": {
+      "type": "object",
+      "required": [
+        "coefficient",
+        "duration"
+      ],
+      "properties": {
+        "coefficient": {
+          "$ref": "#/definitions/Decimal256"
+        },
+        "duration": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
     }
   }
 }

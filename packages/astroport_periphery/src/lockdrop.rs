@@ -1,7 +1,8 @@
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_std::{
-    from_slice, to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, Uint256, WasmMsg,
+    from_slice, to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdResult, Uint128, Uint256,
+    WasmMsg,
 };
 use cw20::Cw20ReceiveMsg;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
@@ -15,6 +16,7 @@ pub enum PoolType {
     ATOM,
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<String> for PoolType {
     fn into(self) -> String {
         match self {
@@ -59,6 +61,7 @@ impl<'a> Prefixer<'a> for PoolType {
     }
 }
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     /// Account which can update config
@@ -79,12 +82,10 @@ pub struct InstantiateMsg {
     pub min_lock_duration: u64,
     /// Max. no. of weeks allowed for lockup
     pub max_lock_duration: u64,
-    /// Lockdrop Reward multiplier
-    pub monthly_multiplier: u64,
-    /// Lockdrop Reward divider
-    pub monthly_divider: u64,
     /// Max lockup positions a user can have
     pub max_positions_per_user: u32,
+    /// Describes rewards coefficients for each lockup duration
+    pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -240,6 +241,12 @@ pub struct MigrationInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub struct LockupRewardsInfo {
+    pub duration: u64,
+    pub coefficient: Decimal256,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
@@ -261,19 +268,17 @@ pub struct Config {
     pub min_lock_duration: u64,
     /// Max. no. of weeks allowed for lockup
     pub max_lock_duration: u64,
-    /// Lockdrop Reward multiplier
-    pub montly_multiplier: u64,
-    /// Lockdrop Reward divider
-    pub monthly_divider: u64,
     /// Total NTRN lockdrop incentives to be distributed among the users
     pub lockdrop_incentives: Uint128,
     /// Max lockup positions a user can have
     pub max_positions_per_user: u32,
+    /// Describes rewards coefficients for each lockup duration
+    pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 pub struct State {
-    /// Total ASTRO incentives share
+    /// Total NTRN incentives share
     pub total_incentives_share: u64,
 }
 
@@ -282,11 +287,11 @@ pub struct PoolInfo {
     pub pool: Addr,
     pub amount_in_lockups: Uint128,
     // pub migration_info: Option<MigrationInfo>,
-    /// Share of total ASTRO incentives allocated to this pool
+    /// Share of total NTRN incentives allocated to this pool
     pub incentives_share: u64,
-    /// Weighted LP Token balance used to calculate ASTRO rewards a particular user can claim
+    /// Weighted LP Token balance used to calculate NTRN rewards a particular user can claim
     pub weighted_amount: Uint256,
-    /// Ratio of Generator ASTRO rewards accured to astroport pool share
+    /// Ratio of Generator NTRN rewards accured to astroport pool share
     pub generator_ntrn_per_share: Decimal,
     /// Ratio of Generator Proxy rewards accured to astroport pool share
     pub generator_proxy_per_share: RestrictedVector<AssetInfo, Decimal>,
@@ -296,9 +301,9 @@ pub struct PoolInfo {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 pub struct UserInfo {
-    /// Total ASTRO tokens user received as rewards for participation in the lockdrop
+    /// Total NTRN tokens user received as rewards for participation in the lockdrop
     pub total_ntrn_rewards: Uint128,
-    /// ASTRO tokens transferred to user
+    /// NTRN tokens transferred to user
     pub ntrn_transferred: bool,
     /// Number of lockup positions the user is having
     pub lockup_positions_index: u32,
@@ -311,9 +316,9 @@ pub struct LockupInfoV1 {
     pub astroport_lp_transferred: Option<Uint128>,
     /// Boolean value indicating if the user's has withdrawn funds post the only 1 withdrawal limit cutoff
     pub withdrawal_flag: bool,
-    /// ASTRO tokens received as rewards for participation in the lockdrop
+    /// NTRN tokens received as rewards for participation in the lockdrop
     pub ntrn_rewards: Uint128,
-    /// Generator ASTRO tokens loockup received as generator rewards
+    /// Generator NTRN tokens loockup received as generator rewards
     pub generator_ntrn_debt: Uint128,
     /// Generator Proxy tokens lockup received as generator rewards
     pub generator_proxy_debt: Uint128,
@@ -328,9 +333,9 @@ pub struct LockupInfoV2 {
     pub astroport_lp_transferred: Option<Uint128>,
     /// Boolean value indicating if the user's has withdrawn funds post the only 1 withdrawal limit cutoff
     pub withdrawal_flag: bool,
-    /// ASTRO tokens received as rewards for participation in the lockdrop
+    /// NTRN tokens received as rewards for participation in the lockdrop
     pub ntrn_rewards: Uint128,
-    /// Generator ASTRO tokens loockup received as generator rewards
+    /// Generator NTRN tokens loockup received as generator rewards
     pub generator_ntrn_debt: Uint128,
     /// Generator Proxy tokens lockup received as generator rewards
     pub generator_proxy_debt: RestrictedVector<AssetInfo, Uint128>,
@@ -340,7 +345,7 @@ pub struct LockupInfoV2 {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct StateResponse {
-    /// Total ASTRO incentives share
+    /// Total NTRN incentives share
     pub total_incentives_share: u64,
     /// Vector containing LP addresses for all the supported LP Pools
     pub supported_pairs_list: Vec<PoolType>,
@@ -348,24 +353,24 @@ pub struct StateResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct UserInfoResponse {
-    /// Total ASTRO tokens user received as rewards for participation in the lockdrop
-    pub total_astro_rewards: Uint128,
-    /// ASTRO tokens transferred to user
-    pub astro_transferred: bool,
+    /// Total NTRN tokens user received as rewards for participation in the lockdrop
+    pub total_ntrn_rewards: Uint128,
+    /// NTRN tokens transferred to user
+    pub ntrn_transferred: bool,
     /// Lockup positions
     pub lockup_infos: Vec<LockUpInfoResponse>,
-    /// ASTRO tokens receivable as generator rewards that user can claim
-    pub claimable_generator_astro_debt: Uint128,
+    /// NTRN tokens receivable as generator rewards that user can claim
+    pub claimable_generator_ntrn_debt: Uint128,
     /// Number of lockup positions the user is having
     pub lockup_positions_index: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UserInfoWithListResponse {
-    /// Total ASTRO tokens user received as rewards for participation in the lockdrop
-    pub total_astro_rewards: Uint128,
-    /// ASTRO tokens transferred to user
-    pub astro_transferred: bool,
+    /// Total NTRN tokens user received as rewards for participation in the lockdrop
+    pub total_ntrn_rewards: Uint128,
+    /// NTRN tokens transferred to user
+    pub ntrn_transferred: bool,
     /// Lockup positions
     pub lockup_infos: Vec<LockUpInfoSummary>,
     /// Number of lockup positions the user is having
@@ -386,11 +391,11 @@ pub struct LockUpInfoResponse {
     pub lp_units_locked: Uint128,
     /// Boolean value indicating if the user's has withdrawn funds post the only 1 withdrawal limit cutoff
     pub withdrawal_flag: bool,
-    /// ASTRO tokens received as rewards for participation in the lockdrop
-    pub astro_rewards: Uint128,
+    /// NTRN tokens received as rewards for participation in the lockdrop
+    pub ntrn_rewards: Uint128,
     pub duration: u64,
-    /// Generator ASTRO tokens lockup received as generator rewards
-    pub generator_astro_debt: Uint128,
+    /// Generator NTRN tokens lockup received as generator rewards
+    pub generator_ntrn_debt: Uint128,
     /// ASTRO tokens receivable as generator rewards that user can claim
     pub claimable_generator_astro_debt: Uint128,
     /// Generator Proxy tokens lockup received as generator rewards

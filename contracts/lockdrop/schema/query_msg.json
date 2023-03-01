@@ -35,11 +35,11 @@
         "pool": {
           "type": "object",
           "required": [
-            "terraswap_lp_token"
+            "pool_type"
           ],
           "properties": {
-            "terraswap_lp_token": {
-              "type": "string"
+            "pool_type": {
+              "$ref": "#/definitions/PoolType"
             }
           }
         }
@@ -96,7 +96,7 @@
           "type": "object",
           "required": [
             "duration",
-            "terraswap_lp_token",
+            "pool_type",
             "user_address"
           ],
           "properties": {
@@ -105,8 +105,8 @@
               "format": "uint64",
               "minimum": 0.0
             },
-            "terraswap_lp_token": {
-              "type": "string"
+            "pool_type": {
+              "$ref": "#/definitions/PoolType"
             },
             "user_address": {
               "type": "string"
@@ -119,24 +119,24 @@
     {
       "type": "object",
       "required": [
-        "pending_asset_reward"
+        "query_user_lockup_total_at_height"
       ],
       "properties": {
-        "pending_asset_reward": {
+        "query_user_lockup_total_at_height": {
           "type": "object",
           "required": [
-            "duration",
-            "terraswap_lp_token",
+            "height",
+            "pool_type",
             "user_address"
           ],
           "properties": {
-            "duration": {
+            "height": {
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0
             },
-            "terraswap_lp_token": {
-              "type": "string"
+            "pool_type": {
+              "$ref": "#/definitions/PoolType"
             },
             "user_address": {
               "type": "string"
@@ -145,6 +145,41 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "query_lockup_total_at_height"
+      ],
+      "properties": {
+        "query_lockup_total_at_height": {
+          "type": "object",
+          "required": [
+            "height",
+            "pool_type"
+          ],
+          "properties": {
+            "height": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "pool_type": {
+              "$ref": "#/definitions/PoolType"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
     }
-  ]
+  ],
+  "definitions": {
+    "PoolType": {
+      "type": "string",
+      "enum": [
+        "USDC",
+        "ATOM"
+      ]
+    }
+  }
 }
