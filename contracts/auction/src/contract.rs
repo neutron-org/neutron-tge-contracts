@@ -650,7 +650,7 @@ pub fn execute_finalize_init_pool(
         state.pool_init_timestamp = env.block.time.seconds();
         STATE.save(deps.storage, &state)?;
 
-        let msgs = vec![
+        let mut msgs = vec![
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_usdc_lp_token_address.to_string(),
                 funds: vec![],
@@ -668,6 +668,28 @@ pub fn execute_finalize_init_pool(
                 })?,
             }),
         ];
+
+        // Send locked tokens to the lockdrop contract
+        if !state.atom_lp_locked.is_zero() {
+            msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: ntrn_atom_lp_token_address.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: config.lockdrop_contract_address.to_string(),
+                    amount: state.atom_lp_locked,
+                })?,
+            }))
+        }
+        if !state.usdc_lp_locked.is_zero() {
+            msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: ntrn_usdc_lp_token_address.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: config.lockdrop_contract_address.to_string(),
+                    amount: state.usdc_lp_locked,
+                })?,
+            }))
+        }
 
         Ok(Response::new().add_messages(msgs).add_attributes(vec![
             attr("action", "Auction::ExecuteMsg::FinalizePoolInitialization"),
