@@ -58,7 +58,6 @@ pub fn instantiate(
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
-        airdrop_contract_address: deps.api.addr_validate(&msg.airdrop_contract_address)?,
         lockdrop_contract_address: deps.api.addr_validate(&msg.lockdrop_contract_address)?,
         price_feed_contract: deps.api.addr_validate(msg.price_feed_contract.as_str())?,
         reserve_contract_address: deps.api.addr_validate(&msg.reserve_contract_address)?,

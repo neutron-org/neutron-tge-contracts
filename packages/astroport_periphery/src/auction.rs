@@ -8,7 +8,6 @@ use crate::lockdrop::PoolType;
 pub struct InstantiateMsg {
     pub owner: Option<String>,
     pub price_feed_contract: String,
-    pub airdrop_contract_address: String,
     pub lockdrop_contract_address: String,
     pub reserve_contract_address: String,
     pub vesting_usdc_contract_address: String,
@@ -107,8 +106,6 @@ pub struct MigrateMsg {}
 pub struct Config {
     /// Account who can update config
     pub owner: Addr,
-    /// Airdrop Contract address
-    pub airdrop_contract_address: Addr,
     /// Reserve Contract address
     pub reserve_contract_address: Addr,
     /// Vesting LP-USDC Contract address
