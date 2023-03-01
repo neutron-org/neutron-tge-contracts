@@ -7,12 +7,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 // TODO: implement display trait
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Copy)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Copy)]
 pub enum PoolType {
     USDC,
     ATOM,
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<String> for PoolType {
     fn into(self) -> String {
         match self {
@@ -21,7 +22,6 @@ impl Into<String> for PoolType {
         }
     }
 }
-
 
 impl PoolType {
     fn bytes(&self) -> &[u8] {
@@ -58,6 +58,7 @@ impl<'a> Prefixer<'a> for PoolType {
     }
 }
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     /// Account which can update config
@@ -84,7 +85,7 @@ pub struct InstantiateMsg {
     pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
     /// Bootstrap Auction contract address
     pub auction_contract_address: Option<String>,
@@ -150,7 +151,7 @@ pub enum ExecuteMsg {
     ClaimOwnership {},
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Cw20HookMsg {
     // Called by the bootstrap auction contract when liquidity is added to the
@@ -197,7 +198,7 @@ impl CallbackMsg {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
@@ -227,22 +228,22 @@ pub enum QueryMsg {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct MigrateMsg {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct MigrationInfo {
     pub terraswap_migrated_amount: Uint128,
     pub astroport_lp_token: Addr,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct LockupRewardsInfo {
     pub duration: u64,
     pub coefficient: Decimal256,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
@@ -272,7 +273,7 @@ pub struct Config {
     pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 pub struct State {
     /// Total NTRN incentives share
     pub total_incentives_share: u64,
@@ -295,7 +296,7 @@ pub struct PoolInfo {
     pub is_staked: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 pub struct UserInfo {
     /// Total NTRN tokens user received as rewards for participation in the lockdrop
     pub total_ntrn_rewards: Uint128,
@@ -305,7 +306,7 @@ pub struct UserInfo {
     pub lockup_positions_index: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct LockupInfoV1 {
     /// Terraswap LP units locked by the user
     pub lp_units_locked: Uint128,
@@ -339,7 +340,7 @@ pub struct LockupInfoV2 {
     pub unlock_timestamp: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct StateResponse {
     /// Total NTRN incentives share
     pub total_incentives_share: u64,
@@ -356,12 +357,12 @@ pub struct UserInfoResponse {
     /// Lockup positions
     pub lockup_infos: Vec<LockUpInfoResponse>,
     /// NTRN tokens receivable as generator rewards that user can claim
-    pub claimable_generator_NTRN_debt: Uint128,
+    pub claimable_generator_ntrn_debt: Uint128,
     /// Number of lockup positions the user is having
     pub lockup_positions_index: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UserInfoWithListResponse {
     /// Total NTRN tokens user received as rewards for participation in the lockdrop
     pub total_ntrn_rewards: Uint128,
@@ -373,7 +374,7 @@ pub struct UserInfoWithListResponse {
     pub lockup_positions_index: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct LockUpInfoSummary {
     pub pool_type: PoolType,
     pub duration: u64,
@@ -406,7 +407,7 @@ pub struct LockUpInfoResponse {
     pub astroport_lp_transferred: Option<Uint128>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct PendingAssetRewardResponse {
     pub amount: Uint128,
 }

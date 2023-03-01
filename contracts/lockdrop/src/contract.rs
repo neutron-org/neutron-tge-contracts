@@ -154,19 +154,9 @@ pub fn instantiate(
 /// * **ExecuteMsg::UpdateConfig { new_config }** Admin function to update configuration parameters.
 ///
 /// * **ExecuteMsg::InitializePool {
-///     terraswap_lp_token,
+///     pool_type,
 ///     incentives_share,
-/// }** Facilitates addition of new Pool (Terraswap Pools) whose LP tokens can then be locked in the lockdrop contract.
-///
-/// * **ExecuteMsg::MigrateLiquidity {
-///     terraswap_lp_token,
-///     astroport_pool_addr,
-///     slippage_tolerance,
-/// }** Migrate Liquidity from Terraswap to Astroport.
-///
-/// * **ExecuteMsg::StakeLpTokens { terraswap_lp_token }** Facilitates staking of Astroport LP tokens for a particular LP pool with the generator contract.
-///
-/// * **ExecuteMsg::EnableClaims {}** Enables NTRN Claims by users.
+/// }** Facilitates addition of new Pool (axlrUSDC/NTRN or ATOM/NTRN) whose LP tokens can then be locked in the lockdrop contract.
 ///
 /// * **ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
 ///             terraswap_lp_token,
@@ -207,11 +197,10 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
                 config.owner,
                 OWNERSHIP_PROPOSAL,
             )
-            .map_err(|e| e)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL).map_err(|e| e)
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
         }
         ExecuteMsg::ClaimOwnership {} => {
             claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
@@ -221,7 +210,6 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
                 })?;
                 Ok(())
             })
-            .map_err(|e| e)
         }
         ExecuteMsg::IncreaseNTRNIncentives {} => handle_increasing_ntrn_incentives(deps, env, info),
         ExecuteMsg::IncreaseLockupFor {
@@ -360,6 +348,17 @@ fn _handle_callback(
 ///             terraswap_lp_token,
 ///             duration,
 ///         }** Returns the amount of pending asset rewards for the specified recipient and for a specific lockup position.
+///
+/// * **QueryUserLockupTotalAtHeight {
+///         pool_type: PoolType,
+///         user_address: String,
+///         height: u64,
+///     }** Returns locked amount of LP tokens for the specified user for the specified pool at a specific height.
+///
+/// * **QueryLockupTotalAtHeight {
+///         pool_type: PoolType,
+///         height: u64,
+///     }** Returns a total amount of LP tokens for the specified pool at a specific height.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
@@ -441,7 +440,7 @@ pub fn handle_update_config(
                 .keys(deps.storage, None, None, Order::Ascending)
                 .collect::<Result<Vec<PoolType>, StdError>>()?
             {
-                let pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
+                let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
                 if pool_info.is_staked {
                     return Err(StdError::generic_err(format!(
                         "{:?} astro LP tokens already staked. Unstake them before updating generator",
@@ -506,6 +505,8 @@ pub fn handle_increasing_ntrn_incentives(
 /// * **cw20_sender_addr** is an object of type [`Addr`]. Address caller cw20 contract
 ///
 /// * **incentives_share** is an object of type [`u64`]. Parameter defining share of total NTRN incentives are allocated for this pool
+///
+/// * **amount** amount of LP tokens of `pool_type` to be staked in the Generator Contract.
 pub fn handle_initialize_pool(
     deps: DepsMut,
     env: Env,
@@ -531,7 +532,7 @@ pub fn handle_initialize_pool(
     }
 
     // CHECK ::: Is LP Token Pool initialized
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
     if info.sender != pool_info.pool {
         return Err(StdError::generic_err("Unknown cw20 token address"));
@@ -548,7 +549,7 @@ pub fn handle_initialize_pool(
     )?;
     pool_info.is_staked = true;
 
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info, env.block.height)?;
+    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
 
     state.total_incentives_share += incentives_share;
     STATE.save(deps.storage, &state)?;
@@ -633,12 +634,12 @@ pub fn handle_increase_lockup(
 
     let user_address = addr_validate_to_lower(deps.api, user_address_raw)?;
 
-    if config.lockup_rewards_info.iter().find(|i| i.duration == duration).is_none() {
+    if !config.lockup_rewards_info.iter().any(|i| i.duration == duration) {
         return Err(StdError::generic_err("invalid duration"))
     }
 
     // CHECK ::: LP Token supported or not ?
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
     let mut user_info = USER_INFO
         .may_load(deps.storage, &user_address)?
         .unwrap_or_default();
@@ -654,7 +655,7 @@ pub fn handle_increase_lockup(
     pool_info.weighted_amount += calculate_weight(amount, duration, &config)?;
     pool_info.amount_in_lockups += amount;
 
-    let lockup_key = (pool_type.clone(), &user_address, U64Key::new(duration));
+    let lockup_key = (pool_type, &user_address, U64Key::new(duration));
 
     let lockup_info = match LOCKUP_INFO.compatible_may_load(
         deps.as_ref(),
@@ -700,7 +701,7 @@ pub fn handle_increase_lockup(
         }
     })?;
 
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info, env.block.height)?;
+    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
     USER_INFO.save(deps.storage, &user_address, &user_info)?;
 
     Ok(Response::new().add_attributes(vec![
@@ -744,11 +745,11 @@ pub fn handle_withdraw_from_lockup(
         return Err(StdError::generic_err("Invalid withdrawal request"));
     }
 
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
     // Retrieve Lockup position
     let user_address = info.sender;
-    let lockup_key = (pool_type.clone(), &user_address, U64Key::new(duration));
+    let lockup_key = (pool_type, &user_address, U64Key::new(duration));
     let mut lockup_info =
         LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key.clone(), &config.generator)?;
 
@@ -801,7 +802,7 @@ pub fn handle_withdraw_from_lockup(
     })?;
 
     // SAVE Updated States
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info, env.block.height)?;
+    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
 
     Ok(Response::new().add_attributes(vec![
         attr("action", "withdraw_from_lockup"),
@@ -879,7 +880,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     let user_address = info.sender;
 
     // CHECK ::: Is LP Token Pool supported or not ?
-    let pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
+    let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
     let mut user_info = USER_INFO
         .may_load(deps.storage, &user_address)?
@@ -898,7 +899,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     USER_INFO.save(deps.storage, &user_address, &user_info)?;
 
     // Check is there lockup or not ?
-    let lockup_key = (pool_type.clone(), &user_address, U64Key::new(duration));
+    let lockup_key = (pool_type, &user_address, U64Key::new(duration));
     let lockup_info =
         LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key.clone(), &config.generator)?;
 
@@ -983,7 +984,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
 
             cosmos_msgs.push(
                 CallbackMsg::UpdatePoolOnDualRewardsClaim {
-                    pool_type: pool_type.clone(),
+                    pool_type: pool_type,
                     prev_ntrn_balance: astro_balance,
                     prev_proxy_reward_balances,
                 }
@@ -1056,7 +1057,7 @@ pub fn update_pool_on_dual_rewards_claim(
     prev_proxy_reward_balances: Vec<Asset>,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
     let generator = config
         .generator
@@ -1105,7 +1106,7 @@ pub fn update_pool_on_dual_rewards_claim(
     }
 
     // SAVE UPDATED STATE OF THE POOL
-    ASSET_POOLS.save(deps.storage, pool_type.clone(), &pool_info, env.block.height)?;
+    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
 
     Ok(Response::new().add_attributes(vec![
         attr("action", "update_generator_dual_rewards"),
@@ -1140,8 +1141,8 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     withdraw_lp_stake: bool,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
-    let lockup_key = (pool_type.clone(), &user_address, U64Key::new(duration));
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
+    let lockup_key = (pool_type, &user_address, U64Key::new(duration));
     let mut lockup_info =
         LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key.clone(), &config.generator)?;
 
@@ -1373,11 +1374,11 @@ pub fn query_user_info(deps: Deps, env: Env, user: String) -> StdResult<UserInfo
         .collect::<Result<Vec<PoolType>, StdError>>()?
     {
         for duration in LOCKUP_INFO
-            .prefix((pool_type.clone(), &user_address))
+            .prefix((pool_type, &user_address))
             .keys(deps.storage, None, None, Order::Ascending)
             .collect::<Result<Vec<u64>, StdError>>()?
         {
-            let lockup_info = query_lockup_info(deps, &env, &user, pool_type.clone(), duration)?;
+            let lockup_info = query_lockup_info(deps, &env, &user, pool_type, duration)?;
             total_astro_rewards += lockup_info.ntrn_rewards;
             claimable_generator_astro_debt += lockup_info.claimable_generator_astro_debt;
             lockup_infos.push(lockup_info);
@@ -1388,7 +1389,7 @@ pub fn query_user_info(deps: Deps, env: Env, user: String) -> StdResult<UserInfo
         total_ntrn_rewards: total_astro_rewards,
         ntrn_transferred: user_info.ntrn_transferred,
         lockup_infos,
-        claimable_generator_NTRN_debt: claimable_generator_astro_debt,
+        claimable_generator_ntrn_debt: claimable_generator_astro_debt,
         lockup_positions_index: user_info.lockup_positions_index,
     })
 }
@@ -1417,12 +1418,12 @@ pub fn query_user_info_with_lockups_list(
         .collect::<Result<Vec<PoolType>, StdError>>()?
     {
         for duration in LOCKUP_INFO
-            .prefix((pool_type.clone(), &user_address))
+            .prefix((pool_type, &user_address))
             .keys(deps.storage, None, None, Order::Ascending)
             .collect::<Result<Vec<u64>, StdError>>()?
         {
             lockup_infos.push(LockUpInfoSummary {
-                pool_type: pool_type.clone(),
+                pool_type: pool_type,
                 duration,
             });
         }
@@ -1436,10 +1437,26 @@ pub fn query_user_info_with_lockups_list(
     })
 }
 
+/// Returns locked amount of LP tokens for the specified user for the specified pool at a specific height.
+/// ## Params
+/// * **deps** is an object of type [`Deps`].
+///
+/// * **pool_type** is an object of type [`PoolType`].
+///
+/// * **user** is an object of type [`Addr`].
+///
+/// * **height** is an object of type [`u64`].
 pub fn query_user_lockup_total_at_height(deps: Deps, pool: PoolType, user: Addr, height: u64) -> StdResult<Option<Uint128>> {
-    Ok(TOTAL_USER_LOCKUP_AMOUNT.may_load_at_height(deps.storage, (pool, &user), height)?)
+    TOTAL_USER_LOCKUP_AMOUNT.may_load_at_height(deps.storage, (pool, &user), height)
 }
 
+/// Returns a total amount of LP tokens for the specified pool at a specific height.
+/// ## Params
+/// * **deps** is an object of type [`Deps`].
+///
+/// * **pool_type** is an object of type [`PoolType`].
+///
+/// * **height** is an object of type [`u64`].
 pub fn query_lockup_total_at_height(deps: Deps, pool: PoolType, height: u64) -> StdResult<Option<Uint128>> {
     if let Some(pool) = ASSET_POOLS.may_load_at_height(deps.storage, pool, height)? {
         return Ok(Some(pool.amount_in_lockups));
@@ -1470,11 +1487,11 @@ pub fn query_lockup_info(
 
     let user_address = addr_validate_to_lower(deps.api, user_address)?;
 
-    let lockup_key = (pool_type.clone(), &user_address, U64Key::new(duration));
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
+    let lockup_key = (pool_type, &user_address, U64Key::new(duration));
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
     let mut lockup_info = LOCKUP_INFO.compatible_load(deps, lockup_key, &config.generator)?;
 
-    let mut lockup_astroport_lp_units_opt: Option<Uint128> = None;
+    let lockup_astroport_lp_units_opt: Option<Uint128>;
     let astroport_lp_token_opt: Addr;
     let mut claimable_generator_astro_debt = Uint128::zero();
     let mut claimable_generator_proxy_debt: RestrictedVector<AssetInfo, Uint128> =
@@ -1662,16 +1679,16 @@ fn update_user_lockup_positions_and_calc_rewards(
         .collect::<Result<Vec<PoolType>, StdError>>()?
     {
         for duration in LOCKUP_INFO
-            .prefix((pool_type.clone(), user_address))
+            .prefix((pool_type, user_address))
             .keys(deps.storage, None, None, Order::Ascending)
             .collect::<Result<Vec<u64>, StdError>>()?
         {
-            keys.push((pool_type.clone(), duration));
+            keys.push((pool_type, duration));
         }
     }
     for (pool_type, duration) in keys {
-        let pool_info = ASSET_POOLS.load(deps.storage, pool_type.clone())?;
-        let lockup_key = (pool_type.clone(), user_address, U64Key::new(duration));
+        let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
+        let lockup_key = (pool_type, user_address, U64Key::new(duration));
         let mut lockup_info =
             LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key.clone(), &config.generator)?;
 

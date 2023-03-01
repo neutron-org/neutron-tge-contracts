@@ -1,7 +1,7 @@
 use crate::contract::{execute, instantiate, query, UNTRN_DENOM};
 use astroport_periphery::lockdrop::{Config, ExecuteMsg, InstantiateMsg, LockupRewardsInfo, QueryMsg};
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-use cosmwasm_std::{from_binary, Addr, Decimal, Decimal256, coin, Uint128, StdError};
+use cosmwasm_std::{from_binary, Addr, Decimal256, coin, Uint128, StdError};
 
 const ATOM_LP_TOKEN_ADDR: &str = "atom_lp";
 const USDC_LP_TOKEN_ADDR: &str = "usdc_lp";
@@ -86,7 +86,7 @@ fn update_owner() {
 
     // Let's query the state
     let config: Config =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap()).unwrap();
+        from_binary(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap();
     assert_eq!(new_owner, config.owner);
 }
 
@@ -121,11 +121,11 @@ fn increase_ntrn_incentives() {
 
     let info = mock_info(owner.as_str(), &[coin(100u128, UNTRN_DENOM)]);
 
-    let res = execute(deps.as_mut(), env.clone(), info, msg.clone());
+    let res = execute(deps.as_mut(), env.clone(), info, msg);
     assert!(res.is_ok());
 
     let config: Config =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap()).unwrap();
+        from_binary(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap();
     assert_eq!(Uint128::new(100u128), config.lockdrop_incentives);
 
 
@@ -135,7 +135,6 @@ fn increase_ntrn_incentives() {
 
     let info = mock_info(owner.as_str(), &[coin(100u128, "DENOM")]);
 
-    let err = execute(deps.as_mut(), env.clone(), info, msg.clone()).unwrap_err();
+    let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
     assert_eq!(err, StdError::generic_err(format!("{} is not found", UNTRN_DENOM)));
 }
-

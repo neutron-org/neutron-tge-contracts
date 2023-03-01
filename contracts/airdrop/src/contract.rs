@@ -218,6 +218,7 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
     Ok(Response::default())
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Admin function to update any of the configuration parameters.. Returns a [`StdError`] on failure.
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
