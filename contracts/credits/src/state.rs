@@ -12,7 +12,7 @@ pub struct Config {
     pub airdrop_address: Addr,
     /// Lockdrop contract address
     pub lockdrop_address: Addr,
-    /// When can start withdrawing NTRN funds
+    /// When can start withdrawing untrn tokens
     pub when_withdrawable: Timestamp,
 }
 
@@ -42,5 +42,5 @@ pub struct Schedule {
 pub const CONFIG: Item<Config> = Item::new("config");
 
 /// Assume that we cannot set vesting multiple times for same address
-/// Vested allocations of cntrn
+/// Vested allocations of cNTRN
 pub const ALLOCATIONS: Map<&Addr, Allocation> = Map::new("allocations");

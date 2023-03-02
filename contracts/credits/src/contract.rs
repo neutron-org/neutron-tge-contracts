@@ -188,7 +188,7 @@ pub fn execute_transfer(
 }
 
 /// Calculates amount that is already unlocked from vesting for sender,
-/// burns this amount of cntrn tokens and sends 1:1 of untrn tokens proportion to the sender.
+/// burns this amount of cNTRN tokens and sends 1:1 of untrn tokens proportion to the sender.
 ///
 /// Available to execute only after `config.when_withdrawable` time.
 ///
@@ -227,8 +227,8 @@ pub fn execute_withdraw(
 
     // Guard against the case where actual balance is smaller than max withdrawable amount.
     // That can happen if user already withdrawn some funds as rewards for lockdrop participation through burn_from (skipping vesting).
-    // Example: user had 100 cntrn on balance, and burned 100 cntrn through burn_from.
-    // Suppose vesting period fully ended. In that case `compute_withdrawable_amount()` will return 100 NTRN,
+    // Example: user had 100 cNTRN on balance, and burned 100 cNTRN through burn_from.
+    // Suppose vesting period fully ended. In that case `compute_withdrawable_amount()` will return 100 untrn,
     // although he has 0 on balance.
     let actual_balance = BALANCES.load(deps.storage, &owner)?;
     let to_withdraw = max_withdrawable_amount.min(actual_balance);
@@ -245,7 +245,7 @@ pub fn execute_withdraw(
 }
 
 /// Withdraws specified `amount` of tokens -
-/// burns cntrn tokens and sends amount in 1:1 proportion of untrn tokens to the sender (airdrop account).
+/// burns cNTRN tokens and sends amount in 1:1 proportion of untrn tokens to the sender (airdrop account).
 /// Used by airdrop account for burning unclaimed tokens.
 ///
 /// Only available for an airdrop contract account.
@@ -276,7 +276,7 @@ pub fn execute_burn(
 }
 
 /// Withdraws specified `amount` of tokens from specified `owner` -
-/// burns cntrn tokens and sends amount in 1:1 proportion of untrn tokens to the `owner`.
+/// burns cNTRN tokens and sends amount in 1:1 proportion of untrn tokens to the `owner`.
 ///
 /// Used for rewards for lockdrop participation and *skips vesting*.
 /// It also does NOT change amounts available for `withdraw` by user.
@@ -292,7 +292,7 @@ pub fn execute_burn(
 ///
 /// * **info** is an object of type [`MessageInfo`].
 ///
-/// * **owner** is an object of type [`String`]. Address to burn cntrn tokens from and send untrn tokens to.
+/// * **owner** is an object of type [`String`]. Address to burn cNTRN tokens from and send untrn tokens to.
 ///
 /// * **amount** is an object of type [`Uint128`]. Amount to be burned and minted in 1:1 proportion.
 pub fn execute_burn_from(
@@ -313,7 +313,7 @@ pub fn execute_burn_from(
     burn_and_send(deps, env, info, amount)
 }
 
-/// Mints cntrn tokens in 1:1 proportion to sent untrn ones
+/// Mints cNTRN tokens in 1:1 proportion to sent untrn ones
 /// Uses cw20 standard mint, but only can mint to the airdrop contract balance
 /// Returns a default object of type [`Response`].
 ///
@@ -328,7 +328,7 @@ pub fn execute_burn_from(
 ///
 /// * **info** is an object of type [`MessageInfo`].
 pub fn execute_mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, ContractError> {
-    // mint in 1:1 proportion to locked ntrn funds
+    // mint in 1:1 proportion to locked untrn tokens
     let untrn_amount = try_find_untrns(info.funds.clone())?;
 
     let config = CONFIG.load(deps.storage)?;
@@ -525,7 +525,7 @@ fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, ContractError> {
     Ok(token.amount)
 }
 
-// burns cntrn tokens and send untrn tokens to the sender
+// burns cNTRN tokens and send untrn tokens to the sender
 fn burn_and_send(
     deps: DepsMut,
     env: Env,

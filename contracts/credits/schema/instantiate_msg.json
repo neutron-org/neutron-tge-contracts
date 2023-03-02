@@ -17,7 +17,7 @@
       "type": "string"
     },
     "when_withdrawable": {
-      "description": "When can start withdrawing NTRN funds",
+      "description": "When can start withdrawing untrn tokens",
       "allOf": [
         {
           "$ref": "#/definitions/Timestamp"
