@@ -260,12 +260,11 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
                 config.owner,
                 OWNERSHIP_PROPOSAL,
             )
-            .map_err(|e| e)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL).map_err(|e| e)
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
         }
         ExecuteMsg::ClaimOwnership {} => {
             claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
@@ -276,7 +275,6 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
 
                 Ok(())
             })
-            .map_err(|e| e)
         }
     }
 }
@@ -2672,7 +2670,7 @@ mod unit_tests {
         let terraswap_lp_addr = Addr::unchecked("tswp_lp_token");
         let migration_info = MigrationInfo {
             terraswap_migrated_amount: Uint128::from(100_000000u128),
-            astroport_lp_token: astroport_lp_token.clone(),
+            astroport_lp_token,
         };
         let pool_info = PoolInfo {
             terraswap_pool: Addr::unchecked(terraswap_lp_addr.clone()),
@@ -2731,7 +2729,7 @@ mod unit_tests {
         {
             assert_eq!(contract_addr.to_owned(), "minter_address".to_string());
             assert_eq!(
-                from_binary::<astroport::pair_stable_bluna::ExecuteMsg>(&msg).unwrap(),
+                from_binary::<astroport::pair_stable_bluna::ExecuteMsg>(msg).unwrap(),
                 astroport::pair_stable_bluna::ExecuteMsg::ClaimReward { receiver: None }
             )
         } else {
@@ -2750,7 +2748,7 @@ mod unit_tests {
                 lock_duration: 10,
                 previous_balance: init_uusd_balance,
             });
-            assert_eq!(from_binary::<ExecuteMsg>(&msg).unwrap(), real_message);
+            assert_eq!(from_binary::<ExecuteMsg>(msg).unwrap(), real_message);
         } else {
             panic!("Wrong message")
         }
@@ -2819,7 +2817,7 @@ mod unit_tests {
         assert_eq!(res.u128(), 700u128);
 
         // emulating newly arrived rewards
-        total_reward_index = total_reward_index + Decimal256::from_ratio(100u128, 1000u128);
+        total_reward_index += Decimal256::from_ratio(100u128, 1000u128);
 
         let res = calc_user_reward(
             &deps.storage,
@@ -2912,7 +2910,7 @@ mod unit_tests {
         let terraswap_lp_addr = Addr::unchecked("tswp_lp_token");
         let migration_info = MigrationInfo {
             terraswap_migrated_amount: Uint128::from(100_000000u128),
-            astroport_lp_token: astroport_lp_token.clone(),
+            astroport_lp_token,
         };
         let pool_info = PoolInfo {
             terraswap_pool: Addr::unchecked(terraswap_lp_addr.clone()),
@@ -3056,7 +3054,7 @@ mod unit_tests {
         // the user should receive rewards from the seconds distribution
         let resp = callback_distribute_asset_reward(
             deps.as_mut(),
-            env.clone(),
+            env,
             uusd_balance,
             terraswap_lp_addr.clone(),
             user_addr.clone(),
