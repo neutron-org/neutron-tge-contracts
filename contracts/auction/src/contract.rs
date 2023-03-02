@@ -362,6 +362,9 @@ pub fn execute_withdraw(
     state.total_usdc_deposited -= amount_usdc;
     state.total_atom_deposited -= amount_atom;
 
+    user_info.usdc_deposited -= amount_usdc;
+    user_info.atom_deposited -= amount_atom;
+
     // SAVE UPDATED STATE
     STATE.save(deps.storage, &state)?;
     users_store.save(deps.storage, &user_address, &user_info)?;
