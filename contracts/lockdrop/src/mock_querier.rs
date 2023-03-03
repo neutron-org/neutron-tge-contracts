@@ -76,6 +76,7 @@ impl WasmMockQuerier {
                                 fee_address: Some(Addr::unchecked("fee_address")),
                                 generator_address: Some(Addr::unchecked("gen_address")),
                                 whitelist_code_id: 666,
+                                coin_registry_address: Addr::unchecked("mock"),
                             })
                             .into(),
                         ),
@@ -84,14 +85,14 @@ impl WasmMockQuerier {
                     "minter_address" => match from_binary(msg).unwrap() {
                         Pair {} => SystemResult::Ok(
                             to_binary(&PairInfo {
-                                asset_infos: [
+                                asset_infos: Vec::from([
                                     AssetInfo::Token {
                                         contract_addr: Addr::unchecked("token1"),
                                     },
                                     AssetInfo::Token {
                                         contract_addr: Addr::unchecked("token2"),
                                     },
-                                ],
+                                ]),
                                 contract_addr: Addr::unchecked(contract_addr.as_str()),
                                 liquidity_token: Addr::unchecked("liquidity_token"),
                                 pair_type: PairType::Stable {},
