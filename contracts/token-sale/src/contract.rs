@@ -53,7 +53,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 fn query_balance(deps: &Deps, address: &Addr, denom: String) -> StdResult<Uint128> {
-    let balance = deps.querier.query_balance(address, &denom)?;
+    let balance = deps.querier.query_balance(address, denom)?;
     Ok(balance.amount)
 }
 
@@ -119,7 +119,7 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     deps.api
-        .debug(format!("WASMDEBUG: execute: received msg: {:?}", msg).as_str());
+        .debug(format!("WASMDEBUG: execute: received msg: {msg:?}").as_str());
 
     match msg {
         ExecuteMsg::WithdrawReserve {} => execute_withdraw_reserve(deps, env, info),
@@ -269,8 +269,7 @@ fn execute_withdraw(
             if requested_amount > withdrawable_amount {
                 return Err(ContractError::WithdrawError {
                     text: format!(
-                        "can not withdraw more than current withdrawable amount ({})",
-                        withdrawable_amount
+                        "can not withdraw more than current withdrawable amount ({withdrawable_amount})"
                     ),
                 });
             }
