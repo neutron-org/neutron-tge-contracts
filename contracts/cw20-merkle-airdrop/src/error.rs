@@ -35,20 +35,20 @@ pub enum ContractError {
     #[error("Cannot migrate from different contract type: {previous_contract}")]
     CannotMigrate { previous_contract: String },
 
-    #[error("Airdrop stage {stage} expired at {expiration}")]
-    StageExpired { stage: u8, expiration: Expiration },
+    #[error("Airdrop expired at {expiration}")]
+    Expired { expiration: Expiration },
 
     #[error("Airdrop stage {stage} not expired yet")]
     StageNotExpired { stage: u8, expiration: Expiration },
 
-    #[error("Airdrop stage {stage} begins at {start}")]
-    StageNotBegun { stage: u8, start: Scheduled },
+    #[error("Airdrop begins at {start}")]
+    NotBegun { start: Scheduled },
 
-    #[error("Airdrop stage {stage} is paused")]
-    StagePaused { stage: u8 },
+    #[error("Airdrop is paused")]
+    Paused {},
 
-    #[error("Airdrop stage {stage} is not paused")]
-    StageNotPaused { stage: u8 },
+    #[error("Airdrop is not paused")]
+    NotPaused {},
 
     #[error("Semver parsing error: {0}")]
     SemVer(String),

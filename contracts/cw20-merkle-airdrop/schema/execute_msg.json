@@ -109,8 +109,7 @@
           "type": "object",
           "required": [
             "amount",
-            "proof",
-            "stage"
+            "proof"
           ],
           "properties": {
             "amount": {
@@ -133,11 +132,6 @@
                   "type": "null"
                 }
               ]
-            },
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
             }
           }
         }
@@ -164,17 +158,7 @@
       ],
       "properties": {
         "pause": {
-          "type": "object",
-          "required": [
-            "stage"
-          ],
-          "properties": {
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          }
+          "type": "object"
         }
       },
       "additionalProperties": false
@@ -187,9 +171,6 @@
       "properties": {
         "resume": {
           "type": "object",
-          "required": [
-            "stage"
-          ],
           "properties": {
             "new_expiration": {
               "anyOf": [
@@ -200,11 +181,6 @@
                   "type": "null"
                 }
               ]
-            },
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
             }
           }
         }

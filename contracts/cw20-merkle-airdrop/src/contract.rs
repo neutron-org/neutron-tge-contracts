@@ -17,12 +17,12 @@ use crate::helpers::CosmosSignature;
 use crate::migrations::v0_12_1;
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    IsPausedResponse, LatestStageResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
+    IsPausedResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
     TotalClaimedResponse,
 };
 use crate::state::{
-    Config, CLAIM, CONFIG, HRP, LATEST_STAGE, MERKLE_ROOT, STAGE_ACCOUNT_MAP, STAGE_AMOUNT,
-    STAGE_AMOUNT_CLAIMED, STAGE_EXPIRATION, STAGE_PAUSED, STAGE_START,
+    Config, ACCOUNT_MAP, AMOUNT, AMOUNT_CLAIMED, CLAIM, CONFIG, HRP, MERKLE_ROOT, PAUSED,
+    STAGE_EXPIRATION, START,
 };
 use credits::msg::ExecuteMsg::AddVesting;
 
@@ -49,8 +49,7 @@ pub fn instantiate(
         .owner
         .map_or(Ok(info.sender), |o| deps.api.addr_validate(&o))?;
 
-    let stage = 0;
-    LATEST_STAGE.save(deps.storage, &stage)?;
+    PAUSED.save(deps.storage, &false)?;
 
     let credits_address = match msg.credits_address {
         Some(addr) => Some(deps.api.addr_validate(&addr)?),
@@ -113,17 +112,13 @@ pub fn execute(
             hrp,
         ),
         ExecuteMsg::Claim {
-            stage,
             amount,
             proof,
             sig_info,
-        } => execute_claim(deps, env, info, stage, amount, proof, sig_info),
+        } => execute_claim(deps, env, info, amount, proof, sig_info),
         ExecuteMsg::WithdrawAll {} => execute_withdraw_all(deps, env, info),
-        ExecuteMsg::Pause { stage } => execute_pause(deps, env, info, stage),
-        ExecuteMsg::Resume {
-            stage,
-            new_expiration,
-        } => execute_resume(deps, env, info, stage, new_expiration),
+        ExecuteMsg::Pause {} => execute_pause(deps, env, info),
+        ExecuteMsg::Resume { new_expiration } => execute_resume(deps, env, info, new_expiration),
     }
 }
 
@@ -198,35 +193,29 @@ pub fn execute_register_merkle_root(
     let mut root_buf: [u8; 32] = [0; 32];
     hex::decode_to_slice(&merkle_root, &mut root_buf)?;
 
-    let stage = LATEST_STAGE.update(deps.storage, |stage| -> StdResult<_> { Ok(stage + 1) })?;
-
-    MERKLE_ROOT.save(deps.storage, stage, &merkle_root)?;
-    LATEST_STAGE.save(deps.storage, &stage)?;
+    MERKLE_ROOT.save(deps.storage, &merkle_root)?;
 
     // save expiration
     let exp = expiration.unwrap_or(Expiration::Never {});
-    STAGE_EXPIRATION.save(deps.storage, stage, &exp)?;
+    STAGE_EXPIRATION.save(deps.storage, &exp)?;
 
     // save start
     if let Some(start) = start {
-        STAGE_START.save(deps.storage, stage, &start)?;
+        START.save(deps.storage, &start)?;
     }
 
     // save hrp
     if let Some(hrp) = hrp {
-        HRP.save(deps.storage, stage, &hrp)?;
+        HRP.save(deps.storage, &hrp)?;
     }
-
-    STAGE_PAUSED.save(deps.storage, stage, &false)?;
 
     // save total airdropped amount
     let amount = total_amount.unwrap_or_else(Uint128::zero);
-    STAGE_AMOUNT.save(deps.storage, stage, &amount)?;
-    STAGE_AMOUNT_CLAIMED.save(deps.storage, stage, &Uint128::zero())?;
+    AMOUNT.save(deps.storage, &amount)?;
+    AMOUNT_CLAIMED.save(deps.storage, &Uint128::zero())?;
 
     Ok(Response::new().add_attributes(vec![
         attr("action", "register_merkle_root"),
-        attr("stage", stage.to_string()),
         attr("merkle_root", merkle_root),
         attr("total_amount", amount),
     ]))
@@ -236,27 +225,26 @@ pub fn execute_claim(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    stage: u8,
     amount: Uint128,
     proof: Vec<String>,
     sig_info: Option<SignatureInfo>,
 ) -> Result<Response, ContractError> {
     // airdrop begun
-    let start = STAGE_START.may_load(deps.storage, stage)?;
+    let start = START.may_load(deps.storage)?;
     if let Some(start) = start {
         if !start.is_triggered(&env.block) {
-            return Err(ContractError::StageNotBegun { stage, start });
+            return Err(ContractError::NotBegun { start });
         }
     }
     // not expired
-    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+    let expiration = STAGE_EXPIRATION.load(deps.storage)?;
     if expiration.is_expired(&env.block) {
-        return Err(ContractError::StageExpired { stage, expiration });
+        return Err(ContractError::Expired { expiration });
     }
 
-    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
+    let is_paused = PAUSED.load(deps.storage)?;
     if is_paused {
-        return Err(ContractError::StagePaused { stage });
+        return Err(ContractError::Paused {});
     }
 
     // if present verify signature and extract external address or use info.sender as proof
@@ -267,8 +255,8 @@ pub fn execute_claim(
             // verify signature
             let cosmos_signature: CosmosSignature = from_binary(&sig.signature)?;
             cosmos_signature.verify(deps.as_ref(), &sig.claim_msg)?;
-            // get airdrop stage bech32 prefix and derive proof address from public key
-            let hrp = HRP.load(deps.storage, stage)?;
+            // get airdrop bech32 prefix and derive proof address from public key
+            let hrp = HRP.load(deps.storage)?;
             let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
 
             if sig.extract_addr()? != info.sender {
@@ -276,25 +264,21 @@ pub fn execute_claim(
             }
 
             // Save external address index
-            STAGE_ACCOUNT_MAP.save(
-                deps.storage,
-                (stage, proof_addr.clone()),
-                &info.sender.to_string(),
-            )?;
+            ACCOUNT_MAP.save(deps.storage, proof_addr.clone(), &info.sender.to_string())?;
 
             proof_addr
         }
     };
 
     // verify not claimed
-    let claimed = CLAIM.may_load(deps.storage, (proof_addr.clone(), stage))?;
+    let claimed = CLAIM.may_load(deps.storage, proof_addr.clone())?;
     if claimed.is_some() {
         return Err(ContractError::Claimed {});
     }
 
     // verify merkle root
     let config = CONFIG.load(deps.storage)?;
-    let merkle_root = MERKLE_ROOT.load(deps.storage, stage)?;
+    let merkle_root = MERKLE_ROOT.load(deps.storage)?;
 
     let user_input = format!("{}{}", proof_addr, amount);
     let hash = sha2::Sha256::digest(user_input.as_bytes())
@@ -324,13 +308,13 @@ pub fn execute_claim(
         None => return Err(ContractError::CreditsAddress {}),
     };
 
-    // Update claim index to the current stage
-    CLAIM.save(deps.storage, (proof_addr, stage), &true)?;
+    // Update claim index
+    CLAIM.save(deps.storage, proof_addr, &true)?;
 
     // Update total claimed to reflect
-    let mut claimed_amount = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
+    let mut claimed_amount = AMOUNT_CLAIMED.load(deps.storage)?;
     claimed_amount += amount;
-    STAGE_AMOUNT_CLAIMED.save(deps.storage, stage, &claimed_amount)?;
+    AMOUNT_CLAIMED.save(deps.storage, &claimed_amount)?;
 
     // we stop all airdrops at the date of expiration, and we use the very same date
     // as a start timestamp for vesting. if expiration is not set, vesting will not work.
@@ -371,7 +355,6 @@ pub fn execute_claim(
         .add_message(vesting_message)
         .add_attributes(vec![
             attr("action", "claim"),
-            attr("stage", stage.to_string()),
             attr("address", info.sender.to_string()),
             attr("amount", amount),
         ]);
@@ -390,9 +373,9 @@ pub fn execute_withdraw_all(
         return Err(ContractError::Unauthorized {});
     }
 
-    if !STAGE_PAUSED.load(deps.storage, 1)?
+    if !PAUSED.load(deps.storage)?
         && env.block.time
-            <= match STAGE_EXPIRATION.load(deps.storage, 1)? {
+            <= match STAGE_EXPIRATION.load(deps.storage)? {
                 Expiration::AtTime(timestamp) => timestamp,
                 _ => {
                     return Err(ContractError::Std(StdError::generic_err(
@@ -456,7 +439,6 @@ pub fn execute_pause(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    stage: u8,
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
@@ -465,27 +447,26 @@ pub fn execute_pause(
         return Err(ContractError::Unauthorized {});
     }
 
-    let start = STAGE_START.may_load(deps.storage, stage)?;
+    let start = START.may_load(deps.storage)?;
     if let Some(start) = start {
         if !start.is_triggered(&env.block) {
-            return Err(ContractError::StageNotBegun { stage, start });
+            return Err(ContractError::NotBegun { start });
         }
     }
 
-    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+    let expiration = STAGE_EXPIRATION.load(deps.storage)?;
     if expiration.is_expired(&env.block) {
-        return Err(ContractError::StageExpired { stage, expiration });
+        return Err(ContractError::Expired { expiration });
     }
 
-    STAGE_PAUSED.save(deps.storage, stage, &true)?;
-    Ok(Response::new().add_attributes(vec![attr("action", "pause"), attr("stage_paused", "true")]))
+    PAUSED.save(deps.storage, &true)?;
+    Ok(Response::new().add_attributes(vec![attr("action", "pause"), attr("paused", "true")]))
 }
 
 pub fn execute_resume(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    stage: u8,
     new_expiration: Option<Expiration>,
 ) -> Result<Response, ContractError> {
     // authorize owner
@@ -495,57 +476,48 @@ pub fn execute_resume(
         return Err(ContractError::Unauthorized {});
     }
 
-    let start = STAGE_START.may_load(deps.storage, stage)?;
+    let start = START.may_load(deps.storage)?;
     if let Some(start) = start {
         if !start.is_triggered(&env.block) {
-            return Err(ContractError::StageNotBegun { stage, start });
+            return Err(ContractError::NotBegun { start });
         }
     }
 
-    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
+    let expiration = STAGE_EXPIRATION.load(deps.storage)?;
     if expiration.is_expired(&env.block) {
-        return Err(ContractError::StageExpired { stage, expiration });
+        return Err(ContractError::Expired { expiration });
     }
 
-    let is_paused = STAGE_PAUSED.load(deps.storage, stage)?;
+    let is_paused = PAUSED.load(deps.storage)?;
     if !is_paused {
-        return Err(ContractError::StageNotPaused { stage });
+        return Err(ContractError::NotPaused {});
     }
 
     if let Some(new_expiration) = new_expiration {
         if new_expiration.is_expired(&env.block) {
-            return Err(ContractError::StageExpired { stage, expiration });
+            return Err(ContractError::Expired { expiration });
         }
-        STAGE_EXPIRATION.save(deps.storage, stage, &new_expiration)?;
+        STAGE_EXPIRATION.save(deps.storage, &new_expiration)?;
     }
 
-    STAGE_PAUSED.save(deps.storage, stage, &false)?;
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "resume"),
-        attr("stage_paused", "false"),
-    ]))
+    PAUSED.save(deps.storage, &false)?;
+    Ok(Response::new().add_attributes(vec![attr("action", "resume"), attr("paused", "false")]))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::MerkleRoot { stage } => to_binary(&query_merkle_root(deps, stage)?),
-        QueryMsg::LatestStage {} => to_binary(&query_latest_stage(deps)?),
-        QueryMsg::IsClaimed { stage, address } => {
-            to_binary(&query_is_claimed(deps, stage, address)?)
+        QueryMsg::MerkleRoot {} => to_binary(&query_merkle_root(deps)?),
+        QueryMsg::IsClaimed { address } => to_binary(&query_is_claimed(deps, address)?),
+        QueryMsg::IsPaused {} => to_binary(&query_is_paused(deps)?),
+        QueryMsg::TotalClaimed {} => to_binary(&query_total_claimed(deps)?),
+        QueryMsg::AccountMap { external_address } => {
+            to_binary(&query_address_map(deps, external_address)?)
         }
-        QueryMsg::IsPaused { stage } => to_binary(&query_is_paused(deps, stage)?),
-        QueryMsg::TotalClaimed { stage } => to_binary(&query_total_claimed(deps, stage)?),
-        QueryMsg::AccountMap {
-            stage,
-            external_address,
-        } => to_binary(&query_address_map(deps, stage, external_address)?),
-        QueryMsg::AllAccountMaps {
-            stage,
-            start_after,
-            limit,
-        } => to_binary(&query_all_address_map(deps, stage, start_after, limit)?),
+        QueryMsg::AllAccountMaps { start_after, limit } => {
+            to_binary(&query_all_address_map(deps, start_after, limit)?)
+        }
     }
 }
 
@@ -559,14 +531,13 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     })
 }
 
-pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse> {
-    let merkle_root = MERKLE_ROOT.load(deps.storage, stage)?;
-    let expiration = STAGE_EXPIRATION.load(deps.storage, stage)?;
-    let start = STAGE_START.may_load(deps.storage, stage)?;
-    let total_amount = STAGE_AMOUNT.load(deps.storage, stage)?;
+pub fn query_merkle_root(deps: Deps) -> StdResult<MerkleRootResponse> {
+    let merkle_root = MERKLE_ROOT.load(deps.storage)?;
+    let expiration = STAGE_EXPIRATION.load(deps.storage)?;
+    let start = START.may_load(deps.storage)?;
+    let total_amount = AMOUNT.load(deps.storage)?;
 
     let resp = MerkleRootResponse {
-        stage,
         merkle_root,
         expiration,
         start,
@@ -576,42 +547,29 @@ pub fn query_merkle_root(deps: Deps, stage: u8) -> StdResult<MerkleRootResponse>
     Ok(resp)
 }
 
-pub fn query_latest_stage(deps: Deps) -> StdResult<LatestStageResponse> {
-    let latest_stage = LATEST_STAGE.load(deps.storage)?;
-    let resp = LatestStageResponse { latest_stage };
-
-    Ok(resp)
-}
-
-pub fn query_is_claimed(deps: Deps, stage: u8, address: String) -> StdResult<IsClaimedResponse> {
-    let is_claimed = CLAIM
-        .may_load(deps.storage, (address, stage))?
-        .unwrap_or(false);
+pub fn query_is_claimed(deps: Deps, address: String) -> StdResult<IsClaimedResponse> {
+    let is_claimed = CLAIM.may_load(deps.storage, address)?.unwrap_or(false);
     let resp = IsClaimedResponse { is_claimed };
 
     Ok(resp)
 }
 
-pub fn query_is_paused(deps: Deps, stage: u8) -> StdResult<IsPausedResponse> {
-    let is_paused = STAGE_PAUSED.may_load(deps.storage, stage)?.unwrap_or(false);
+pub fn query_is_paused(deps: Deps) -> StdResult<IsPausedResponse> {
+    let is_paused = PAUSED.may_load(deps.storage)?.unwrap_or(false);
     let resp = IsPausedResponse { is_paused };
 
     Ok(resp)
 }
 
-pub fn query_total_claimed(deps: Deps, stage: u8) -> StdResult<TotalClaimedResponse> {
-    let total_claimed = STAGE_AMOUNT_CLAIMED.load(deps.storage, stage)?;
+pub fn query_total_claimed(deps: Deps) -> StdResult<TotalClaimedResponse> {
+    let total_claimed = AMOUNT_CLAIMED.load(deps.storage)?;
     let resp = TotalClaimedResponse { total_claimed };
 
     Ok(resp)
 }
 
-pub fn query_address_map(
-    deps: Deps,
-    stage: u8,
-    external_address: String,
-) -> StdResult<AccountMapResponse> {
-    let host_address = STAGE_ACCOUNT_MAP.load(deps.storage, (stage, external_address.clone()))?;
+pub fn query_address_map(deps: Deps, external_address: String) -> StdResult<AccountMapResponse> {
+    let host_address = ACCOUNT_MAP.load(deps.storage, external_address.clone())?;
     let resp = AccountMapResponse {
         host_address,
         external_address,
@@ -695,16 +653,12 @@ mod tests {
         let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // it worked, let's query the state
-        let res = query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap();
+        let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
         assert_eq!("owner0000", config.owner.unwrap().as_str());
         assert_eq!("credits0000", config.credits_address.unwrap());
         assert_eq!("reserve0000", config.reserve_address.unwrap());
         assert_eq!("untrn", config.neutron_denom);
-
-        let res = query(deps.as_ref(), env, QueryMsg::LatestStage {}).unwrap();
-        let latest_stage: LatestStageResponse = from_binary(&res).unwrap();
-        assert_eq!(0u8, latest_stage.latest_stage);
     }
 
     #[test]
@@ -830,7 +784,6 @@ mod tests {
             res.attributes,
             vec![
                 attr("action", "register_merkle_root"),
-                attr("stage", "1"),
                 attr(
                     "merkle_root",
                     "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37",
@@ -839,18 +792,7 @@ mod tests {
             ]
         );
 
-        let res = query(deps.as_ref(), env.clone(), QueryMsg::LatestStage {}).unwrap();
-        let latest_stage: LatestStageResponse = from_binary(&res).unwrap();
-        assert_eq!(1u8, latest_stage.latest_stage);
-
-        let res = query(
-            deps.as_ref(),
-            env,
-            QueryMsg::MerkleRoot {
-                stage: latest_stage.latest_stage,
-            },
-        )
-        .unwrap();
+        let res = query(deps.as_ref(), env, QueryMsg::MerkleRoot {}).unwrap();
         let merkle_root: MerkleRootResponse = from_binary(&res).unwrap();
         assert_eq!(
             "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
@@ -858,8 +800,7 @@ mod tests {
         );
     }
 
-    const TEST_DATA_1: &[u8] = include_bytes!("../testdata/airdrop_stage_1_test_data.json");
-    const TEST_DATA_2: &[u8] = include_bytes!("../testdata/airdrop_stage_2_test_data.json");
+    const TEST_DATA_1: &[u8] = include_bytes!("../testdata/airdrop_test_data.json");
 
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
     #[serde(rename_all = "snake_case")]
@@ -901,7 +842,6 @@ mod tests {
 
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
-            stage: 1u8,
             proof: test_data.proofs,
             sig_info: None,
         };
@@ -914,7 +854,6 @@ mod tests {
 
     #[test]
     fn claim() {
-        // Run test 1
         let mut deps = mock_dependencies();
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
@@ -942,7 +881,6 @@ mod tests {
 
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
-            stage: 1u8,
             proof: test_data.proofs,
             sig_info: None,
         };
@@ -978,21 +916,15 @@ mod tests {
             res.attributes,
             vec![
                 attr("action", "claim"),
-                attr("stage", "1"),
                 attr("address", test_data.account.clone()),
                 attr("amount", test_data.amount),
             ]
         );
 
-        // Check total claimed on stage 1
+        // Check total claimed
         assert_eq!(
             from_binary::<TotalClaimedResponse>(
-                &query(
-                    deps.as_ref(),
-                    env.clone(),
-                    QueryMsg::TotalClaimed { stage: 1 },
-                )
-                .unwrap()
+                &query(deps.as_ref(), env.clone(), QueryMsg::TotalClaimed {},).unwrap()
             )
             .unwrap()
             .total_claimed,
@@ -1006,7 +938,6 @@ mod tests {
                     deps.as_ref(),
                     env.clone(),
                     QueryMsg::IsClaimed {
-                        stage: 1,
                         address: test_data.account,
                     },
                 )
@@ -1019,82 +950,9 @@ mod tests {
         // check error on double claim
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(res, ContractError::Claimed {});
-
-        // Second test
-        let test_data: Encoded = from_slice(TEST_DATA_2).unwrap();
-
-        // register new drop
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let msg = ExecuteMsg::RegisterMerkleRoot {
-            merkle_root: test_data.root,
-            expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(10_000))),
-            start: None,
-            total_amount: None,
-            hrp: None,
-        };
-        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
-
-        // Claim next airdrop
-        let msg = ExecuteMsg::Claim {
-            amount: test_data.amount,
-            stage: 2u8,
-            proof: test_data.proofs,
-            sig_info: None,
-        };
-
-        let env = mock_env();
-        let info = mock_info(test_data.account.as_str(), &[]);
-        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
-        let expected = vec![
-            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: "credits0000".to_string(),
-                funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: test_data.account.clone(),
-                    amount: test_data.amount,
-                })
-                .unwrap(),
-            })),
-            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: "credits0000".to_string(),
-                msg: to_binary(&AddVesting {
-                    address: test_data.account.clone(),
-                    amount: test_data.amount,
-                    start_time: env.block.time.plus_seconds(10_000).seconds(),
-                    duration: VESTING_DURATION_SECONDS,
-                })
-                .unwrap(),
-                funds: vec![],
-            })),
-        ];
-        assert_eq!(res.messages, expected);
-
-        assert_eq!(
-            res.attributes,
-            vec![
-                attr("action", "claim"),
-                attr("stage", "2"),
-                attr("address", test_data.account),
-                attr("amount", test_data.amount),
-            ]
-        );
-
-        // Check total claimed on stage 2
-        assert_eq!(
-            from_binary::<TotalClaimedResponse>(
-                &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 2 }).unwrap()
-            )
-            .unwrap()
-            .total_claimed,
-            test_data.amount
-        );
-
-        // Drop stage three with external sigs
     }
 
-    const TEST_DATA_1_MULTI: &[u8] =
-        include_bytes!("../testdata/airdrop_stage_1_test_multi_data.json");
+    const TEST_DATA_1_MULTI: &[u8] = include_bytes!("../testdata/airdrop_test_multi_data.json");
 
     #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
     #[serde(rename_all = "snake_case")]
@@ -1143,7 +1001,6 @@ mod tests {
         for account in test_data.accounts.iter() {
             let msg = ExecuteMsg::Claim {
                 amount: account.amount,
-                stage: 1u8,
                 proof: account.proofs.clone(),
                 sig_info: None,
             };
@@ -1179,18 +1036,17 @@ mod tests {
                 res.attributes,
                 vec![
                     attr("action", "claim"),
-                    attr("stage", "1"),
                     attr("address", account.account.clone()),
                     attr("amount", account.amount),
                 ]
             );
         }
 
-        // Check total claimed on stage 1
+        // Check total claimed
         let env = mock_env();
         assert_eq!(
             from_binary::<TotalClaimedResponse>(
-                &query(deps.as_ref(), env, QueryMsg::TotalClaimed { stage: 1 }).unwrap()
+                &query(deps.as_ref(), env, QueryMsg::TotalClaimed {}).unwrap()
             )
             .unwrap()
             .total_claimed,
@@ -1200,7 +1056,7 @@ mod tests {
 
     // Check expiration. Chain height in tests is 12345
     #[test]
-    fn stage_expires() {
+    fn expiration() {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
@@ -1230,7 +1086,6 @@ mod tests {
         // can't claim expired
         let msg = ExecuteMsg::Claim {
             amount: Uint128::new(5),
-            stage: 1u8,
             proof: vec![],
             sig_info: None,
         };
@@ -1238,8 +1093,7 @@ mod tests {
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(
             res,
-            ContractError::StageExpired {
-                stage: 1,
+            ContractError::Expired {
                 expiration: Expiration::AtHeight(100),
             }
         )
@@ -1489,7 +1343,7 @@ mod tests {
     }
 
     #[test]
-    fn stage_starts() {
+    fn starts() {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
@@ -1516,10 +1370,9 @@ mod tests {
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
-        // can't claim stage has not started yet
+        // can't claim, airdrop has not started yet
         let msg = ExecuteMsg::Claim {
             amount: Uint128::new(5),
-            stage: 1u8,
             proof: vec![],
             sig_info: None,
         };
@@ -1527,8 +1380,7 @@ mod tests {
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
         assert_eq!(
             res,
-            ContractError::StageNotBegun {
-                stage: 1,
+            ContractError::NotBegun {
                 start: Scheduled::AtHeight(200_000),
             }
         )
@@ -1689,7 +1541,6 @@ mod tests {
             // cant claim without sig, info.sender is not present in the root
             let msg = ExecuteMsg::Claim {
                 amount: test_data.amount,
-                stage: 1u8,
                 proof: test_data.proofs.clone(),
                 sig_info: None,
             };
@@ -1699,12 +1550,9 @@ mod tests {
             let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
             assert_eq!(res, ContractError::VerificationFailed {});
 
-            // stage account map is not saved
-
             // can claim with sig
             let msg = ExecuteMsg::Claim {
                 amount: test_data.amount,
-                stage: 1u8,
                 proof: test_data.proofs,
                 sig_info: test_data.signed_msg,
             };
@@ -1740,21 +1588,15 @@ mod tests {
                 res.attributes,
                 vec![
                     attr("action", "claim"),
-                    attr("stage", "1"),
                     attr("address", claim_addr.clone()),
                     attr("amount", test_data.amount),
                 ]
             );
 
-            // Check total claimed on stage 1
+            // Check total claimed
             assert_eq!(
                 from_binary::<TotalClaimedResponse>(
-                    &query(
-                        deps.as_ref(),
-                        env.clone(),
-                        QueryMsg::TotalClaimed { stage: 1 },
-                    )
-                    .unwrap()
+                    &query(deps.as_ref(), env.clone(), QueryMsg::TotalClaimed {},).unwrap()
                 )
                 .unwrap()
                 .total_claimed,
@@ -1768,7 +1610,6 @@ mod tests {
                         deps.as_ref(),
                         env.clone(),
                         QueryMsg::IsClaimed {
-                            stage: 1,
                             address: test_data.account.clone(),
                         },
                     )
@@ -1789,7 +1630,6 @@ mod tests {
                     deps.as_ref(),
                     env,
                     QueryMsg::AccountMap {
-                        stage: 1,
                         external_address: test_data.account.clone(),
                     },
                 )
@@ -1830,19 +1670,18 @@ mod tests {
             };
             let _res = execute(deps.as_mut(), env, info, msg).unwrap();
 
-            let pause_msg = ExecuteMsg::Pause { stage: 1u8 };
+            let pause_msg = ExecuteMsg::Pause {};
             let env = mock_env();
             let info = mock_info("owner0000", &[]);
             let result = execute(deps.as_mut(), env, info, pause_msg).unwrap();
 
             assert_eq!(
                 result.attributes,
-                vec![attr("action", "pause"), attr("stage_paused", "true"),]
+                vec![attr("action", "pause"), attr("paused", "true"),]
             );
 
             let msg = ExecuteMsg::Claim {
                 amount: test_data.amount,
-                stage: 1u8,
                 proof: test_data.proofs.clone(),
                 sig_info: None,
             };
@@ -1851,10 +1690,9 @@ mod tests {
             let info = mock_info(test_data.account.as_str(), &[]);
             let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap_err();
 
-            assert_eq!(res, ContractError::StagePaused { stage: 1u8 });
+            assert_eq!(res, ContractError::Paused {});
 
             let resume_msg = ExecuteMsg::Resume {
-                stage: 1u8,
                 new_expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(5_000))),
             };
             let env = mock_env();
@@ -1863,11 +1701,10 @@ mod tests {
 
             assert_eq!(
                 result.attributes,
-                vec![attr("action", "resume"), attr("stage_paused", "false"),]
+                vec![attr("action", "resume"), attr("paused", "false"),]
             );
             let msg = ExecuteMsg::Claim {
                 amount: test_data.amount,
-                stage: 1u8,
                 proof: test_data.proofs.clone(),
                 sig_info: None,
             };
@@ -1902,7 +1739,6 @@ mod tests {
                 res.attributes,
                 vec![
                     attr("action", "claim"),
-                    attr("stage", "1"),
                     attr("address", test_data.account.clone()),
                     attr("amount", test_data.amount),
                 ]
@@ -2032,7 +1868,7 @@ mod tests {
                 .downcast::<ContractError>()
                 .unwrap();
 
-            let pause_msg = ExecuteMsg::Pause { stage: 1u8 };
+            let pause_msg = ExecuteMsg::Pause {};
             let result = router
                 .execute_contract(
                     Addr::unchecked("owner0000"),
@@ -2047,11 +1883,11 @@ mod tests {
                 .unwrap()
                 .attributes
                 .into_iter()
-                .filter(|attribute| ["action", "stage_paused"].contains(&attribute.key.as_str()))
+                .filter(|attribute| ["action", "paused"].contains(&attribute.key.as_str()))
                 .collect::<Vec<_>>();
             assert_eq!(
                 result,
-                vec![attr("action", "pause"), attr("stage_paused", "true")]
+                vec![attr("action", "pause"), attr("paused", "true")]
             );
 
             // We expect credits contract to send 10000 untrn to merkle airdrop contract

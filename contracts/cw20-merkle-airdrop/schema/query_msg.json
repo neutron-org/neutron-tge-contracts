@@ -21,28 +21,6 @@
       ],
       "properties": {
         "merkle_root": {
-          "type": "object",
-          "required": [
-            "stage"
-          ],
-          "properties": {
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "latest_stage"
-      ],
-      "properties": {
-        "latest_stage": {
           "type": "object"
         }
       },
@@ -57,17 +35,11 @@
         "is_claimed": {
           "type": "object",
           "required": [
-            "address",
-            "stage"
+            "address"
           ],
           "properties": {
             "address": {
               "type": "string"
-            },
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
             }
           }
         }
@@ -81,17 +53,7 @@
       ],
       "properties": {
         "total_claimed": {
-          "type": "object",
-          "required": [
-            "stage"
-          ],
-          "properties": {
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          }
+          "type": "object"
         }
       },
       "additionalProperties": false
@@ -105,17 +67,11 @@
         "account_map": {
           "type": "object",
           "required": [
-            "external_address",
-            "stage"
+            "external_address"
           ],
           "properties": {
             "external_address": {
               "type": "string"
-            },
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
             }
           }
         }
@@ -130,9 +86,6 @@
       "properties": {
         "all_account_maps": {
           "type": "object",
-          "required": [
-            "stage"
-          ],
           "properties": {
             "limit": {
               "type": [
@@ -140,11 +93,6 @@
                 "null"
               ],
               "format": "uint32",
-              "minimum": 0.0
-            },
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
               "minimum": 0.0
             },
             "start_after": {
@@ -165,17 +113,7 @@
       ],
       "properties": {
         "is_paused": {
-          "type": "object",
-          "required": [
-            "stage"
-          ],
-          "properties": {
-            "stage": {
-              "type": "integer",
-              "format": "uint8",
-              "minimum": 0.0
-            }
-          }
+          "type": "object"
         }
       },
       "additionalProperties": false

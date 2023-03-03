@@ -37,7 +37,6 @@ pub enum ExecuteMsg {
     },
     /// Claim does not check if contract has enough funds, owner must ensure it.
     Claim {
-        stage: u8,
         amount: Uint128,
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
@@ -48,11 +47,8 @@ pub enum ExecuteMsg {
     },
     /// Withdraw all remaining tokens that the contract owns (only owner)
     WithdrawAll {},
-    Pause {
-        stage: u8,
-    },
+    Pause {},
     Resume {
-        stage: u8,
         new_expiration: Option<Expiration>,
     },
 }
@@ -61,30 +57,20 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
-    MerkleRoot {
-        stage: u8,
-    },
-    LatestStage {},
+    MerkleRoot {},
     IsClaimed {
-        stage: u8,
         address: String,
     },
-    TotalClaimed {
-        stage: u8,
-    },
+    TotalClaimed {},
     // for cross chain airdrops, maps target account to host account
     AccountMap {
-        stage: u8,
         external_address: String,
     },
     AllAccountMaps {
-        stage: u8,
         start_after: Option<String>,
         limit: Option<u32>,
     },
-    IsPaused {
-        stage: u8,
-    },
+    IsPaused {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -99,18 +85,11 @@ pub struct ConfigResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MerkleRootResponse {
-    pub stage: u8,
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
     pub expiration: Expiration,
     pub start: Option<Scheduled>,
     pub total_amount: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct LatestStageResponse {
-    pub latest_stage: u8,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

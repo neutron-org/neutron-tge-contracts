@@ -6,7 +6,7 @@ export default class GenerateRoot extends Command {
   static description = 'Generates merkle root'
 
   static examples = [
-    `$ merkle-airdrop-cli generateRoot --file ../testdata/airdrop_stage_2.json
+    `$ merkle-airdrop-cli generateRoot --file ../testdata/airdrop.json
 `,
   ]
 
