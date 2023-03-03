@@ -37,4 +37,3 @@ schemars = "0.8"
 cosmwasm-schema = { version = "1.0" }
 cosmwasm-storage = { version = "1.0" }
 cw-multi-test = "0.13"
-astroport-lockdrop = { path = "../lockdrop" }

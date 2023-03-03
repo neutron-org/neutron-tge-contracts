@@ -11,7 +11,6 @@ use astroport_periphery::auction::{
     State, UpdateConfigMsg, UserInfo, UserInfoResponse,
 };
 use astroport_periphery::helpers::{build_approve_cw20_msg, cw20_get_balance};
-use astroport_periphery::lockdrop::ExecuteMsg::EnableClaims as LockdropEnableClaims;
 
 use crate::state::{CONFIG, STATE, USERS};
 use astroport::asset::{Asset, AssetInfo, PairInfo};
@@ -169,7 +168,7 @@ pub fn receive_cw20(
                 Err(StdError::generic_err("Unauthorized"))
             }
         }
-        Cw20HookMsg::IncreaseAstroIncentives {} => {
+        Cw20HookMsg::IncreaseNTRNIncentives {} => {
             handle_increasing_astro_incentives(deps, cw20_msg.amount)
         }
     }
@@ -1121,18 +1120,11 @@ pub fn update_state_on_liquidity_addition_to_pool(
         STATE.save(deps.storage, &state)?;
 
         // Activate lockdrop and airdrop claims
-        let cosmos_msgs = vec![
-            CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: config.lockdrop_contract_address.to_string(),
-                msg: to_binary(&LockdropEnableClaims {})?,
-                funds: vec![],
-            }),
-            CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: config.airdrop_contract_address.to_string(),
-                msg: to_binary(&AirdropEnableClaims {})?,
-                funds: vec![],
-            }),
-        ];
+        let cosmos_msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: config.airdrop_contract_address.to_string(),
+            msg: to_binary(&AirdropEnableClaims {})?,
+            funds: vec![],
+        })];
 
         Ok(Response::new()
             .add_messages(cosmos_msgs)

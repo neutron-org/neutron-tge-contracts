@@ -3,28 +3,15 @@
   "title": "UserInfoResponse",
   "type": "object",
   "required": [
-    "astro_transferred",
-    "claimable_generator_astro_debt",
-    "delegated_astro_rewards",
+    "claimable_generator_ntrn_debt",
     "lockup_infos",
     "lockup_positions_index",
-    "total_astro_rewards"
+    "ntrn_transferred",
+    "total_ntrn_rewards"
   ],
   "properties": {
-    "astro_transferred": {
-      "description": "ASTRO tokens transferred to user",
-      "type": "boolean"
-    },
-    "claimable_generator_astro_debt": {
-      "description": "ASTRO tokens receivable as generator rewards that user can claim",
-      "allOf": [
-        {
-          "$ref": "#/definitions/Uint128"
-        }
-      ]
-    },
-    "delegated_astro_rewards": {
-      "description": "Total ASTRO tokens user delegated to the LP bootstrap auction pool",
+    "claimable_generator_ntrn_debt": {
+      "description": "NTRN tokens receivable as generator rewards that user can claim",
       "allOf": [
         {
           "$ref": "#/definitions/Uint128"
@@ -44,8 +31,12 @@
       "format": "uint32",
       "minimum": 0.0
     },
-    "total_astro_rewards": {
-      "description": "Total ASTRO tokens user received as rewards for participation in the lockdrop",
+    "ntrn_transferred": {
+      "description": "NTRN tokens transferred to user",
+      "type": "boolean"
+    },
+    "total_ntrn_rewards": {
+      "description": "Total NTRN tokens user received as rewards for participation in the lockdrop",
       "allOf": [
         {
           "$ref": "#/definitions/Uint128"
@@ -110,35 +101,21 @@
     "LockUpInfoResponse": {
       "type": "object",
       "required": [
-        "astro_rewards",
+        "astroport_lp_token",
         "claimable_generator_astro_debt",
         "claimable_generator_proxy_debt",
         "duration",
-        "generator_astro_debt",
+        "generator_ntrn_debt",
         "generator_proxy_debt",
         "lp_units_locked",
-        "terraswap_lp_token",
+        "ntrn_rewards",
+        "pool_type",
         "unlock_timestamp",
         "withdrawal_flag"
       ],
       "properties": {
-        "astro_rewards": {
-          "description": "ASTRO tokens received as rewards for participation in the lockdrop",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Uint128"
-            }
-          ]
-        },
         "astroport_lp_token": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/definitions/Addr"
         },
         "astroport_lp_transferred": {
           "anyOf": [
@@ -182,8 +159,8 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "generator_astro_debt": {
-          "description": "Generator ASTRO tokens lockup received as generator rewards",
+        "generator_ntrn_debt": {
+          "description": "Generator NTRN tokens lockup received as generator rewards",
           "allOf": [
             {
               "$ref": "#/definitions/Uint128"
@@ -206,11 +183,19 @@
             }
           ]
         },
-        "terraswap_lp_token": {
+        "ntrn_rewards": {
+          "description": "NTRN tokens received as rewards for participation in the lockdrop",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "pool_type": {
           "description": "Terraswap LP token",
           "allOf": [
             {
-              "$ref": "#/definitions/Addr"
+              "$ref": "#/definitions/PoolType"
             }
           ]
         },
@@ -225,6 +210,13 @@
           "type": "boolean"
         }
       }
+    },
+    "PoolType": {
+      "type": "string",
+      "enum": [
+        "USDC",
+        "ATOM"
+      ]
     },
     "RestrictedVector_for_AssetInfo_and_Uint128": {
       "description": "Vec wrapper for internal use. Some business logic relies on an order of this vector, thus it is forbidden to sort it or remove elements. New values can be added using .update() ONLY.",

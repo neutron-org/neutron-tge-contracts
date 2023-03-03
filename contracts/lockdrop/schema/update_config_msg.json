@@ -3,13 +3,6 @@
   "title": "UpdateConfigMsg",
   "type": "object",
   "properties": {
-    "astro_token_address": {
-      "description": "Astroport token address",
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "auction_contract_address": {
       "description": "Bootstrap Auction contract address",
       "type": [
