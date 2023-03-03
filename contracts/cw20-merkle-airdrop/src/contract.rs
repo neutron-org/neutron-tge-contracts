@@ -30,13 +30,11 @@ use credits::msg::ExecuteMsg::AddVesting;
 const CONTRACT_NAME: &str = "crates.io:cw20-merkle-airdrop";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-// Vesting duration is 3 months
-const VESTING_DURATION: u64 = 1_000_000_000 // nanoseconds in second 
-    * 60 // seconds in minute
+// Vesting duration is 90 days
+const VESTING_DURATION_SECONDS: u64 = 60 // seconds in minute
     * 60 // minutes in hour
     * 24 // hours in day
-    * 30 // days in month
-    * 3; // months
+    * 90; // days
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -363,8 +361,8 @@ pub fn execute_claim(
         msg: to_binary(&AddVesting {
             address: info.sender.to_string(),
             amount,
-            start_time: vesting_start_time.nanos(),
-            duration: VESTING_DURATION,
+            start_time: vesting_start_time.seconds(),
+            duration: VESTING_DURATION_SECONDS,
         })?,
         funds: vec![],
     };
@@ -402,7 +400,7 @@ pub fn execute_withdraw_all(
                     )))
                 }
             }
-            .plus_nanos(VESTING_DURATION)
+            .plus_seconds(VESTING_DURATION_SECONDS)
     {
         return Err(ContractError::Std(StdError::generic_err(
             "withdraw_all only works 3 months after the end of the event",
@@ -967,8 +965,8 @@ mod tests {
                 msg: to_binary(&AddVesting {
                     address: test_data.account.clone(),
                     amount: test_data.amount,
-                    start_time: env.block.time.plus_seconds(10_000).nanos(),
-                    duration: VESTING_DURATION,
+                    start_time: env.block.time.plus_seconds(10_000).seconds(),
+                    duration: VESTING_DURATION_SECONDS,
                 })
                 .unwrap(),
                 funds: vec![],
@@ -1063,8 +1061,8 @@ mod tests {
                 msg: to_binary(&AddVesting {
                     address: test_data.account.clone(),
                     amount: test_data.amount,
-                    start_time: env.block.time.plus_seconds(10_000).nanos(),
-                    duration: VESTING_DURATION,
+                    start_time: env.block.time.plus_seconds(10_000).seconds(),
+                    duration: VESTING_DURATION_SECONDS,
                 })
                 .unwrap(),
                 funds: vec![],
@@ -1168,8 +1166,8 @@ mod tests {
                     msg: to_binary(&AddVesting {
                         address: account.account.clone(),
                         amount: account.amount,
-                        start_time: env.block.time.plus_seconds(10_000).nanos(),
-                        duration: VESTING_DURATION,
+                        start_time: env.block.time.plus_seconds(10_000).seconds(),
+                        duration: VESTING_DURATION_SECONDS,
                     })
                     .unwrap(),
                     funds: vec![],
@@ -1269,7 +1267,7 @@ mod tests {
         let info = mock_info("owner0000", &[]);
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
-            expiration: Some(Expiration::AtTime(env.block.time.plus_nanos(100))),
+            expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(100))),
             start: None,
             total_amount: Some(Uint128::new(10000)),
             hrp: None,
@@ -1277,7 +1275,7 @@ mod tests {
         execute(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // makes withdraw_all available
-        env.block.time = env.block.time.plus_nanos(VESTING_DURATION + 101);
+        env.block.time = env.block.time.plus_seconds(VESTING_DURATION_SECONDS + 101);
 
         let info = mock_info("owner0000", &[]);
         let res = execute(deps.as_mut(), env, info, ExecuteMsg::WithdrawAll {}).unwrap_err();
@@ -1417,7 +1415,7 @@ mod tests {
         //update block height
         let block_info = BlockInfo {
             height: 12501,
-            time: Timestamp::from_seconds(12501).plus_nanos(VESTING_DURATION),
+            time: Timestamp::from_seconds(12501).plus_seconds(VESTING_DURATION_SECONDS),
             chain_id: "testing".to_string(),
         };
         router.set_block(block_info);
@@ -1729,8 +1727,8 @@ mod tests {
                     msg: to_binary(&AddVesting {
                         address: claim_addr.clone(),
                         amount: test_data.amount,
-                        start_time: env.block.time.plus_seconds(10_000).nanos(),
-                        duration: VESTING_DURATION,
+                        start_time: env.block.time.plus_seconds(10_000).seconds(),
+                        duration: VESTING_DURATION_SECONDS,
                     })
                     .unwrap(),
                     funds: vec![],
@@ -1891,8 +1889,8 @@ mod tests {
                     msg: to_binary(&AddVesting {
                         address: test_data.account.clone(),
                         amount: test_data.amount,
-                        start_time: env.block.time.plus_seconds(5_000).nanos(),
-                        duration: VESTING_DURATION,
+                        start_time: env.block.time.plus_seconds(5_000).seconds(),
+                        duration: VESTING_DURATION_SECONDS,
                     })
                     .unwrap(),
                     funds: vec![],
