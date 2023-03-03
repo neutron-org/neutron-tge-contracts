@@ -67,9 +67,7 @@ pub fn instantiate(
             .unwrap_or(info.sender),
         astro_token_address: deps.api.addr_validate(&msg.astro_token_address)?,
         airdrop_contract_address: deps.api.addr_validate(&msg.airdrop_contract_address)?,
-        lockdrop_contract_address: deps.api.addr_validate(
-            &msg.lockdrop_contract_address,
-        )?,
+        lockdrop_contract_address: deps.api.addr_validate(&msg.lockdrop_contract_address)?,
         pool_info: None,
         generator_contract: None,
         astro_incentive_amount: None,

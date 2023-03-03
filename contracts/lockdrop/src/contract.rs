@@ -2076,11 +2076,7 @@ fn callback_distribute_asset_reward(
 
     let config = CONFIG.load(deps.storage)?;
 
-    let lockup_key = (
-        &terraswap_lp_token,
-        &user_address,
-        lock_duration,
-    );
+    let lockup_key = (&terraswap_lp_token, &user_address, lock_duration);
     let mut user_reward = Uint128::zero();
     // get only lockups that have not yet been withdrawn
     let lockup_info_opt = LOCKUP_INFO
@@ -2759,18 +2755,15 @@ mod unit_tests {
         let total_lp_amount = Uint128::from(1000u128);
         // user1 with 10% share
         let user1 = Addr::unchecked("user1");
-        let user1_path =
-            USERS_ASSET_REWARD_INDEX.key((&terraswap_lp_token, &user1, 10));
+        let user1_path = USERS_ASSET_REWARD_INDEX.key((&terraswap_lp_token, &user1, 10));
         let user1_lp_amount = Uint128::from(100u128);
         // user2 with 70% share
         let user2 = Addr::unchecked("user2");
-        let user2_path =
-            USERS_ASSET_REWARD_INDEX.key((&terraswap_lp_token, &user2, 10));
+        let user2_path = USERS_ASSET_REWARD_INDEX.key((&terraswap_lp_token, &user2, 10));
         let user2_lp_amount = Uint128::from(700u128);
         // user3 with 20% share
         let user3 = Addr::unchecked("user3");
-        let user3_path =
-            USERS_ASSET_REWARD_INDEX.key((&terraswap_lp_token, &user3, 10));
+        let user3_path = USERS_ASSET_REWARD_INDEX.key((&terraswap_lp_token, &user3, 10));
         let user3_lp_amount = Uint128::from(200u128);
         let mut total_reward_index = Decimal256::one();
 
