@@ -11,22 +11,24 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary,  CosmosMsg,
-    Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
-    Uint128, Uint256, WasmMsg,
+    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, CosmosMsg, Decimal,
+    Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult, Uint128,
+    Uint256, WasmMsg,
 };
-use cw2::{ set_contract_version};
+use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
-    LockUpInfoSummary, LockupInfoV2, MigrateMsg,
-    PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg, UserInfoResponse,
-    UserInfoWithListResponse,
+    LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolType, QueryMsg, State,
+    StateResponse, UpdateConfigMsg, UserInfoResponse, UserInfoWithListResponse,
 };
 
-use crate::state::{CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE, USER_INFO, TOTAL_USER_LOCKUP_AMOUNT};
+use crate::state::{
+    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE,
+    TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
+};
 
 const AIRDROP_REWARDS_MULTIPLIER: &str = "2.5";
 
@@ -76,7 +78,9 @@ pub fn instantiate(
     }
     for lr_info in &msg.lockup_rewards_info {
         if lr_info.duration == 0 {
-            return Err(StdError::generic_err("Invalid Lockup info rewards duration"));
+            return Err(StdError::generic_err(
+                "Invalid Lockup info rewards duration",
+            ));
         }
     }
 
@@ -222,7 +226,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             duration,
             amount,
         } => handle_withdraw_from_lockup(deps, env, info, pool_type, duration, amount),
-        ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config)
+        ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
     }
 }
 
@@ -379,10 +383,17 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             pool_type,
             duration,
         )?),
-        QueryMsg::QueryUserLockupTotalAtHeight {pool_type, user_address, height} => {
-            to_binary(&query_user_lockup_total_at_height(deps, pool_type, deps.api.addr_validate(&user_address)?, height)?)
-        },
-        QueryMsg::QueryLockupTotalAtHeight {pool_type, height} => {
+        QueryMsg::QueryUserLockupTotalAtHeight {
+            pool_type,
+            user_address,
+            height,
+        } => to_binary(&query_user_lockup_total_at_height(
+            deps,
+            pool_type,
+            deps.api.addr_validate(&user_address)?,
+            height,
+        )?),
+        QueryMsg::QueryLockupTotalAtHeight { pool_type, height } => {
             to_binary(&query_lockup_total_at_height(deps, pool_type, height)?)
         }
     }
@@ -479,8 +490,10 @@ pub fn handle_increasing_ntrn_incentives(
     let amount = if let Some(coin) = incentive {
         coin.amount
     } else {
-        return Err(StdError::generic_err(
-            format!("{} is not found", UNTRN_DENOM)));
+        return Err(StdError::generic_err(format!(
+            "{} is not found",
+            UNTRN_DENOM
+        )));
     };
     // Anyone can increase ntrn incentives
     config.lockdrop_incentives = config.lockdrop_incentives.checked_add(amount)?;
@@ -633,8 +646,12 @@ pub fn handle_increase_lockup(
 
     let user_address = deps.api.addr_validate(&user_address_raw)?;
 
-    if !config.lockup_rewards_info.iter().any(|i| i.duration == duration) {
-        return Err(StdError::generic_err("invalid duration"))
+    if !config
+        .lockup_rewards_info
+        .iter()
+        .any(|i| i.duration == duration)
+    {
+        return Err(StdError::generic_err("invalid duration"));
     }
 
     // CHECK ::: LP Token supported or not ?
@@ -656,49 +673,49 @@ pub fn handle_increase_lockup(
 
     let lockup_key = (pool_type, &user_address, duration);
 
-    let lockup_info = match LOCKUP_INFO.compatible_may_load(
-        deps.as_ref(),
-        lockup_key,
-        &config.generator,
-    )? {
-        Some(mut li) => {
-            li.lp_units_locked = li.lp_units_locked.checked_add(amount)?;
-            li
-        }
-        None => {
-            if config.max_positions_per_user == user_info.lockup_positions_index {
-                return Err(StdError::generic_err(format!(
-                    "Users can only have max {} lockup positions",
-                    config.max_positions_per_user
-                )));
+    let lockup_info =
+        match LOCKUP_INFO.compatible_may_load(deps.as_ref(), lockup_key, &config.generator)? {
+            Some(mut li) => {
+                li.lp_units_locked = li.lp_units_locked.checked_add(amount)?;
+                li
             }
-            // Update number of lockup positions the user is having
-            user_info.lockup_positions_index += 1;
+            None => {
+                if config.max_positions_per_user == user_info.lockup_positions_index {
+                    return Err(StdError::generic_err(format!(
+                        "Users can only have max {} lockup positions",
+                        config.max_positions_per_user
+                    )));
+                }
+                // Update number of lockup positions the user is having
+                user_info.lockup_positions_index += 1;
 
-            LockupInfoV2 {
-                lp_units_locked: amount,
-                astroport_lp_transferred: None,
-                ntrn_rewards: Uint128::zero(),
-                unlock_timestamp: config.init_timestamp
-                    + config.lock_window
-                    + duration,
-                generator_ntrn_debt: Uint128::zero(),
-                generator_proxy_debt: Default::default(),
-                withdrawal_flag: false,
+                LockupInfoV2 {
+                    lp_units_locked: amount,
+                    astroport_lp_transferred: None,
+                    ntrn_rewards: Uint128::zero(),
+                    unlock_timestamp: config.init_timestamp + config.lock_window + duration,
+                    generator_ntrn_debt: Uint128::zero(),
+                    generator_proxy_debt: Default::default(),
+                    withdrawal_flag: false,
+                }
             }
-        }
-    };
+        };
 
     // SAVE UPDATED STATE
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
 
-    TOTAL_USER_LOCKUP_AMOUNT.update(deps.storage, (pool_type, &user_address), env.block.height, |lockup_amount| -> StdResult<Uint128> {
-        if let Some(la) = lockup_amount {
-            Ok(la + amount)
-        } else {
-            Ok(amount)
-        }
-    })?;
+    TOTAL_USER_LOCKUP_AMOUNT.update(
+        deps.storage,
+        (pool_type, &user_address),
+        env.block.height,
+        |lockup_amount| -> StdResult<Uint128> {
+            if let Some(la) = lockup_amount {
+                Ok(la + amount)
+            } else {
+                Ok(amount)
+            }
+        },
+    )?;
 
     ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
     USER_INFO.save(deps.storage, &user_address, &user_info)?;
@@ -792,13 +809,18 @@ pub fn handle_withdraw_from_lockup(
     } else {
         LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
     }
-    TOTAL_USER_LOCKUP_AMOUNT.update(deps.storage, (pool_type, &user_address), env.block.height, |lockup_amount| -> StdResult<Uint128> {
-        if let Some(la) = lockup_amount {
-            Ok(la - amount)
-        } else {
-            Ok(Uint128::zero())
-        }
-    })?;
+    TOTAL_USER_LOCKUP_AMOUNT.update(
+        deps.storage,
+        (pool_type, &user_address),
+        env.block.height,
+        |lockup_amount| -> StdResult<Uint128> {
+            if let Some(la) = lockup_amount {
+                Ok(la - amount)
+            } else {
+                Ok(Uint128::zero())
+            }
+        },
+    )?;
 
     // SAVE Updated States
     ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
@@ -899,8 +921,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
 
     // Check is there lockup or not ?
     let lockup_key = (pool_type, &user_address, duration);
-    let lockup_info =
-        LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key, &config.generator)?;
+    let lockup_info = LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key, &config.generator)?;
 
     // CHECK :: Can the Lockup position be unlocked or not ?
     if withdraw_lp_stake && env.block.time.seconds() < lockup_info.unlock_timestamp {
@@ -987,7 +1008,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
                     prev_ntrn_balance: astro_balance,
                     prev_proxy_reward_balances,
                 }
-                    .to_cosmos_msg(&env)?,
+                .to_cosmos_msg(&env)?,
             );
         }
     } else if user_info.ntrn_transferred && !withdraw_lp_stake {
@@ -1001,7 +1022,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             duration,
             withdraw_lp_stake,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
@@ -1018,21 +1039,42 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
 /// * **user_addr** is an object of type [`Addr`]. Address of the user for who claims rewards.
 ///
 /// * **ntrn_lockdrop_rewards** is an object of type [`Addr`]. Amount of Lockdrop rewards in uNTRN.
-pub fn claim_airdrop_tokens_with_multiplier_msg(deps: Deps, credits_contract: Addr, user_addr: Addr, ntrn_lockdrop_rewards: Uint128) -> StdResult<CosmosMsg> {
-    // just a mock
+pub fn claim_airdrop_tokens_with_multiplier_msg(
+    deps: Deps,
+    credits_contract: Addr,
+    user_addr: Addr,
+    ntrn_lockdrop_rewards: Uint128,
+) -> StdResult<CosmosMsg> {
     // unvested tokens amount
-    let unvested_tokens_amount: BalanceResponse = deps.querier.query_wasm_smart(&credits_contract,&Cw20QueryMsg::Balance {address: user_addr.to_string()})?;
+    let unvested_tokens_amount: credits::msg::WithdrawableAmountResponse =
+        deps.querier.query_wasm_smart(
+            &credits_contract,
+            &credits::msg::QueryMsg::WithdrawableAmount {
+                address: user_addr.to_string(),
+            },
+        )?;
     // vested tokens amount
-    let vested_tokens_amount: BalanceResponse = deps.querier.query_wasm_smart(&credits_contract,&Cw20QueryMsg::Balance {address: user_addr.to_string()})?;
+    let vested_tokens_amount: credits::msg::VestedAmountResponse = deps.querier.query_wasm_smart(
+        &credits_contract,
+        &credits::msg::QueryMsg::VestedAmount {
+            address: user_addr.to_string(),
+        },
+    )?;
 
     let airdrop_rewards_multiplier = Decimal::from_str(AIRDROP_REWARDS_MULTIPLIER)?;
 
     // either we claim whole vested amount or NTRN lockdrop rewards
-    let claimable_vested_amount = min(vested_tokens_amount.balance, ntrn_lockdrop_rewards * airdrop_rewards_multiplier);
+    let claimable_vested_amount = min(
+        vested_tokens_amount.amount,
+        ntrn_lockdrop_rewards * airdrop_rewards_multiplier,
+    );
 
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: credits_contract.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::BurnFrom { owner: user_addr.to_string(), amount: claimable_vested_amount + unvested_tokens_amount.balance })?,
+        msg: to_binary(&Cw20ExecuteMsg::BurnFrom {
+            owner: user_addr.to_string(),
+            amount: claimable_vested_amount + unvested_tokens_amount.amount,
+        })?,
         funds: vec![],
     }))
 }
@@ -1188,7 +1230,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             .lp_units_locked
             .full_mul(balance)
             .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-            .try_into()?
+        .try_into()?
     };
 
     // If Astro LP tokens are staked with Astro generator
@@ -1293,13 +1335,18 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         lockup_info.astroport_lp_transferred = Some(astroport_lp_amount);
     }
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
-    TOTAL_USER_LOCKUP_AMOUNT.update(deps.storage, (pool_type, &user_address), env.block.height, |lockup_amount| -> StdResult<Uint128> {
-        if let Some(la) = lockup_amount {
-            Ok(la - lockup_info.lp_units_locked)
-        } else {
-            Ok(Uint128::zero())
-        }
-    })?;
+    TOTAL_USER_LOCKUP_AMOUNT.update(
+        deps.storage,
+        (pool_type, &user_address),
+        env.block.height,
+        |lockup_amount| -> StdResult<Uint128> {
+            if let Some(la) = lockup_amount {
+                Ok(la - lockup_info.lp_units_locked)
+            } else {
+                Ok(Uint128::zero())
+            }
+        },
+    )?;
 
     // Transfers claimable one time NTRN rewards to the user that the user gets for all his lock
     if !user_info.ntrn_transferred {
@@ -1313,7 +1360,12 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         }
 
         // claim airdrop rewards
-        cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(deps.as_ref(), config.credit_contract, user_address.clone(), total_claimable_ntrn_rewards)?);
+        cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(
+            deps.as_ref(),
+            config.credit_contract,
+            user_address.clone(),
+            total_claimable_ntrn_rewards,
+        )?);
 
         user_info.ntrn_transferred = true;
         attributes.push(attr(
@@ -1445,7 +1497,12 @@ pub fn query_user_info_with_lockups_list(
 /// * **user** is an object of type [`Addr`].
 ///
 /// * **height** is an object of type [`u64`].
-pub fn query_user_lockup_total_at_height(deps: Deps, pool: PoolType, user: Addr, height: u64) -> StdResult<Option<Uint128>> {
+pub fn query_user_lockup_total_at_height(
+    deps: Deps,
+    pool: PoolType,
+    user: Addr,
+    height: u64,
+) -> StdResult<Option<Uint128>> {
     TOTAL_USER_LOCKUP_AMOUNT.may_load_at_height(deps.storage, (pool, &user), height)
 }
 
@@ -1456,7 +1513,11 @@ pub fn query_user_lockup_total_at_height(deps: Deps, pool: PoolType, user: Addr,
 /// * **pool_type** is an object of type [`PoolType`].
 ///
 /// * **height** is an object of type [`u64`].
-pub fn query_lockup_total_at_height(deps: Deps, pool: PoolType, height: u64) -> StdResult<Option<Uint128>> {
+pub fn query_lockup_total_at_height(
+    deps: Deps,
+    pool: PoolType,
+    height: u64,
+) -> StdResult<Option<Uint128>> {
     if let Some(pool) = ASSET_POOLS.may_load_at_height(deps.storage, pool, height)? {
         return Ok(Some(pool.amount_in_lockups));
     }
@@ -1525,7 +1586,7 @@ pub fn query_lockup_info(
                 .lp_units_locked
                 .full_mul(pool_astroport_lp_units)
                 .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-                .try_into()?
+            .try_into()?
         };
         lockup_astroport_lp_units_opt = Some(lockup_astroport_lp_units);
         astroport_lp_token_opt = astroport_lp_token.clone();
@@ -1633,7 +1694,7 @@ pub fn calculate_astro_incentives_for_lockup(
             Uint256::from(pool_incentives_share) * lockup_weighted_balance,
             Uint256::from(total_incentives_share) * total_weighted_amount,
         )
-            .checked_mul_uint256(total_lockdrop_incentives.into())?)
+        .checked_mul_uint256(total_lockdrop_incentives.into())?)
     }
 }
 
@@ -1645,9 +1706,12 @@ pub fn calculate_astro_incentives_for_lockup(
 ///
 /// * **config** is an object of type [`Config`]. Config with weekly multiplier and divider.
 fn calculate_weight(amount: Uint128, duration: u64, config: &Config) -> StdResult<Uint256> {
-    if let Some(info) = config.lockup_rewards_info.iter().find(|info| info.duration == duration) {
-        let lock_weight = Decimal256::one()
-            + info.coefficient;
+    if let Some(info) = config
+        .lockup_rewards_info
+        .iter()
+        .find(|info| info.duration == duration)
+    {
+        let lock_weight = Decimal256::one() + info.coefficient;
         Ok(lock_weight.checked_mul_uint256(amount.into())?.into())
     } else {
         Err(StdError::generic_err("invalid duration"))

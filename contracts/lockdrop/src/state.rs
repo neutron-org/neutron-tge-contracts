@@ -16,16 +16,27 @@ pub const CONFIG: Item<Config> = Item::new("config");
 pub const STATE: Item<State> = Item::new("state");
 
 /// Key is an Terraswap LP token address
-pub const ASSET_POOLS: SnapshotMap<PoolType, PoolInfo> = SnapshotMap::new("LiquidityPools", "LiquitidyPools_checkpoints", "LiquidityPools_changelog", Strategy::EveryBlock);
+pub const ASSET_POOLS: SnapshotMap<PoolType, PoolInfo> = SnapshotMap::new(
+    "LiquidityPools",
+    "LiquitidyPools_checkpoints",
+    "LiquidityPools_changelog",
+    Strategy::EveryBlock,
+);
 /// Key is an user address
 pub const USER_INFO: Map<&Addr, UserInfo> = Map::new("users");
 /// Key consists of an Terraswap LP token address, an user address, and a duration
 pub const LOCKUP_INFO: Map<(PoolType, &Addr, U64Key), LockupInfoV2> = Map::new("lockup_position");
 
-pub const TOTAL_USER_LOCKUP_AMOUNT: SnapshotMap<(PoolType, &Addr), Uint128> = SnapshotMap::new("total_user_lockup_info", "total_user_lockup_info_checkpoints", "total_lockup_info_changelog", Strategy::EveryBlock);
+pub const TOTAL_USER_LOCKUP_AMOUNT: SnapshotMap<(PoolType, &Addr), Uint128> = SnapshotMap::new(
+    "total_user_lockup_info",
+    "total_user_lockup_info_checkpoints",
+    "total_lockup_info_changelog",
+    Strategy::EveryBlock,
+);
 
 /// Old LOCKUP_INFO storage interface for backward compatibility
-pub const OLD_LOCKUP_INFO: Map<(PoolType, &Addr, U64Key), LockupInfoV1> = Map::new("lockup_position");
+pub const OLD_LOCKUP_INFO: Map<(PoolType, &Addr, U64Key), LockupInfoV1> =
+    Map::new("lockup_position");
 
 pub trait CompatibleLoader<K, R> {
     fn compatible_load(&self, deps: Deps, key: K, generator: &Option<Addr>) -> StdResult<R>;
@@ -54,8 +65,7 @@ impl CompatibleLoader<(PoolType, &Addr, U64Key), LockupInfoV2>
 
             if !old_lockup_info.generator_proxy_debt.is_zero() {
                 let asset = ASSET_POOLS.load(deps.storage, key.0)?;
-                let astro_lp = asset
-                    .pool;
+                let astro_lp = asset.pool;
                 let pool_info: PoolInfoResponse = deps.querier.query_wasm_smart(
                     generator,
                     &GenQueryMsg::PoolInfo {

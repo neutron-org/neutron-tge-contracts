@@ -1,7 +1,9 @@
 use crate::contract::{execute, instantiate, query, UNTRN_DENOM};
-use astroport_periphery::lockdrop::{Config, ExecuteMsg, InstantiateMsg, LockupRewardsInfo, QueryMsg};
+use astroport_periphery::lockdrop::{
+    Config, ExecuteMsg, InstantiateMsg, LockupRewardsInfo, QueryMsg,
+};
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-use cosmwasm_std::{from_binary, Addr, Decimal256, coin, Uint128, StdError};
+use cosmwasm_std::{coin, from_binary, Addr, Decimal256, StdError, Uint128};
 
 const ATOM_LP_TOKEN_ADDR: &str = "atom_lp";
 const USDC_LP_TOKEN_ADDR: &str = "usdc_lp";
@@ -26,7 +28,10 @@ fn update_owner() {
         credit_contract: "credit_contract".to_string(),
         atom_token: ATOM_LP_TOKEN_ADDR.to_string(),
         usdc_token: USDC_LP_TOKEN_ADDR.to_string(),
-        lockup_rewards_info: vec![LockupRewardsInfo{duration: 1, coefficient: Decimal256::zero()}]
+        lockup_rewards_info: vec![LockupRewardsInfo {
+            duration: 1,
+            coefficient: Decimal256::zero(),
+        }],
     };
 
     // We can just call .unwrap() to assert this was a success
@@ -110,7 +115,10 @@ fn increase_ntrn_incentives() {
         credit_contract: "credit_contract".to_string(),
         atom_token: ATOM_LP_TOKEN_ADDR.to_string(),
         usdc_token: USDC_LP_TOKEN_ADDR.to_string(),
-        lockup_rewards_info: vec![LockupRewardsInfo{duration: 1, coefficient: Decimal256::zero()}]
+        lockup_rewards_info: vec![LockupRewardsInfo {
+            duration: 1,
+            coefficient: Decimal256::zero(),
+        }],
     };
 
     // We can just call .unwrap() to assert this was a success
@@ -128,7 +136,6 @@ fn increase_ntrn_incentives() {
         from_binary(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap();
     assert_eq!(Uint128::new(100u128), config.lockdrop_incentives);
 
-
     // invalid coin
     let env = mock_env();
     let msg = ExecuteMsg::IncreaseNTRNIncentives {};
@@ -136,5 +143,8 @@ fn increase_ntrn_incentives() {
     let info = mock_info(owner.as_str(), &[coin(100u128, "DENOM")]);
 
     let err = execute(deps.as_mut(), env, info, msg).unwrap_err();
-    assert_eq!(err, StdError::generic_err(format!("{} is not found", UNTRN_DENOM)));
+    assert_eq!(
+        err,
+        StdError::generic_err(format!("{} is not found", UNTRN_DENOM))
+    );
 }

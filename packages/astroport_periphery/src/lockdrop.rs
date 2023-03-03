@@ -1,6 +1,9 @@
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
-use cosmwasm_std::{from_slice, to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, Uint256, WasmMsg, Decimal256};
+use cosmwasm_std::{
+    from_slice, to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdResult, Uint128, Uint256,
+    WasmMsg,
+};
 use cw20::Cw20ReceiveMsg;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use schemars::JsonSchema;
@@ -225,7 +228,7 @@ pub enum QueryMsg {
     QueryLockupTotalAtHeight {
         pool_type: PoolType,
         height: u64,
-    }
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

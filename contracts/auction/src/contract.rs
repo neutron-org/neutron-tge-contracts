@@ -1120,13 +1120,11 @@ pub fn update_state_on_liquidity_addition_to_pool(
         STATE.save(deps.storage, &state)?;
 
         // Activate lockdrop and airdrop claims
-        let cosmos_msgs = vec![
-            CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: config.airdrop_contract_address.to_string(),
-                msg: to_binary(&AirdropEnableClaims {})?,
-                funds: vec![],
-            }),
-        ];
+        let cosmos_msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: config.airdrop_contract_address.to_string(),
+            msg: to_binary(&AirdropEnableClaims {})?,
+            funds: vec![],
+        })];
 
         Ok(Response::new()
             .add_messages(cosmos_msgs)

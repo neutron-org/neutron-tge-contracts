@@ -89,7 +89,6 @@ pub enum QueryMsg {
     UserInfo { address: String },
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct MigrateMsg {}
 
