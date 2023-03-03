@@ -13,7 +13,7 @@ use astroport_periphery::auction::{
 use astroport_periphery::helpers::{build_approve_cw20_msg, cw20_get_balance};
 
 use crate::state::{CONFIG, STATE, USERS};
-use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, PairInfo};
+use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::generator::{
     ExecuteMsg as GenExecuteMsg, PendingTokenResponse, QueryMsg as GenQueryMsg, RewardInfoResponse,
 };
@@ -61,15 +61,12 @@ pub fn instantiate(
     let config = Config {
         owner: msg
             .owner
-            .map(|v| addr_validate_to_lower(deps.api, &v))
+            .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
-        astro_token_address: addr_validate_to_lower(deps.api, &msg.astro_token_address)?,
-        airdrop_contract_address: addr_validate_to_lower(deps.api, &msg.airdrop_contract_address)?,
-        lockdrop_contract_address: addr_validate_to_lower(
-            deps.api,
-            &msg.lockdrop_contract_address,
-        )?,
+        astro_token_address: deps.api.addr_validate(&msg.astro_token_address)?,
+        airdrop_contract_address: deps.api.addr_validate(&msg.airdrop_contract_address)?,
+        lockdrop_contract_address: deps.api.addr_validate(&msg.lockdrop_contract_address)?,
         pool_info: None,
         generator_contract: None,
         astro_incentive_amount: None,
@@ -273,7 +270,7 @@ pub fn handle_update_config(
 
     // UPDATE :: ADDRESSES IF PROVIDED
     if let Some(owner) = new_config.owner {
-        config.owner = addr_validate_to_lower(deps.api, &owner)?;
+        config.owner = deps.api.addr_validate(&owner)?;
         attributes.push(attr("owner", config.owner.to_string()));
     }
 
@@ -283,7 +280,7 @@ pub fn handle_update_config(
                 "Assets had already been provided to previous pool!",
             ));
         }
-        let astro_ust_pair_addr = addr_validate_to_lower(deps.api, &astro_ust_pair_address)?;
+        let astro_ust_pair_addr = deps.api.addr_validate(&astro_ust_pair_address)?;
 
         let pair_info: PairInfo = deps
             .querier
@@ -301,7 +298,7 @@ pub fn handle_update_config(
             return Err(StdError::generic_err("ASTRO-UST LP tokens already staked"));
         }
 
-        let generator_addr = addr_validate_to_lower(deps.api, &generator_contract)?;
+        let generator_addr = deps.api.addr_validate(&generator_contract)?;
         config.generator_contract = Some(generator_addr.clone());
         attributes.push(attr("generator", generator_addr.to_string()));
     }
@@ -355,7 +352,7 @@ pub fn handle_delegate_astro_tokens(
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
 
-    let user_address = addr_validate_to_lower(deps.api, &user_address)?;
+    let user_address = deps.api.addr_validate(&user_address)?;
 
     // CHECK :: Auction deposit window open
     if !is_deposit_open(env.block.time.seconds(), &config) {
@@ -683,7 +680,7 @@ fn build_provide_liquidity_to_lp_pool_msg(
             amount: ust.amount,
         }],
         msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
-            assets: [ust, astro],
+            assets: [ust, astro].to_vec(),
             slippage_tolerance,
             auto_stake: None,
             receiver: None,
@@ -866,7 +863,7 @@ pub fn handle_claim_rewards_and_withdraw_lp_shares(
 
                     let astro_balance = {
                         let res: BalanceResponse = deps.querier.query_wasm_smart(
-                            rwi.base_reward_token,
+                            rwi.base_reward_token.to_string(),
                             &Cw20QueryMsg::Balance {
                                 address: env.contract.address.to_string(),
                             },
@@ -1188,7 +1185,7 @@ pub fn update_state_on_reward_claim(
         let base_reward_received;
         state.generator_astro_per_share += {
             let res: BalanceResponse = deps.querier.query_wasm_smart(
-                rwi.base_reward_token,
+                rwi.base_reward_token.to_string(),
                 &Cw20QueryMsg::Balance {
                     address: env.contract.address.to_string(),
                 },
@@ -1260,7 +1257,7 @@ pub fn calculate_withdrawable_lp_shares(
 fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<UserInfoResponse> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
-    let user_address = addr_validate_to_lower(deps.api, &user_address)?;
+    let user_address = deps.api.addr_validate(&user_address)?;
     let mut user_info = USERS
         .may_load(deps.storage, &user_address)?
         .unwrap_or_default();

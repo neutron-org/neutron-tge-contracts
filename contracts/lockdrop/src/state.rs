@@ -47,8 +47,8 @@ impl CompatibleLoader<(PoolType, &Addr, U64Key), LockupInfoV2>
         key: (PoolType, &Addr, U64Key),
         generator: &Option<Addr>,
     ) -> StdResult<LockupInfoV2> {
-        self.load(deps.storage, key.clone()).or_else(|_| {
-            let old_lockup_info = OLD_LOCKUP_INFO.load(deps.storage, key.clone())?;
+        self.load(deps.storage, key).or_else(|_| {
+            let old_lockup_info = OLD_LOCKUP_INFO.load(deps.storage, key)?;
             let mut generator_proxy_debt = RestrictedVector::default();
             let generator = generator.as_ref().expect("Generator should be set!");
 
@@ -93,7 +93,7 @@ impl CompatibleLoader<(PoolType, &Addr, U64Key), LockupInfoV2>
         key: (PoolType, &Addr, U64Key),
         generator: &Option<Addr>,
     ) -> StdResult<Option<LockupInfoV2>> {
-        if !OLD_LOCKUP_INFO.has(deps.storage, key.clone()) {
+        if !OLD_LOCKUP_INFO.has(deps.storage, key) {
             return Ok(None);
         }
         Some(self.compatible_load(deps, key, generator)).transpose()
