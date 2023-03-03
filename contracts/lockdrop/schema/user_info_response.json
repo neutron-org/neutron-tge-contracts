@@ -59,7 +59,7 @@
       "type": "string"
     },
     "AssetInfo": {
-      "description": "This enum describes available Token types. ## Examples ``` # use cosmwasm_std::Addr; # use astroport::asset::AssetInfo::{NativeToken, Token}; Token { contract_addr: Addr::unchecked(\"terra...\") }; NativeToken { denom: String::from(\"uluna\") }; ```",
+      "description": "This enum describes available Token types. ## Examples ``` # use cosmwasm_std::Addr; # use astroport::asset::AssetInfo::{NativeToken, Token}; Token { contract_addr: Addr::unchecked(\"stake...\") }; NativeToken { denom: String::from(\"uluna\") }; ```",
       "oneOf": [
         {
           "description": "Non-native Token",
@@ -77,7 +77,8 @@
                 "contract_addr": {
                   "$ref": "#/definitions/Addr"
                 }
-              }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
@@ -98,7 +99,8 @@
                 "denom": {
                   "type": "string"
                 }
-              }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
