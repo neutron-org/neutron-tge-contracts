@@ -29,7 +29,7 @@ astroport-periphery = { path = "../../packages/astroport_periphery" }
 cw20 = { version = "0.13" }
 cw2 = { version = "0.13" }
 cosmwasm-std = { version = "1.0" }
-cw-storage-plus = { version = "0.13" }
+cw-storage-plus = { version = "0.15.1" }
 serde = { version = "1.0.127", default-features = false, features = ["derive"] }
 schemars = "0.8"
 
@@ -37,11 +37,4 @@ schemars = "0.8"
 cosmwasm-schema = { version = "1.0" }
 cosmwasm-storage = { version = "1.0" }
 cw-multi-test = "0.13"
-# needed for intergration testing
-astroport-pair = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
-astroport-token = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
-astroport-vesting = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
-astroport-generator = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
-astroport-whitelist = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
-astroport-factory = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
 astroport-lockdrop = { path = "../lockdrop" }
