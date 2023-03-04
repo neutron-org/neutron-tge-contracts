@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateMsg {
-    /// Owner if none set to info.sender.
-    pub owner: Option<String>,
     pub credits_address: Option<String>,
     pub reserve_address: Option<String>,
     pub neutron_denom: String,
@@ -76,7 +74,7 @@ pub enum QueryMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ConfigResponse {
-    pub owner: Option<String>,
+    pub owner: String,
     pub credits_address: Option<String>,
     pub reserve_address: Option<String>,
     pub neutron_denom: String,

@@ -45,10 +45,6 @@ pub fn instantiate(
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-    let owner = msg
-        .owner
-        .map_or(Ok(info.sender), |o| deps.api.addr_validate(&o))?;
-
     PAUSED.save(deps.storage, &false)?;
 
     let credits_address = match msg.credits_address {
@@ -63,7 +59,7 @@ pub fn instantiate(
     CONFIG.save(
         deps.storage,
         &Config {
-            owner: Some(owner),
+            owner: info.sender,
             credits_address,
             reserve_address,
             neutron_denom: msg.neutron_denom,
@@ -133,17 +129,11 @@ pub fn execute_update_config(
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
-    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
-    if info.sender != owner {
+    if info.sender != cfg.owner {
         return Err(ContractError::Unauthorized {});
     }
 
-    // if owner some validated to addr, otherwise set to none
-    let mut tmp_owner = None;
-    if let Some(addr) = new_owner {
-        tmp_owner = Some(deps.api.addr_validate(&addr)?)
-    }
-
+    let owner = new_owner.map_or(Ok(cfg.owner), |addr| deps.api.addr_validate(&addr))?;
     let credits_address = match credits_address {
         Some(addr) => Some(deps.api.addr_validate(&addr)?),
         None => cfg.credits_address,
@@ -160,7 +150,7 @@ pub fn execute_update_config(
     CONFIG.save(
         deps.storage,
         &Config {
-            owner: tmp_owner,
+            owner,
             credits_address,
             reserve_address,
             neutron_denom,
@@ -182,10 +172,8 @@ pub fn execute_register_merkle_root(
     hrp: Option<String>,
 ) -> Result<Response, ContractError> {
     let cfg = CONFIG.load(deps.storage)?;
-
-    // if owner set validate, otherwise unauthorized
-    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
-    if info.sender != owner {
+    // authorize owner
+    if info.sender != cfg.owner {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -368,8 +356,7 @@ pub fn execute_withdraw_all(
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
-    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
-    if info.sender != owner {
+    if info.sender != cfg.owner {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -442,8 +429,7 @@ pub fn execute_pause(
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
-    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
-    if info.sender != owner {
+    if info.sender != cfg.owner {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -471,8 +457,7 @@ pub fn execute_resume(
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
-    let owner = cfg.owner.ok_or(ContractError::Unauthorized {})?;
-    if info.sender != owner {
+    if info.sender != cfg.owner {
         return Err(ContractError::Unauthorized {});
     }
 
@@ -524,7 +509,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let cfg = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
-        owner: cfg.owner.map(|o| o.to_string()),
+        owner: cfg.owner.to_string(),
         credits_address: cfg.credits_address.map(|addr| addr.to_string()),
         reserve_address: cfg.reserve_address.map(|addr| addr.to_string()),
         neutron_denom: cfg.neutron_denom,
@@ -640,14 +625,13 @@ mod tests {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
             neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
-        let info = mock_info("addr0000", &[]);
+        let info = mock_info("owner0000", &[]);
 
         // we can just call .unwrap() to assert this was a success
         let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -655,7 +639,7 @@ mod tests {
         // it worked, let's query the state
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0000", config.owner.unwrap().as_str());
+        assert_eq!("owner0000", config.owner.to_string());
         assert_eq!("credits0000", config.credits_address.unwrap());
         assert_eq!("reserve0000", config.reserve_address.unwrap());
         assert_eq!("untrn", config.neutron_denom);
@@ -666,7 +650,6 @@ mod tests {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
-            owner: None,
             credits_address: Some(String::from("credits0000")),
             reserve_address: Some(String::from("reserve0000")),
             neutron_denom: "untrn".to_string(),
@@ -692,7 +675,7 @@ mod tests {
         // it worked, let's query the state
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0001", config.owner.unwrap().as_str());
+        assert_eq!("owner0001", config.owner.to_string());
         assert_eq!("credits0000", config.credits_address.unwrap());
         assert_eq!("untrn", config.neutron_denom);
 
@@ -725,7 +708,7 @@ mod tests {
         // it worked, let's query the state
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0001", config.owner.unwrap().as_str());
+        assert_eq!("owner0001", config.owner.to_string());
         assert_eq!("credits0001", config.credits_address.unwrap());
         assert_eq!("reserve0001", config.reserve_address.unwrap());
         assert_eq!("untrn", config.neutron_denom);
@@ -746,7 +729,7 @@ mod tests {
         // it worked, let's query the state
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0001", config.owner.unwrap().as_str());
+        assert_eq!("owner0001", config.owner.to_string());
         assert_eq!("credits0001", config.credits_address.unwrap());
         assert_eq!("reserve0001", config.reserve_address.unwrap());
         assert_eq!("ujunox", config.neutron_denom);
@@ -757,14 +740,13 @@ mod tests {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
             neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
-        let info = mock_info("addr0000", &[]);
+        let info = mock_info("owner0000", &[]);
         let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
         // register new merkle root
@@ -819,18 +801,15 @@ mod tests {
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: None,
             reserve_address: Some("reserve0000".to_string()),
             neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
-        let info = mock_info("addr0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-        let env = mock_env();
         let info = mock_info("owner0000", &[]);
+        let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
             expiration: None,
@@ -858,14 +837,13 @@ mod tests {
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
             neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
-        let info = mock_info("addr0000", &[]);
+        let info = mock_info("owner0000", &[]);
         let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
         let env = mock_env();
@@ -971,23 +949,20 @@ mod tests {
 
     #[test]
     fn multiple_claim() {
-        // Run test 1
         let mut deps = mock_dependencies();
         let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
 
         let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
             neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
-        let info = mock_info("addr0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+        let info = mock_info("owner0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info.clone(), msg).unwrap();
 
         let env = mock_env();
-        let info = mock_info("owner0000", &[]);
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
             expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(10_000))),
@@ -1060,14 +1035,13 @@ mod tests {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
             neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
-        let info = mock_info("addr0000", &[]);
+        let info = mock_info("owner0000", &[]);
         let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
         // can register merkle root
@@ -1108,14 +1082,13 @@ mod tests {
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: Some("credits0000".to_string()),
             reserve_address: None,
             neutron_denom: "untrn".to_string(),
         };
 
         let mut env = mock_env();
-        let info = mock_info("addr0000", &[]);
+        let info = mock_info("owner0000", &[]);
         let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         let info = mock_info("owner0000", &[]);
@@ -1182,7 +1155,6 @@ mod tests {
             .unwrap();
 
         let merkle_airdrop_instantiate_msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: Some(cw20_addr.to_string()),
             reserve_address: Some("reserve0000".to_string()),
             neutron_denom: "untrn".to_string(),
@@ -1347,19 +1319,17 @@ mod tests {
         let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
             neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
-        let info = mock_info("addr0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
+        let info = mock_info("owner0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info.clone(), msg).unwrap();
 
         // can register merkle root
         let env = mock_env();
-        let info = mock_info("owner0000", &[]);
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc"
                 .to_string(),
@@ -1384,87 +1354,6 @@ mod tests {
                 start: Scheduled::AtHeight(200_000),
             }
         )
-    }
-
-    #[test]
-    fn owner_freeze() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg {
-            owner: Some("owner0000".to_string()),
-            credits_address: Some("credits0000".to_string()),
-            reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
-        };
-
-        let env = mock_env();
-        let info = mock_info("addr0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-        // can register merkle root
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let msg = ExecuteMsg::RegisterMerkleRoot {
-            merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc"
-                .to_string(),
-            expiration: None,
-            start: None,
-            total_amount: None,
-            hrp: None,
-        };
-        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
-
-        // can update owner
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let msg = ExecuteMsg::UpdateConfig {
-            new_owner: Some("owner0001".to_string()),
-            new_credits_address: None,
-            new_reserve_address: None,
-            new_neutron_denom: None,
-        };
-
-        let res = execute(deps.as_mut(), env, info, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // freeze contract
-        let env = mock_env();
-        let info = mock_info("owner0001", &[]);
-        let msg = ExecuteMsg::UpdateConfig {
-            new_owner: None,
-            new_credits_address: None,
-            new_reserve_address: None,
-            new_neutron_denom: None,
-        };
-
-        let res = execute(deps.as_mut(), env, info, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // cannot register new drop
-        let env = mock_env();
-        let info = mock_info("owner0001", &[]);
-        let msg = ExecuteMsg::RegisterMerkleRoot {
-            merkle_root: "ebaa83c7eaf7467c378d2f37b5e46752d904d2d17acd380b24b02e3b398b3e5a"
-                .to_string(),
-            expiration: None,
-            start: None,
-            total_amount: None,
-            hrp: None,
-        };
-        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-        assert_eq!(res, ContractError::Unauthorized {});
-
-        // cannot update config
-        let env = mock_env();
-        let info = mock_info("owner0001", &[]);
-        let msg = ExecuteMsg::UpdateConfig {
-            new_owner: Some("owner0001".to_string()),
-            new_credits_address: None,
-            new_reserve_address: None,
-            new_neutron_denom: None,
-        };
-        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-        assert_eq!(res, ContractError::Unauthorized {});
     }
 
     mod external_sig {
@@ -1517,18 +1406,15 @@ mod tests {
                 .unwrap();
 
             let msg = InstantiateMsg {
-                owner: Some("owner0000".to_string()),
                 credits_address: Some("credits0000".to_string()),
                 reserve_address: Some("reserve0000".to_string()),
                 neutron_denom: "untrn".to_string(),
             };
 
             let env = mock_env();
-            let info = mock_info("addr0000", &[]);
-            let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-            let env = mock_env();
             let info = mock_info("owner0000", &[]);
+            let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
             let msg = ExecuteMsg::RegisterMerkleRoot {
                 merkle_root: test_data.root,
                 expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(10_000))),
@@ -1649,18 +1535,15 @@ mod tests {
             let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
             let msg = InstantiateMsg {
-                owner: Some("owner0000".to_string()),
                 credits_address: Some("credits0000".to_string()),
                 reserve_address: Some("reserve0000".to_string()),
                 neutron_denom: "untrn".to_string(),
             };
 
             let env = mock_env();
-            let info = mock_info("addr0000", &[]);
-            let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-            let env = mock_env();
             let info = mock_info("owner0000", &[]);
+            let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
             let msg = ExecuteMsg::RegisterMerkleRoot {
                 merkle_root: test_data.root,
                 expiration: None,
@@ -1791,7 +1674,6 @@ mod tests {
                 .unwrap();
 
             let merkle_airdrop_instantiate_msg = InstantiateMsg {
-                owner: Some("owner0000".to_string()),
                 credits_address: Some(cw20_addr.to_string()),
                 reserve_address: Some("reserve0000".to_string()),
                 neutron_denom: "untrn".to_string(),

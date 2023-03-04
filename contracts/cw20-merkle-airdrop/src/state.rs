@@ -7,8 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Config {
-    /// Owner If None set, contract is frozen.
-    pub owner: Option<Addr>,
+    pub owner: Addr,
     pub credits_address: Option<Addr>,
     pub reserve_address: Option<Addr>,
     pub neutron_denom: String,
