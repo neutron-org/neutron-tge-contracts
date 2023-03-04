@@ -35,57 +35,6 @@
       "additionalProperties": false
     },
     {
-      "type": "object",
-      "required": [
-        "register_merkle_root"
-      ],
-      "properties": {
-        "register_merkle_root": {
-          "type": "object",
-          "required": [
-            "expiration",
-            "merkle_root"
-          ],
-          "properties": {
-            "expiration": {
-              "$ref": "#/definitions/Timestamp"
-            },
-            "hrp": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "merkle_root": {
-              "description": "MerkleRoot is hex-encoded merkle root.",
-              "type": "string"
-            },
-            "start": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Scheduled"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "total_amount": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Uint128"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
       "description": "Claim does not check if contract has enough funds, owner must ensure it.",
       "type": "object",
       "required": [
@@ -179,39 +128,6 @@
     "Binary": {
       "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>. See also <https://github.com/CosmWasm/cosmwasm/blob/main/docs/MESSAGE_TYPES.md>.",
       "type": "string"
-    },
-    "Scheduled": {
-      "description": "Scheduled represents a point in time when an event happens. It can compare with a BlockInfo and will return is_triggered() == true once the condition is hit (and for every block in the future)",
-      "oneOf": [
-        {
-          "description": "AtHeight will schedule when `env.block.height` >= height",
-          "type": "object",
-          "required": [
-            "at_height"
-          ],
-          "properties": {
-            "at_height": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "AtTime will schedule when `env.block.time` >= time",
-          "type": "object",
-          "required": [
-            "at_time"
-          ],
-          "properties": {
-            "at_time": {
-              "$ref": "#/definitions/Timestamp"
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
     },
     "SignatureInfo": {
       "type": "object",

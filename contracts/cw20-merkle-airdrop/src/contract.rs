@@ -7,7 +7,7 @@ use cosmwasm_std::{
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
-use cw_utils::{Expiration, Scheduled};
+use cw_utils::Expiration;
 use semver::Version;
 use sha2::Digest;
 use std::convert::TryInto;
@@ -66,7 +66,35 @@ pub fn instantiate(
         },
     )?;
 
-    Ok(Response::default())
+    // check merkle root length
+    let mut root_buf: [u8; 32] = [0; 32];
+    hex::decode_to_slice(&msg.merkle_root, &mut root_buf)?;
+
+    MERKLE_ROOT.save(deps.storage, &msg.merkle_root)?;
+
+    // save expiration
+    STAGE_EXPIRATION.save(deps.storage, &msg.expiration)?;
+
+    // save start
+    if let Some(start) = msg.start {
+        START.save(deps.storage, &start)?;
+    }
+
+    // save hrp
+    if let Some(hrp) = msg.hrp {
+        HRP.save(deps.storage, &hrp)?;
+    }
+
+    // save total airdropped amount
+    let amount = msg.total_amount.unwrap_or_else(Uint128::zero);
+    AMOUNT.save(deps.storage, &amount)?;
+    AMOUNT_CLAIMED.save(deps.storage, &Uint128::zero())?;
+
+    Ok(Response::new().add_attributes(vec![
+        attr("action", "instantiate"),
+        attr("merkle_root", msg.merkle_root),
+        attr("total_amount", amount),
+    ]))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -88,22 +116,6 @@ pub fn execute(
             new_owner,
             new_credits_address,
             new_reserve_address,
-        ),
-        ExecuteMsg::RegisterMerkleRoot {
-            merkle_root,
-            expiration,
-            start,
-            total_amount,
-            hrp,
-        } => execute_register_merkle_root(
-            deps,
-            env,
-            info,
-            merkle_root,
-            expiration,
-            start,
-            total_amount,
-            hrp,
         ),
         ExecuteMsg::Claim {
             amount,
@@ -150,54 +162,6 @@ pub fn execute_update_config(
     )?;
 
     Ok(Response::new().add_attribute("action", "update_config"))
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn execute_register_merkle_root(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    merkle_root: String,
-    expiration: Timestamp,
-    start: Option<Scheduled>,
-    total_amount: Option<Uint128>,
-    hrp: Option<String>,
-) -> Result<Response, ContractError> {
-    let cfg = CONFIG.load(deps.storage)?;
-    // authorize owner
-    if info.sender != cfg.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    // check merkle root length
-    let mut root_buf: [u8; 32] = [0; 32];
-    hex::decode_to_slice(&merkle_root, &mut root_buf)?;
-
-    MERKLE_ROOT.save(deps.storage, &merkle_root)?;
-
-    // save expiration
-    STAGE_EXPIRATION.save(deps.storage, &expiration)?;
-
-    // save start
-    if let Some(start) = start {
-        START.save(deps.storage, &start)?;
-    }
-
-    // save hrp
-    if let Some(hrp) = hrp {
-        HRP.save(deps.storage, &hrp)?;
-    }
-
-    // save total airdropped amount
-    let amount = total_amount.unwrap_or_else(Uint128::zero);
-    AMOUNT.save(deps.storage, &amount)?;
-    AMOUNT_CLAIMED.save(deps.storage, &Uint128::zero())?;
-
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "register_merkle_root"),
-        attr("merkle_root", merkle_root),
-        attr("total_amount", amount),
-    ]))
 }
 
 pub fn execute_claim(
@@ -567,6 +531,7 @@ mod tests {
     };
     use cw20::MinterResponse;
     use cw_multi_test::{App, BankKeeper, Contract, ContractWrapper, Executor};
+    use cw_utils::Scheduled;
     use schemars::JsonSchema;
     use serde::{Deserialize, Serialize};
 
@@ -591,38 +556,21 @@ mod tests {
     }
 
     #[test]
-    fn proper_instantiation() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg {
-            credits_address: Some("credits0000".to_string()),
-            reserve_address: Some("reserve0000".to_string()),
-        };
-
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-
-        // we can just call .unwrap() to assert this was a success
-        let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
-
-        // it worked, let's query the state
-        let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
-        let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0000", config.owner);
-        assert_eq!("credits0000", config.credits_address.unwrap());
-        assert_eq!("reserve0000", config.reserve_address.unwrap());
-    }
-
-    #[test]
     fn update_config() {
         let mut deps = mock_dependencies();
+        let env = mock_env();
 
         let msg = InstantiateMsg {
             credits_address: Some(String::from("credits0000")),
             reserve_address: Some(String::from("reserve0000")),
+            merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37"
+                .to_string(),
+            expiration: env.block.time.plus_seconds(10_000),
+            start: None,
+            total_amount: None,
+            hrp: None,
         };
 
-        let env = mock_env();
         let info = mock_info("owner0000", &[]);
         let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
@@ -696,22 +644,13 @@ mod tests {
     }
 
     #[test]
-    fn register_merkle_root() {
+    fn proper_instantiation() {
         let mut deps = mock_dependencies();
+        let env = mock_env();
 
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-        };
-
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-        // register new merkle root
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37"
                 .to_string(),
             expiration: env.block.time.plus_seconds(10_000),
@@ -720,11 +659,12 @@ mod tests {
             hrp: None,
         };
 
-        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+        let info = mock_info("owner0000", &[]);
+        let res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
         assert_eq!(
             res.attributes,
             vec![
-                attr("action", "register_merkle_root"),
+                attr("action", "instantiate"),
                 attr(
                     "merkle_root",
                     "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37",
@@ -757,25 +697,21 @@ mod tests {
     #[test]
     fn cant_claim_without_credits_address() {
         let mut deps = mock_dependencies();
+        let env = mock_env();
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
             credits_address: None,
             reserve_address: Some("reserve0000".to_string()),
-        };
-
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
-
-        let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
             expiration: env.block.time.plus_seconds(10_000),
             start: None,
             total_amount: None,
             hrp: None,
         };
-        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
@@ -792,27 +728,21 @@ mod tests {
     #[test]
     fn claim() {
         let mut deps = mock_dependencies();
+        let env = mock_env();
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-        };
-
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
             expiration: env.block.time.plus_seconds(10_000),
             start: None,
             total_amount: None,
             hrp: None,
         };
-        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
@@ -907,26 +837,21 @@ mod tests {
     #[test]
     fn multiple_claim() {
         let mut deps = mock_dependencies();
+        let env = mock_env();
         let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
 
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-        };
-
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info.clone(), msg).unwrap();
-
-        let env = mock_env();
-        let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
             expiration: env.block.time.plus_seconds(10_000),
             start: None,
             total_amount: None,
             hrp: None,
         };
-        let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
         // Loop accounts and claim
         for account in test_data.accounts.iter() {
@@ -989,21 +914,13 @@ mod tests {
     #[test]
     fn expiration() {
         let mut deps = mock_dependencies();
+        let mut env = mock_env();
+        let info = mock_info("owner0000", &[]);
+        let expiration = env.block.time.plus_seconds(100);
 
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-        };
-
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-        // can register merkle root
-        let mut env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let expiration = env.block.time.plus_seconds(100);
-        let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc"
                 .to_string(),
             expiration,
@@ -1011,7 +928,7 @@ mod tests {
             total_amount: None,
             hrp: None,
         };
-        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+        let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // make expired
         env.block.time = env.block.time.plus_seconds(200);
@@ -1029,30 +946,22 @@ mod tests {
 
     #[test]
     fn cant_withdraw_all_without_reserve_address() {
-        let mut deps = mock_dependencies_with_balance(&[Coin {
-            denom: "ujunox".to_string(),
-            amount: Uint128::new(10000),
-        }]);
+        let mut deps = mock_dependencies();
+        let mut env = mock_env();
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: None,
-        };
-
-        let mut env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
-
-        let info = mock_info("owner0000", &[]);
-        let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
             expiration: env.block.time.plus_seconds(100),
             start: None,
             total_amount: Some(Uint128::new(10000)),
             hrp: None,
         };
-        execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
 
         // makes withdraw_all available
         env.block.time = env.block.time.plus_seconds(VESTING_DURATION_SECONDS + 101);
@@ -1064,6 +973,7 @@ mod tests {
 
     #[test]
     fn withdraw_all() {
+        let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
         let mut router = mock_app();
         router
             .init_modules(|router, _api, storage| {
@@ -1110,6 +1020,11 @@ mod tests {
         let merkle_airdrop_instantiate_msg = InstantiateMsg {
             credits_address: Some(cw20_addr.to_string()),
             reserve_address: Some("reserve0000".to_string()),
+            merkle_root: test_data.root,
+            expiration: router.block_info().time.plus_seconds(10),
+            start: None,
+            total_amount: Some(Uint128::new(10000)),
+            hrp: None,
         };
 
         let merkle_airdrop_addr = router
@@ -1120,24 +1035,6 @@ mod tests {
                 &[],
                 "Airdrop Test",
                 None,
-            )
-            .unwrap();
-
-        let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
-        //register airdrop
-        let register_msg = ExecuteMsg::RegisterMerkleRoot {
-            merkle_root: test_data.root,
-            expiration: router.block_info().time.plus_seconds(10),
-            start: None,
-            total_amount: Some(Uint128::new(10000)),
-            hrp: None,
-        };
-        router
-            .execute_contract(
-                Addr::unchecked("owner0000".to_string()),
-                merkle_airdrop_addr.clone(),
-                &register_msg,
-                &[],
             )
             .unwrap();
 
@@ -1267,19 +1164,11 @@ mod tests {
     #[test]
     fn starts() {
         let mut deps = mock_dependencies();
+        let env = mock_env();
 
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-        };
-
-        let env = mock_env();
-        let info = mock_info("owner0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info.clone(), msg).unwrap();
-
-        // can register merkle root
-        let env = mock_env();
-        let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc"
                 .to_string(),
             expiration: env.block.time.plus_seconds(10_000),
@@ -1287,7 +1176,9 @@ mod tests {
             total_amount: None,
             hrp: None,
         };
-        execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
+        let info = mock_info("owner0000", &[]);
+        let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
         // can't claim, airdrop has not started yet
         let msg = ExecuteMsg::Claim {
@@ -1341,10 +1232,8 @@ mod tests {
 
         #[test]
         fn claim_with_external_sigs() {
-            let mut deps = mock_dependencies_with_balance(&[Coin {
-                denom: "ujunox".to_string(),
-                amount: Uint128::new(1234567),
-            }]);
+            let mut deps = mock_dependencies();
+            let env = mock_env();
             let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
             let claim_addr = test_data
                 .signed_msg
@@ -1356,20 +1245,15 @@ mod tests {
             let msg = InstantiateMsg {
                 credits_address: Some("credits0000".to_string()),
                 reserve_address: Some("reserve0000".to_string()),
-            };
-
-            let env = mock_env();
-            let info = mock_info("owner0000", &[]);
-            let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
-
-            let msg = ExecuteMsg::RegisterMerkleRoot {
                 merkle_root: test_data.root,
                 expiration: env.block.time.plus_seconds(10_000),
                 start: None,
                 total_amount: None,
                 hrp: Some(test_data.hrp.unwrap()),
             };
-            let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+            let info = mock_info("owner0000", &[]);
+            let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
             // cant claim without sig, info.sender is not present in the root
             let msg = ExecuteMsg::Claim {
@@ -1479,25 +1363,21 @@ mod tests {
                 denom: "ujunox".to_string(),
                 amount: Uint128::new(1234567),
             }]);
+            let env = mock_env();
             let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
             let msg = InstantiateMsg {
                 credits_address: Some("credits0000".to_string()),
                 reserve_address: Some("reserve0000".to_string()),
-            };
-
-            let env = mock_env();
-            let info = mock_info("owner0000", &[]);
-            let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
-
-            let msg = ExecuteMsg::RegisterMerkleRoot {
                 merkle_root: test_data.root,
                 expiration: env.block.time.plus_seconds(10_000),
                 start: None,
                 total_amount: None,
                 hrp: None,
             };
-            let _res = execute(deps.as_mut(), env, info, msg).unwrap();
+
+            let info = mock_info("owner0000", &[]);
+            let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
             let pause_msg = ExecuteMsg::Pause {};
             let env = mock_env();
@@ -1576,6 +1456,7 @@ mod tests {
 
         #[test]
         fn withdraw_all_paused_airdrop() {
+            let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
             let mut router = mock_app();
             router
                 .init_modules(|router, _api, storage| {
@@ -1622,6 +1503,11 @@ mod tests {
             let merkle_airdrop_instantiate_msg = InstantiateMsg {
                 credits_address: Some(cw20_addr.to_string()),
                 reserve_address: Some("reserve0000".to_string()),
+                merkle_root: test_data.root,
+                expiration: router.block_info().time.plus_seconds(10_000),
+                start: None,
+                total_amount: Some(Uint128::new(10000)),
+                hrp: None,
             };
 
             let merkle_airdrop_addr = router
@@ -1632,24 +1518,6 @@ mod tests {
                     &[],
                     "Airdrop Test",
                     None,
-                )
-                .unwrap();
-
-            let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
-            //register airdrop
-            let register_msg = ExecuteMsg::RegisterMerkleRoot {
-                merkle_root: test_data.root,
-                expiration: router.block_info().time.plus_seconds(10_000),
-                start: None,
-                total_amount: Some(Uint128::new(10000)),
-                hrp: None,
-            };
-            router
-                .execute_contract(
-                    Addr::unchecked("owner0000".to_string()),
-                    merkle_airdrop_addr.clone(),
-                    &register_msg,
-                    &[],
                 )
                 .unwrap();
 
