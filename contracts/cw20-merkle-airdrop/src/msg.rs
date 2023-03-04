@@ -1,6 +1,6 @@
 use crate::ContractError;
-use cosmwasm_std::{from_slice, Binary, Uint128};
-use cw_utils::{Expiration, Scheduled};
+use cosmwasm_std::{from_slice, Binary, Timestamp, Uint128};
+use cw_utils::Scheduled;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +26,7 @@ pub enum ExecuteMsg {
     RegisterMerkleRoot {
         /// MerkleRoot is hex-encoded merkle root.
         merkle_root: String,
-        expiration: Option<Expiration>,
+        expiration: Timestamp,
         start: Option<Scheduled>,
         total_amount: Option<Uint128>,
         // hrp is the bech32 parameter required for building external network address
@@ -47,7 +47,7 @@ pub enum ExecuteMsg {
     WithdrawAll {},
     Pause {},
     Resume {
-        new_expiration: Option<Expiration>,
+        new_expiration: Option<Timestamp>,
     },
 }
 
@@ -85,7 +85,7 @@ pub struct ConfigResponse {
 pub struct MerkleRootResponse {
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
-    pub expiration: Expiration,
+    pub expiration: Timestamp,
     pub start: Option<Scheduled>,
     pub total_amount: Uint128,
 }

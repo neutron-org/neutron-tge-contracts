@@ -3,7 +3,7 @@ use crate::enumerable::query_all_address_map;
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, coin, from_binary, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, Uint128, WasmMsg,
+    MessageInfo, Response, StdError, StdResult, Timestamp, Uint128, WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
@@ -166,7 +166,7 @@ pub fn execute_register_merkle_root(
     _env: Env,
     info: MessageInfo,
     merkle_root: String,
-    expiration: Option<Expiration>,
+    expiration: Timestamp,
     start: Option<Scheduled>,
     total_amount: Option<Uint128>,
     hrp: Option<String>,
@@ -184,8 +184,7 @@ pub fn execute_register_merkle_root(
     MERKLE_ROOT.save(deps.storage, &merkle_root)?;
 
     // save expiration
-    let exp = expiration.unwrap_or(Expiration::Never {});
-    STAGE_EXPIRATION.save(deps.storage, &exp)?;
+    STAGE_EXPIRATION.save(deps.storage, &expiration)?;
 
     // save start
     if let Some(start) = start {
@@ -226,7 +225,7 @@ pub fn execute_claim(
     }
     // not expired
     let expiration = STAGE_EXPIRATION.load(deps.storage)?;
-    if expiration.is_expired(&env.block) {
+    if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
 
@@ -305,22 +304,8 @@ pub fn execute_claim(
     AMOUNT_CLAIMED.save(deps.storage, &claimed_amount)?;
 
     // we stop all airdrops at the date of expiration, and we use the very same date
-    // as a start timestamp for vesting. if expiration is not set, vesting will not work.
-    let vesting_start_time =
-        match expiration {
-            Expiration::AtHeight(_) => {
-                return Err(ContractError::Vesting {
-                    description: "Vesting must be scheduled from timestamp, not block height"
-                        .to_string(),
-                })
-            }
-            Expiration::Never {} => return Err(ContractError::Vesting {
-                description:
-                    "Vesting must be scheduled from some timestamp, but there wasn't any provided"
-                        .to_string(),
-            }),
-            Expiration::AtTime(timestamp) => timestamp,
-        };
+    // as a start timestamp for vesting.
+    let vesting_start_time = expiration;
 
     let transfer_message = Cw20Contract(credits_address.clone())
         .call(Cw20ExecuteMsg::Transfer {
@@ -362,15 +347,9 @@ pub fn execute_withdraw_all(
 
     if !PAUSED.load(deps.storage)?
         && env.block.time
-            <= match STAGE_EXPIRATION.load(deps.storage)? {
-                Expiration::AtTime(timestamp) => timestamp,
-                _ => {
-                    return Err(ContractError::Std(StdError::generic_err(
-                        "withdraw_all only works if AtTime expiration is set",
-                    )))
-                }
-            }
-            .plus_seconds(VESTING_DURATION_SECONDS)
+            <= STAGE_EXPIRATION
+                .load(deps.storage)?
+                .plus_seconds(VESTING_DURATION_SECONDS)
     {
         return Err(ContractError::Std(StdError::generic_err(
             "withdraw_all only works 3 months after the end of the event",
@@ -441,7 +420,7 @@ pub fn execute_pause(
     }
 
     let expiration = STAGE_EXPIRATION.load(deps.storage)?;
-    if expiration.is_expired(&env.block) {
+    if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
 
@@ -453,7 +432,7 @@ pub fn execute_resume(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    new_expiration: Option<Expiration>,
+    new_expiration: Option<Timestamp>,
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
@@ -469,7 +448,7 @@ pub fn execute_resume(
     }
 
     let expiration = STAGE_EXPIRATION.load(deps.storage)?;
-    if expiration.is_expired(&env.block) {
+    if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
 
@@ -479,7 +458,7 @@ pub fn execute_resume(
     }
 
     if let Some(new_expiration) = new_expiration {
-        if new_expiration.is_expired(&env.block) {
+        if Expiration::AtTime(new_expiration).is_expired(&env.block) {
             return Err(ContractError::Expired { expiration });
         }
         STAGE_EXPIRATION.save(deps.storage, &new_expiration)?;
@@ -755,7 +734,7 @@ mod tests {
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37"
                 .to_string(),
-            expiration: None,
+            expiration: env.block.time.plus_seconds(10_000),
             start: None,
             total_amount: None,
             hrp: None,
@@ -812,7 +791,7 @@ mod tests {
 
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
-            expiration: None,
+            expiration: env.block.time.plus_seconds(10_000),
             start: None,
             total_amount: None,
             hrp: None,
@@ -850,7 +829,7 @@ mod tests {
         let info = mock_info("owner0000", &[]);
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
-            expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(10_000))),
+            expiration: env.block.time.plus_seconds(10_000),
             start: None,
             total_amount: None,
             hrp: None,
@@ -965,7 +944,7 @@ mod tests {
         let env = mock_env();
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
-            expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(10_000))),
+            expiration: env.block.time.plus_seconds(10_000),
             start: None,
             total_amount: None,
             hrp: None,
@@ -1029,7 +1008,7 @@ mod tests {
         );
     }
 
-    // Check expiration. Chain height in tests is 12345
+    // Check expiration.
     #[test]
     fn expiration() {
         let mut deps = mock_dependencies();
@@ -1045,17 +1024,21 @@ mod tests {
         let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
 
         // can register merkle root
-        let env = mock_env();
+        let mut env = mock_env();
         let info = mock_info("owner0000", &[]);
+        let expiration = env.block.time.plus_seconds(100);
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc"
                 .to_string(),
-            expiration: Some(Expiration::AtHeight(100)),
+            expiration,
             start: None,
             total_amount: None,
             hrp: None,
         };
         execute(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
+
+        // make expired
+        env.block.time = env.block.time.plus_seconds(200);
 
         // can't claim expired
         let msg = ExecuteMsg::Claim {
@@ -1065,12 +1048,7 @@ mod tests {
         };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-        assert_eq!(
-            res,
-            ContractError::Expired {
-                expiration: Expiration::AtHeight(100),
-            }
-        )
+        assert_eq!(res, ContractError::Expired { expiration })
     }
 
     #[test]
@@ -1094,7 +1072,7 @@ mod tests {
         let info = mock_info("owner0000", &[]);
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
-            expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(100))),
+            expiration: env.block.time.plus_seconds(100),
             start: None,
             total_amount: Some(Uint128::new(10000)),
             hrp: None,
@@ -1175,9 +1153,7 @@ mod tests {
         //register airdrop
         let register_msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: test_data.root,
-            expiration: Some(Expiration::AtTime(
-                router.block_info().time.plus_seconds(10),
-            )),
+            expiration: router.block_info().time.plus_seconds(10),
             start: None,
             total_amount: Some(Uint128::new(10000)),
             hrp: None,
@@ -1333,7 +1309,7 @@ mod tests {
         let msg = ExecuteMsg::RegisterMerkleRoot {
             merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc"
                 .to_string(),
-            expiration: None,
+            expiration: env.block.time.plus_seconds(10_000),
             start: Some(Scheduled::AtHeight(200_000)),
             total_amount: None,
             hrp: None,
@@ -1359,7 +1335,6 @@ mod tests {
     mod external_sig {
         use super::*;
         use crate::msg::SignatureInfo;
-        use cw_utils::Expiration::AtHeight;
 
         const TEST_DATA_EXTERNAL_SIG: &[u8] =
             include_bytes!("../testdata/airdrop_external_sig_test_data.json");
@@ -1417,7 +1392,7 @@ mod tests {
 
             let msg = ExecuteMsg::RegisterMerkleRoot {
                 merkle_root: test_data.root,
-                expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(10_000))),
+                expiration: env.block.time.plus_seconds(10_000),
                 start: None,
                 total_amount: None,
                 hrp: Some(test_data.hrp.unwrap()),
@@ -1546,7 +1521,7 @@ mod tests {
 
             let msg = ExecuteMsg::RegisterMerkleRoot {
                 merkle_root: test_data.root,
-                expiration: None,
+                expiration: env.block.time.plus_seconds(10_000),
                 start: None,
                 total_amount: None,
                 hrp: None,
@@ -1576,7 +1551,7 @@ mod tests {
             assert_eq!(res, ContractError::Paused {});
 
             let resume_msg = ExecuteMsg::Resume {
-                new_expiration: Some(Expiration::AtTime(env.block.time.plus_seconds(5_000))),
+                new_expiration: Some(env.block.time.plus_seconds(5_000)),
             };
             let env = mock_env();
             let info = mock_info("owner0000", &[]);
@@ -1694,7 +1669,7 @@ mod tests {
             //register airdrop
             let register_msg = ExecuteMsg::RegisterMerkleRoot {
                 merkle_root: test_data.root,
-                expiration: Some(AtHeight(12500)),
+                expiration: router.block_info().time.plus_seconds(10_000),
                 start: None,
                 total_amount: Some(Uint128::new(10000)),
                 hrp: None,

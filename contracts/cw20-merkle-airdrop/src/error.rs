@@ -1,5 +1,5 @@
-use cosmwasm_std::{StdError, Uint128};
-use cw_utils::{Expiration, Scheduled};
+use cosmwasm_std::{StdError, Timestamp};
+use cw_utils::Scheduled;
 use hex::FromHexError;
 use thiserror::Error;
 
@@ -14,9 +14,6 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
-    #[error("Invalid input")]
-    InvalidInput {},
-
     #[error("Already claimed")]
     Claimed {},
 
@@ -26,20 +23,11 @@ pub enum ContractError {
     #[error("Verification failed")]
     VerificationFailed {},
 
-    #[error("Invalid token type")]
-    InvalidTokenType {},
-
-    #[error("Insufficient Funds: Contract balance: {balance} does not cover the required amount: {amount}")]
-    InsufficientFunds { balance: Uint128, amount: Uint128 },
-
     #[error("Cannot migrate from different contract type: {previous_contract}")]
     CannotMigrate { previous_contract: String },
 
     #[error("Airdrop expired at {expiration}")]
-    Expired { expiration: Expiration },
-
-    #[error("Airdrop stage {stage} not expired yet")]
-    StageNotExpired { stage: u8, expiration: Expiration },
+    Expired { expiration: Timestamp },
 
     #[error("Airdrop begins at {start}")]
     NotBegun { start: Scheduled },
@@ -58,12 +46,6 @@ pub enum ContractError {
 
     #[error("Reserve contract address is not set")]
     ReserveAddress {},
-
-    #[error("Unknown reply id {id}")]
-    UnknownReplyId { id: u64 },
-
-    #[error("Cannot issue vesting message: {description}")]
-    Vesting { description: String },
 }
 
 impl From<semver::Error> for ContractError {
