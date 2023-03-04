@@ -35,6 +35,7 @@ const VESTING_DURATION_SECONDS: u64 = 60 // seconds in minute
     * 60 // minutes in hour
     * 24 // hours in day
     * 90; // days
+const NEUTRON_DENOM: &str = "untrn";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -62,7 +63,6 @@ pub fn instantiate(
             owner: info.sender,
             credits_address,
             reserve_address,
-            neutron_denom: msg.neutron_denom,
         },
     )?;
 
@@ -81,7 +81,6 @@ pub fn execute(
             new_owner,
             new_credits_address,
             new_reserve_address,
-            new_neutron_denom,
         } => execute_update_config(
             deps,
             env,
@@ -89,7 +88,6 @@ pub fn execute(
             new_owner,
             new_credits_address,
             new_reserve_address,
-            new_neutron_denom,
         ),
         ExecuteMsg::RegisterMerkleRoot {
             merkle_root,
@@ -125,7 +123,6 @@ pub fn execute_update_config(
     new_owner: Option<String>,
     credits_address: Option<String>,
     reserve_address: Option<String>,
-    neutron_denom: Option<String>,
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
@@ -142,10 +139,6 @@ pub fn execute_update_config(
         Some(addr) => Some(deps.api.addr_validate(&addr)?),
         None => cfg.reserve_address,
     };
-    let neutron_denom = match neutron_denom {
-        Some(denom) => denom,
-        None => cfg.neutron_denom,
-    };
 
     CONFIG.save(
         deps.storage,
@@ -153,7 +146,6 @@ pub fn execute_update_config(
             owner,
             credits_address,
             reserve_address,
-            neutron_denom,
         },
     )?;
 
@@ -388,7 +380,7 @@ pub fn execute_withdraw_all(
     });
     let send_message = CosmosMsg::Bank(BankMsg::Send {
         to_address: reserve_address.to_string(),
-        amount: vec![coin(amount_to_withdraw.u128(), cfg.neutron_denom)],
+        amount: vec![coin(amount_to_withdraw.u128(), NEUTRON_DENOM)],
     });
     let res = Response::new()
         .add_messages([burn_message, send_message])
@@ -491,7 +483,6 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         owner: cfg.owner.to_string(),
         credits_address: cfg.credits_address.map(|addr| addr.to_string()),
         reserve_address: cfg.reserve_address.map(|addr| addr.to_string()),
-        neutron_denom: cfg.neutron_denom,
     })
 }
 
@@ -606,7 +597,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
@@ -618,10 +608,9 @@ mod tests {
         // it worked, let's query the state
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0000", config.owner.to_string());
+        assert_eq!("owner0000", config.owner);
         assert_eq!("credits0000", config.credits_address.unwrap());
         assert_eq!("reserve0000", config.reserve_address.unwrap());
-        assert_eq!("untrn", config.neutron_denom);
     }
 
     #[test]
@@ -631,7 +620,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: Some(String::from("credits0000")),
             reserve_address: Some(String::from("reserve0000")),
-            neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
@@ -645,7 +633,6 @@ mod tests {
             new_owner: Some("owner0001".to_string()),
             new_credits_address: None,
             new_reserve_address: None,
-            new_neutron_denom: None,
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -654,9 +641,8 @@ mod tests {
         // it worked, let's query the state
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0001", config.owner.to_string());
+        assert_eq!("owner0001", config.owner);
         assert_eq!("credits0000", config.credits_address.unwrap());
-        assert_eq!("untrn", config.neutron_denom);
 
         // Unauthorized err
         let env = mock_env();
@@ -665,7 +651,6 @@ mod tests {
             new_owner: None,
             new_credits_address: None,
             new_reserve_address: None,
-            new_neutron_denom: None,
         };
 
         let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -678,7 +663,6 @@ mod tests {
             new_owner: Some("owner0001".to_string()),
             new_credits_address: Some("credits0001".to_string()),
             new_reserve_address: Some("reserve0001".to_string()),
-            new_neutron_denom: None,
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -687,10 +671,9 @@ mod tests {
         // it worked, let's query the state
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0001", config.owner.to_string());
+        assert_eq!("owner0001", config.owner);
         assert_eq!("credits0001", config.credits_address.unwrap());
         assert_eq!("reserve0001", config.reserve_address.unwrap());
-        assert_eq!("untrn", config.neutron_denom);
 
         // update neutron denom
         let env = mock_env();
@@ -699,7 +682,6 @@ mod tests {
             new_owner: Some("owner0001".to_string()),
             new_credits_address: None,
             new_reserve_address: None,
-            new_neutron_denom: Some("ujunox".to_string()),
         };
 
         let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -708,10 +690,9 @@ mod tests {
         // it worked, let's query the state
         let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
         let config: ConfigResponse = from_binary(&res).unwrap();
-        assert_eq!("owner0001", config.owner.to_string());
+        assert_eq!("owner0001", config.owner);
         assert_eq!("credits0001", config.credits_address.unwrap());
         assert_eq!("reserve0001", config.reserve_address.unwrap());
-        assert_eq!("ujunox", config.neutron_denom);
     }
 
     #[test]
@@ -721,7 +702,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
@@ -782,7 +762,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: None,
             reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
@@ -818,7 +797,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
@@ -934,7 +912,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
@@ -1016,7 +993,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
@@ -1062,7 +1038,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: None,
-            neutron_denom: "untrn".to_string(),
         };
 
         let mut env = mock_env();
@@ -1135,7 +1110,6 @@ mod tests {
         let merkle_airdrop_instantiate_msg = InstantiateMsg {
             credits_address: Some(cw20_addr.to_string()),
             reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
         };
 
         let merkle_airdrop_addr = router
@@ -1297,7 +1271,6 @@ mod tests {
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
-            neutron_denom: "untrn".to_string(),
         };
 
         let env = mock_env();
@@ -1383,7 +1356,6 @@ mod tests {
             let msg = InstantiateMsg {
                 credits_address: Some("credits0000".to_string()),
                 reserve_address: Some("reserve0000".to_string()),
-                neutron_denom: "untrn".to_string(),
             };
 
             let env = mock_env();
@@ -1512,7 +1484,6 @@ mod tests {
             let msg = InstantiateMsg {
                 credits_address: Some("credits0000".to_string()),
                 reserve_address: Some("reserve0000".to_string()),
-                neutron_denom: "untrn".to_string(),
             };
 
             let env = mock_env();
@@ -1651,7 +1622,6 @@ mod tests {
             let merkle_airdrop_instantiate_msg = InstantiateMsg {
                 credits_address: Some(cw20_addr.to_string()),
                 reserve_address: Some("reserve0000".to_string()),
-                neutron_denom: "untrn".to_string(),
             };
 
             let merkle_airdrop_addr = router

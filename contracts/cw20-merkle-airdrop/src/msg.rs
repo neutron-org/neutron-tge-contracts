@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     pub credits_address: Option<String>,
     pub reserve_address: Option<String>,
-    pub neutron_denom: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -21,7 +20,6 @@ pub enum ExecuteMsg {
         new_owner: Option<String>,
         new_credits_address: Option<String>,
         new_reserve_address: Option<String>,
-        new_neutron_denom: Option<String>,
     },
     RegisterMerkleRoot {
         /// MerkleRoot is hex-encoded merkle root.
@@ -77,7 +75,6 @@ pub struct ConfigResponse {
     pub owner: String,
     pub credits_address: Option<String>,
     pub reserve_address: Option<String>,
-    pub neutron_denom: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

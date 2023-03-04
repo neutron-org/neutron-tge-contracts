@@ -10,7 +10,6 @@ pub struct Config {
     pub owner: Addr,
     pub credits_address: Option<Addr>,
     pub reserve_address: Option<Addr>,
-    pub neutron_denom: String,
 }
 
 pub const CONFIG_KEY: &str = "config";

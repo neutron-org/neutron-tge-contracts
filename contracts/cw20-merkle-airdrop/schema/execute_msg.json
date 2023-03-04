@@ -17,12 +17,6 @@
                 "null"
               ]
             },
-            "new_neutron_denom": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
             "new_owner": {
               "description": "NewOwner if non sent, contract gets locked. Recipients can receive airdrops but owner cannot register new stages.",
               "type": [
@@ -50,18 +44,12 @@
         "register_merkle_root": {
           "type": "object",
           "required": [
+            "expiration",
             "merkle_root"
           ],
           "properties": {
             "expiration": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Expiration"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "$ref": "#/definitions/Timestamp"
             },
             "hrp": {
               "type": [
@@ -175,7 +163,7 @@
             "new_expiration": {
               "anyOf": [
                 {
-                  "$ref": "#/definitions/Expiration"
+                  "$ref": "#/definitions/Timestamp"
                 },
                 {
                   "type": "null"
@@ -192,53 +180,6 @@
     "Binary": {
       "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>. See also <https://github.com/CosmWasm/cosmwasm/blob/main/docs/MESSAGE_TYPES.md>.",
       "type": "string"
-    },
-    "Expiration": {
-      "description": "Expiration represents a point in time when some event happens. It can compare with a BlockInfo and will return is_expired() == true once the condition is hit (and for every block in the future)",
-      "oneOf": [
-        {
-          "description": "AtHeight will expire when `env.block.height` >= height",
-          "type": "object",
-          "required": [
-            "at_height"
-          ],
-          "properties": {
-            "at_height": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "AtTime will expire when `env.block.time` >= time",
-          "type": "object",
-          "required": [
-            "at_time"
-          ],
-          "properties": {
-            "at_time": {
-              "$ref": "#/definitions/Timestamp"
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "Never will never expire. Used to express the empty variant",
-          "type": "object",
-          "required": [
-            "never"
-          ],
-          "properties": {
-            "never": {
-              "type": "object",
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
     },
     "Scheduled": {
       "description": "Scheduled represents a point in time when an event happens. It can compare with a BlockInfo and will return is_triggered() == true once the condition is hit (and for every block in the future)",
