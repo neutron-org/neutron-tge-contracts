@@ -15,8 +15,6 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     UpdateConfig {
-        /// NewOwner if non sent, contract gets locked. Recipients can receive airdrops
-        /// but owner cannot register new stages.
         new_owner: Option<String>,
         new_credits_address: Option<String>,
         new_reserve_address: Option<String>,
