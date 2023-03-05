@@ -1,5 +1,4 @@
 use cosmwasm_std::{StdError, Timestamp};
-use cw_utils::Scheduled;
 use hex::FromHexError;
 use thiserror::Error;
 
@@ -30,7 +29,7 @@ pub enum ContractError {
     Expired { expiration: Timestamp },
 
     #[error("Airdrop begins at {start}")]
-    NotBegun { start: Scheduled },
+    NotBegun { start: Timestamp },
 
     #[error("Airdrop is paused")]
     Paused {},

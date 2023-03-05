@@ -1,10 +1,9 @@
 use crate::ContractError;
 use cosmwasm_std::{from_slice, Binary, Timestamp, Uint128};
-use cw_utils::Scheduled;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateMsg {
     pub credits_address: Option<String>,
@@ -12,7 +11,7 @@ pub struct InstantiateMsg {
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
     pub expiration: Timestamp,
-    pub start: Option<Scheduled>,
+    pub start: Timestamp,
     pub total_amount: Option<Uint128>,
     // hrp is the bech32 parameter required for building external network address
     // from signature message during claim action. example "cosmos", "terra", "juno"
@@ -73,13 +72,13 @@ pub struct ConfigResponse {
     pub reserve_address: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MerkleRootResponse {
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
     pub expiration: Timestamp,
-    pub start: Option<Scheduled>,
+    pub start: Timestamp,
     pub total_amount: Uint128,
 }
 

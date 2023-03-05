@@ -7,7 +7,7 @@ use cosmwasm_std::{
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
-use cw_utils::Expiration;
+use cw_utils::{Expiration, Scheduled};
 use semver::Version;
 use sha2::Digest;
 use std::convert::TryInto;
@@ -76,9 +76,7 @@ pub fn instantiate(
     STAGE_EXPIRATION.save(deps.storage, &msg.expiration)?;
 
     // save start
-    if let Some(start) = msg.start {
-        START.save(deps.storage, &start)?;
-    }
+    START.save(deps.storage, &msg.start)?;
 
     // save hrp
     if let Some(hrp) = msg.hrp {
@@ -173,11 +171,9 @@ pub fn execute_claim(
     sig_info: Option<SignatureInfo>,
 ) -> Result<Response, ContractError> {
     // airdrop begun
-    let start = START.may_load(deps.storage)?;
-    if let Some(start) = start {
-        if !start.is_triggered(&env.block) {
-            return Err(ContractError::NotBegun { start });
-        }
+    let start = START.load(deps.storage)?;
+    if !Scheduled::AtTime(start).is_triggered(&env.block) {
+        return Err(ContractError::NotBegun { start });
     }
     // not expired
     let expiration = STAGE_EXPIRATION.load(deps.storage)?;
@@ -368,11 +364,9 @@ pub fn execute_pause(
         return Err(ContractError::Unauthorized {});
     }
 
-    let start = START.may_load(deps.storage)?;
-    if let Some(start) = start {
-        if !start.is_triggered(&env.block) {
-            return Err(ContractError::NotBegun { start });
-        }
+    let start = START.load(deps.storage)?;
+    if !Scheduled::AtTime(start).is_triggered(&env.block) {
+        return Err(ContractError::NotBegun { start });
     }
 
     let expiration = STAGE_EXPIRATION.load(deps.storage)?;
@@ -396,11 +390,9 @@ pub fn execute_resume(
         return Err(ContractError::Unauthorized {});
     }
 
-    let start = START.may_load(deps.storage)?;
-    if let Some(start) = start {
-        if !start.is_triggered(&env.block) {
-            return Err(ContractError::NotBegun { start });
-        }
+    let start = START.load(deps.storage)?;
+    if !Scheduled::AtTime(start).is_triggered(&env.block) {
+        return Err(ContractError::NotBegun { start });
     }
 
     let expiration = STAGE_EXPIRATION.load(deps.storage)?;
@@ -453,7 +445,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 pub fn query_merkle_root(deps: Deps) -> StdResult<MerkleRootResponse> {
     let merkle_root = MERKLE_ROOT.load(deps.storage)?;
     let expiration = STAGE_EXPIRATION.load(deps.storage)?;
-    let start = START.may_load(deps.storage)?;
+    let start = START.load(deps.storage)?;
     let total_amount = AMOUNT.load(deps.storage)?;
 
     let resp = MerkleRootResponse {

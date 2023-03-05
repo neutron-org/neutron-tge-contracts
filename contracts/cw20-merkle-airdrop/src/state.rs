@@ -1,6 +1,5 @@
 use cosmwasm_std::{Addr, Timestamp, Uint128};
 use cw_storage_plus::{Item, Map};
-use cw_utils::Scheduled;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +18,7 @@ pub const STAGE_EXPIRATION_KEY: &str = "stage_exp";
 pub const STAGE_EXPIRATION: Item<Timestamp> = Item::new(STAGE_EXPIRATION_KEY);
 
 pub const START_KEY: &str = "start";
-pub const START: Item<Scheduled> = Item::new(START_KEY);
+pub const START: Item<Timestamp> = Item::new(START_KEY);
 
 pub const AMOUNT_KEY: &str = "amount";
 pub const AMOUNT: Item<Uint128> = Item::new(AMOUNT_KEY);

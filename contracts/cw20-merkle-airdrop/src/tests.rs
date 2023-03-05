@@ -16,7 +16,6 @@ use cosmwasm_std::{
 use credits::msg::ExecuteMsg::AddVesting;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, MinterResponse};
 use cw_multi_test::{App, BankKeeper, Contract, ContractWrapper, Executor};
-use cw_utils::Scheduled;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -47,7 +46,7 @@ fn update_config() {
         reserve_address: Some(String::from("reserve0000")),
         merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
         expiration: env.block.time.plus_seconds(10_000),
-        start: None,
+        start: env.block.time.plus_seconds(5_000),
         total_amount: None,
         hrp: None,
     };
@@ -134,7 +133,7 @@ fn proper_instantiation() {
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
         expiration: env.block.time.plus_seconds(10_000),
-        start: None,
+        start: env.block.time.plus_seconds(5_000),
         total_amount: None,
         hrp: None,
     };
@@ -185,7 +184,7 @@ fn cant_claim_without_credits_address() {
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: test_data.root,
         expiration: env.block.time.plus_seconds(10_000),
-        start: None,
+        start: env.block.time.minus_seconds(10_000),
         total_amount: None,
         hrp: None,
     };
@@ -216,7 +215,7 @@ fn claim() {
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: test_data.root,
         expiration: env.block.time.plus_seconds(10_000),
-        start: None,
+        start: env.block.time.minus_seconds(10_000),
         total_amount: None,
         hrp: None,
     };
@@ -325,7 +324,7 @@ fn multiple_claim() {
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: test_data.root,
         expiration: env.block.time.plus_seconds(10_000),
-        start: None,
+        start: env.block.time.minus_seconds(10_000),
         total_amount: None,
         hrp: None,
     };
@@ -397,13 +396,14 @@ fn expiration() {
     let mut env = mock_env();
     let info = mock_info("owner0000", &[]);
     let expiration = env.block.time.plus_seconds(100);
+    let start = env.block.time.plus_seconds(50);
 
     let msg = InstantiateMsg {
         credits_address: Some("credits0000".to_string()),
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
         expiration,
-        start: None,
+        start,
         total_amount: None,
         hrp: None,
     };
@@ -434,7 +434,7 @@ fn cant_withdraw_all_without_reserve_address() {
         reserve_address: None,
         merkle_root: test_data.root,
         expiration: env.block.time.plus_seconds(100),
-        start: None,
+        start: env.block.time.plus_seconds(50),
         total_amount: Some(Uint128::new(10000)),
         hrp: None,
     };
@@ -501,7 +501,7 @@ fn withdraw_all() {
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: test_data.root,
         expiration: router.block_info().time.plus_seconds(10),
-        start: None,
+        start: router.block_info().time.plus_seconds(5),
         total_amount: Some(Uint128::new(10000)),
         hrp: None,
     };
@@ -647,13 +647,14 @@ fn withdraw_all() {
 fn starts() {
     let mut deps = mock_dependencies();
     let env = mock_env();
+    let start = env.block.time.plus_seconds(5_000);
 
     let msg = InstantiateMsg {
         credits_address: Some("credits0000".to_string()),
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
         expiration: env.block.time.plus_seconds(10_000),
-        start: Some(Scheduled::AtHeight(200_000)),
+        start,
         total_amount: None,
         hrp: None,
     };
@@ -669,12 +670,7 @@ fn starts() {
     };
 
     let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-    assert_eq!(
-        res,
-        ContractError::NotBegun {
-            start: Scheduled::AtHeight(200_000),
-        }
-    )
+    assert_eq!(res, ContractError::NotBegun { start })
 }
 
 mod external_sig {
@@ -728,7 +724,7 @@ mod external_sig {
             reserve_address: Some("reserve0000".to_string()),
             merkle_root: test_data.root,
             expiration: env.block.time.plus_seconds(10_000),
-            start: None,
+            start: env.block.time.minus_seconds(10_000),
             total_amount: None,
             hrp: Some(test_data.hrp.unwrap()),
         };
@@ -849,7 +845,7 @@ mod external_sig {
             reserve_address: Some("reserve0000".to_string()),
             merkle_root: test_data.root,
             expiration: env.block.time.plus_seconds(10_000),
-            start: None,
+            start: env.block.time.minus_seconds(10_000),
             total_amount: None,
             hrp: None,
         };
@@ -983,7 +979,7 @@ mod external_sig {
             reserve_address: Some("reserve0000".to_string()),
             merkle_root: test_data.root,
             expiration: router.block_info().time.plus_seconds(10_000),
-            start: None,
+            start: router.block_info().time.minus_seconds(10_000),
             total_amount: Some(Uint128::new(10000)),
             hrp: None,
         };
