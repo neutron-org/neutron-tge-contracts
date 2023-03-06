@@ -14,11 +14,14 @@ pub struct Config {
 pub const CONFIG_KEY: &str = "config";
 pub const CONFIG: Item<Config> = Item::new(CONFIG_KEY);
 
-pub const EXPIRATION_KEY: &str = "exp";
-pub const EXPIRATION: Item<Timestamp> = Item::new(EXPIRATION_KEY);
+pub const AIRDROP_START_KEY: &str = "airdrop_start";
+pub const AIRDROP_START: Item<Timestamp> = Item::new(AIRDROP_START_KEY);
 
-pub const START_KEY: &str = "start";
-pub const START: Item<Timestamp> = Item::new(START_KEY);
+pub const VESTING_START_KEY: &str = "vesting_start";
+pub const VESTING_START: Item<Timestamp> = Item::new(VESTING_START_KEY);
+
+pub const VESTING_DURATION_KEY: &str = "vesting_duration_key";
+pub const VESTING_DURATION: Item<Timestamp> = Item::new(VESTING_DURATION_KEY);
 
 pub const AMOUNT_KEY: &str = "amount";
 pub const AMOUNT: Item<Uint128> = Item::new(AMOUNT_KEY);

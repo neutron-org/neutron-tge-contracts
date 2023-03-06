@@ -1,5 +1,5 @@
 use crate::{
-    contract::{execute, instantiate, query, NEUTRON_DENOM, VESTING_DURATION_SECONDS},
+    contract::{execute, instantiate, query, NEUTRON_DENOM},
     error::ContractError,
     helpers::CosmosSignature,
     msg::{
@@ -40,13 +40,17 @@ pub fn contract_cw20() -> Box<dyn Contract<Empty>> {
 fn update_config() {
     let mut deps = mock_dependencies();
     let env = mock_env();
+    let airdrop_start = env.block.time.plus_seconds(5_000);
+    let vesting_start = env.block.time.plus_seconds(10_000);
+    let vesting_duration = Timestamp::from_seconds(20_000);
 
     let msg = InstantiateMsg {
         credits_address: Some(String::from("credits0000")),
         reserve_address: Some(String::from("reserve0000")),
         merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
-        expiration: env.block.time.plus_seconds(10_000),
-        start: env.block.time.plus_seconds(5_000),
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount: None,
         hrp: None,
     };
@@ -102,38 +106,23 @@ fn update_config() {
     assert_eq!("owner0001", config.owner);
     assert_eq!("credits0001", config.credits_address.unwrap());
     assert_eq!("reserve0001", config.reserve_address.unwrap());
-
-    // update neutron denom
-    let env = mock_env();
-    let info = mock_info("owner0001", &[]);
-    let msg = ExecuteMsg::UpdateConfig {
-        new_owner: Some("owner0001".to_string()),
-        new_credits_address: None,
-        new_reserve_address: None,
-    };
-
-    let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
-    assert_eq!(0, res.messages.len());
-
-    // it worked, let's query the state
-    let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
-    let config: ConfigResponse = from_binary(&res).unwrap();
-    assert_eq!("owner0001", config.owner);
-    assert_eq!("credits0001", config.credits_address.unwrap());
-    assert_eq!("reserve0001", config.reserve_address.unwrap());
 }
 
 #[test]
 fn proper_instantiation() {
     let mut deps = mock_dependencies();
     let env = mock_env();
+    let airdrop_start = env.block.time.plus_seconds(5_000);
+    let vesting_start = env.block.time.plus_seconds(10_000);
+    let vesting_duration = Timestamp::from_seconds(20_000);
 
     let msg = InstantiateMsg {
         credits_address: Some("credits0000".to_string()),
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
-        expiration: env.block.time.plus_seconds(10_000),
-        start: env.block.time.plus_seconds(5_000),
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount: None,
         hrp: None,
     };
@@ -155,8 +144,15 @@ fn proper_instantiation() {
     let res = query(deps.as_ref(), env, QueryMsg::MerkleRoot {}).unwrap();
     let merkle_root: MerkleRootResponse = from_binary(&res).unwrap();
     assert_eq!(
-        "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
-        merkle_root.merkle_root
+        merkle_root,
+        MerkleRootResponse {
+            merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37"
+                .to_string(),
+            airdrop_start,
+            vesting_start,
+            vesting_duration,
+            total_amount: Uint128::zero(),
+        }
     );
 }
 
@@ -177,14 +173,18 @@ struct Encoded {
 fn cant_claim_without_credits_address() {
     let mut deps = mock_dependencies();
     let env = mock_env();
+    let airdrop_start = env.block.time.minus_seconds(5_000);
+    let vesting_start = env.block.time.plus_seconds(10_000);
+    let vesting_duration = Timestamp::from_seconds(20_000);
     let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
     let msg = InstantiateMsg {
         credits_address: None,
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: test_data.root,
-        expiration: env.block.time.plus_seconds(10_000),
-        start: env.block.time.minus_seconds(10_000),
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount: None,
         hrp: None,
     };
@@ -208,14 +208,18 @@ fn cant_claim_without_credits_address() {
 fn claim() {
     let mut deps = mock_dependencies();
     let env = mock_env();
+    let airdrop_start = env.block.time.minus_seconds(5_000);
+    let vesting_start = env.block.time.plus_seconds(10_000);
+    let vesting_duration = Timestamp::from_seconds(20_000);
     let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
     let msg = InstantiateMsg {
         credits_address: Some("credits0000".to_string()),
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: test_data.root,
-        expiration: env.block.time.plus_seconds(10_000),
-        start: env.block.time.minus_seconds(10_000),
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount: None,
         hrp: None,
     };
@@ -247,8 +251,8 @@ fn claim() {
             msg: to_binary(&AddVesting {
                 address: test_data.account.clone(),
                 amount: test_data.amount,
-                start_time: env.block.time.plus_seconds(10_000).seconds(),
-                duration: VESTING_DURATION_SECONDS,
+                start_time: vesting_start.seconds(),
+                duration: vesting_duration.seconds(),
             })
             .unwrap(),
             funds: vec![],
@@ -317,14 +321,18 @@ struct MultipleData {
 fn multiple_claim() {
     let mut deps = mock_dependencies();
     let env = mock_env();
+    let airdrop_start = env.block.time.minus_seconds(5_000);
+    let vesting_start = env.block.time.plus_seconds(10_000);
+    let vesting_duration = Timestamp::from_seconds(20_000);
     let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
 
     let msg = InstantiateMsg {
         credits_address: Some("credits0000".to_string()),
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: test_data.root,
-        expiration: env.block.time.plus_seconds(10_000),
-        start: env.block.time.minus_seconds(10_000),
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount: None,
         hrp: None,
     };
@@ -358,8 +366,8 @@ fn multiple_claim() {
                 msg: to_binary(&AddVesting {
                     address: account.account.clone(),
                     amount: account.amount,
-                    start_time: env.block.time.plus_seconds(10_000).seconds(),
-                    duration: VESTING_DURATION_SECONDS,
+                    start_time: vesting_start.seconds(),
+                    duration: vesting_duration.seconds(),
                 })
                 .unwrap(),
                 funds: vec![],
@@ -394,23 +402,25 @@ fn multiple_claim() {
 fn expiration() {
     let mut deps = mock_dependencies();
     let mut env = mock_env();
+    let airdrop_start = env.block.time.minus_seconds(5_000);
+    let vesting_start = env.block.time.plus_seconds(10_000);
+    let vesting_duration = Timestamp::from_seconds(20_000);
     let info = mock_info("owner0000", &[]);
-    let expiration = env.block.time.plus_seconds(100);
-    let start = env.block.time.plus_seconds(50);
 
     let msg = InstantiateMsg {
         credits_address: Some("credits0000".to_string()),
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
-        expiration,
-        start,
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount: None,
         hrp: None,
     };
     let _res = instantiate(deps.as_mut(), env.clone(), info.clone(), msg).unwrap();
 
     // make expired
-    env.block.time = env.block.time.plus_seconds(200);
+    env.block.time = env.block.time.plus_seconds(40_000);
 
     // can't claim expired
     let msg = ExecuteMsg::Claim {
@@ -420,21 +430,30 @@ fn expiration() {
     };
 
     let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-    assert_eq!(res, ContractError::Expired { expiration })
+    assert_eq!(
+        res,
+        ContractError::Expired {
+            expiration: vesting_start.plus_nanos(vesting_duration.nanos())
+        }
+    )
 }
 
 #[test]
 fn cant_withdraw_all_without_reserve_address() {
     let mut deps = mock_dependencies();
     let mut env = mock_env();
+    let airdrop_start = env.block.time.minus_seconds(5_000);
+    let vesting_start = env.block.time.plus_seconds(10_000);
+    let vesting_duration = Timestamp::from_seconds(20_000);
     let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
     let msg = InstantiateMsg {
         credits_address: Some("credits0000".to_string()),
         reserve_address: None,
         merkle_root: test_data.root,
-        expiration: env.block.time.plus_seconds(100),
-        start: env.block.time.plus_seconds(50),
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount: Some(Uint128::new(10000)),
         hrp: None,
     };
@@ -443,7 +462,9 @@ fn cant_withdraw_all_without_reserve_address() {
     let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
 
     // makes withdraw_all available
-    env.block.time = env.block.time.plus_seconds(VESTING_DURATION_SECONDS + 101);
+    env.block.time = vesting_start
+        .plus_nanos(vesting_duration.nanos())
+        .plus_seconds(10);
 
     let info = mock_info("owner0000", &[]);
     let res = execute(deps.as_mut(), env, info, ExecuteMsg::WithdrawAll {}).unwrap_err();
@@ -500,8 +521,9 @@ fn withdraw_all() {
         credits_address: Some(cw20_addr.to_string()),
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: test_data.root,
-        expiration: router.block_info().time.plus_seconds(10),
-        start: router.block_info().time.plus_seconds(5),
+        airdrop_start: router.block_info().time.plus_seconds(5),
+        vesting_start: router.block_info().time.plus_seconds(10),
+        vesting_duration: Timestamp::from_seconds(10),
         total_amount: Some(Uint128::new(10000)),
         hrp: None,
     };
@@ -560,18 +582,14 @@ fn withdraw_all() {
     assert_eq!(
         err,
         ContractError::WithdrawAllUnavailable {
-            available_at: router
-                .block_info()
-                .time
-                .plus_seconds(10)
-                .plus_seconds(VESTING_DURATION_SECONDS)
+            available_at: router.block_info().time.plus_seconds(20)
         }
     );
 
     //update block height
     let block_info = BlockInfo {
         height: 12501,
-        time: Timestamp::from_seconds(12501).plus_seconds(VESTING_DURATION_SECONDS),
+        time: Timestamp::from_seconds(12501),
         chain_id: "testing".to_string(),
     };
     router.set_block(block_info);
@@ -651,14 +669,17 @@ fn withdraw_all() {
 fn starts() {
     let mut deps = mock_dependencies();
     let env = mock_env();
-    let start = env.block.time.plus_seconds(5_000);
+    let airdrop_start = env.block.time.plus_seconds(5_000);
+    let vesting_start = env.block.time.plus_seconds(10_000);
+    let vesting_duration = Timestamp::from_seconds(20_000);
 
     let msg = InstantiateMsg {
         credits_address: Some("credits0000".to_string()),
         reserve_address: Some("reserve0000".to_string()),
         merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
-        expiration: env.block.time.plus_seconds(10_000),
-        start,
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount: None,
         hrp: None,
     };
@@ -674,7 +695,12 @@ fn starts() {
     };
 
     let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-    assert_eq!(res, ContractError::NotBegun { start })
+    assert_eq!(
+        res,
+        ContractError::NotBegun {
+            start: airdrop_start
+        }
+    )
 }
 
 mod external_sig {
@@ -715,6 +741,9 @@ mod external_sig {
     fn claim_with_external_sigs() {
         let mut deps = mock_dependencies();
         let env = mock_env();
+        let airdrop_start = env.block.time.minus_seconds(5_000);
+        let vesting_start = env.block.time.plus_seconds(10_000);
+        let vesting_duration = Timestamp::from_seconds(20_000);
         let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
         let claim_addr = test_data
             .signed_msg
@@ -727,8 +756,9 @@ mod external_sig {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
             merkle_root: test_data.root,
-            expiration: env.block.time.plus_seconds(10_000),
-            start: env.block.time.minus_seconds(10_000),
+            airdrop_start,
+            vesting_start,
+            vesting_duration,
             total_amount: None,
             hrp: Some(test_data.hrp.unwrap()),
         };
@@ -773,8 +803,8 @@ mod external_sig {
                 msg: to_binary(&AddVesting {
                     address: claim_addr.clone(),
                     amount: test_data.amount,
-                    start_time: env.block.time.plus_seconds(10_000).seconds(),
-                    duration: VESTING_DURATION_SECONDS,
+                    start_time: vesting_start.seconds(),
+                    duration: vesting_duration.seconds(),
                 })
                 .unwrap(),
                 funds: vec![],
@@ -842,14 +872,18 @@ mod external_sig {
     fn claim_paused_airdrop() {
         let mut deps = mock_dependencies();
         let env = mock_env();
+        let airdrop_start = env.block.time.minus_seconds(5_000);
+        let vesting_start = env.block.time.plus_seconds(10_000);
+        let vesting_duration = Timestamp::from_seconds(20_000);
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
             credits_address: Some("credits0000".to_string()),
             reserve_address: Some("reserve0000".to_string()),
             merkle_root: test_data.root,
-            expiration: env.block.time.plus_seconds(10_000),
-            start: env.block.time.minus_seconds(10_000),
+            airdrop_start,
+            vesting_start,
+            vesting_duration,
             total_amount: None,
             hrp: None,
         };
@@ -875,13 +909,11 @@ mod external_sig {
 
         let env = mock_env();
         let info = mock_info(test_data.account.as_str(), &[]);
-        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap_err();
+        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
 
         assert_eq!(res, ContractError::Paused {});
 
-        let resume_msg = ExecuteMsg::Resume {
-            new_expiration: Some(env.block.time.plus_seconds(5_000)),
-        };
+        let resume_msg = ExecuteMsg::Resume {};
         let env = mock_env();
         let info = mock_info("owner0000", &[]);
         let result = execute(deps.as_mut(), env, info, resume_msg).unwrap();
@@ -897,7 +929,7 @@ mod external_sig {
         };
         let env = mock_env();
         let info = mock_info(test_data.account.as_str(), &[]);
-        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
+        let res = execute(deps.as_mut(), env, info, msg).unwrap();
         let expected = vec![
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: "credits0000".to_string(),
@@ -913,8 +945,8 @@ mod external_sig {
                 msg: to_binary(&AddVesting {
                     address: test_data.account.clone(),
                     amount: test_data.amount,
-                    start_time: env.block.time.plus_seconds(5_000).seconds(),
-                    duration: VESTING_DURATION_SECONDS,
+                    start_time: vesting_start.seconds(),
+                    duration: vesting_duration.seconds(),
                 })
                 .unwrap(),
                 funds: vec![],
@@ -982,8 +1014,9 @@ mod external_sig {
             credits_address: Some(cw20_addr.to_string()),
             reserve_address: Some("reserve0000".to_string()),
             merkle_root: test_data.root,
-            expiration: router.block_info().time.plus_seconds(10_000),
-            start: router.block_info().time.minus_seconds(10_000),
+            airdrop_start: router.block_info().time.minus_seconds(5_000),
+            vesting_start: router.block_info().time.plus_seconds(10_000),
+            vesting_duration: Timestamp::from_seconds(20_000),
             total_amount: Some(Uint128::new(10000)),
             hrp: None,
         };

@@ -3,19 +3,20 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
-    "expiration",
+    "airdrop_start",
     "merkle_root",
-    "start"
+    "vesting_duration",
+    "vesting_start"
   ],
   "properties": {
+    "airdrop_start": {
+      "$ref": "#/definitions/Timestamp"
+    },
     "credits_address": {
       "type": [
         "string",
         "null"
       ]
-    },
-    "expiration": {
-      "$ref": "#/definitions/Timestamp"
     },
     "hrp": {
       "type": [
@@ -33,9 +34,6 @@
         "null"
       ]
     },
-    "start": {
-      "$ref": "#/definitions/Timestamp"
-    },
     "total_amount": {
       "anyOf": [
         {
@@ -45,6 +43,12 @@
           "type": "null"
         }
       ]
+    },
+    "vesting_duration": {
+      "$ref": "#/definitions/Timestamp"
+    },
+    "vesting_start": {
+      "$ref": "#/definitions/Timestamp"
     }
   },
   "definitions": {

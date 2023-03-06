@@ -3,7 +3,7 @@ use crate::enumerable::query_all_address_map;
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, coin, from_binary, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, Response, StdResult, Timestamp, Uint128, WasmMsg,
+    MessageInfo, Response, StdResult, Uint128, WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
@@ -21,20 +21,14 @@ use crate::msg::{
     TotalClaimedResponse,
 };
 use crate::state::{
-    Config, ACCOUNT_MAP, AMOUNT, AMOUNT_CLAIMED, CLAIM, CONFIG, EXPIRATION, HRP, MERKLE_ROOT,
-    PAUSED, START,
+    Config, ACCOUNT_MAP, AIRDROP_START, AMOUNT, AMOUNT_CLAIMED, CLAIM, CONFIG, HRP, MERKLE_ROOT,
+    PAUSED, VESTING_DURATION, VESTING_START,
 };
 use credits::msg::ExecuteMsg::AddVesting;
 
 // Version info, for migration info
 const CONTRACT_NAME: &str = "crates.io:cw20-merkle-airdrop";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-// Vesting duration is 90 days
-pub const VESTING_DURATION_SECONDS: u64 = 60 // seconds in minute
-    * 60 // minutes in hour
-    * 24 // hours in day
-    * 90; // days
 pub const NEUTRON_DENOM: &str = "untrn";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -72,11 +66,16 @@ pub fn instantiate(
 
     MERKLE_ROOT.save(deps.storage, &msg.merkle_root)?;
 
-    // save expiration
-    EXPIRATION.save(deps.storage, &msg.expiration)?;
+    if msg.vesting_start < msg.airdrop_start {
+        return Err(ContractError::VestingBeforeAirdrop {
+            airdrop_start: msg.airdrop_start,
+            vesting_start: msg.vesting_duration,
+        });
+    }
 
-    // save start
-    START.save(deps.storage, &msg.start)?;
+    AIRDROP_START.save(deps.storage, &msg.airdrop_start)?;
+    VESTING_START.save(deps.storage, &msg.vesting_start)?;
+    VESTING_DURATION.save(deps.storage, &msg.vesting_duration)?;
 
     // save hrp
     if let Some(hrp) = msg.hrp {
@@ -122,7 +121,7 @@ pub fn execute(
         } => execute_claim(deps, env, info, amount, proof, sig_info),
         ExecuteMsg::WithdrawAll {} => execute_withdraw_all(deps, env, info),
         ExecuteMsg::Pause {} => execute_pause(deps, env, info),
-        ExecuteMsg::Resume { new_expiration } => execute_resume(deps, env, info, new_expiration),
+        ExecuteMsg::Resume {} => execute_resume(deps, env, info),
     }
 }
 
@@ -171,12 +170,14 @@ pub fn execute_claim(
     sig_info: Option<SignatureInfo>,
 ) -> Result<Response, ContractError> {
     // airdrop begun
-    let start = START.load(deps.storage)?;
+    let start = AIRDROP_START.load(deps.storage)?;
     if !Scheduled::AtTime(start).is_triggered(&env.block) {
         return Err(ContractError::NotBegun { start });
     }
     // not expired
-    let expiration = EXPIRATION.load(deps.storage)?;
+    let vesting_start = VESTING_START.load(deps.storage)?;
+    let vesting_duration = VESTING_DURATION.load(deps.storage)?;
+    let expiration = vesting_start.plus_nanos(vesting_duration.nanos());
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -255,10 +256,6 @@ pub fn execute_claim(
     claimed_amount += amount;
     AMOUNT_CLAIMED.save(deps.storage, &claimed_amount)?;
 
-    // we stop all airdrops at the date of expiration, and we use the very same date
-    // as a start timestamp for vesting.
-    let vesting_start_time = expiration;
-
     let transfer_message = Cw20Contract(credits_address.clone())
         .call(Cw20ExecuteMsg::Transfer {
             recipient: info.sender.to_string(),
@@ -270,8 +267,8 @@ pub fn execute_claim(
         msg: to_binary(&AddVesting {
             address: info.sender.to_string(),
             amount,
-            start_time: vesting_start_time.seconds(),
-            duration: VESTING_DURATION_SECONDS,
+            start_time: vesting_start.seconds(),
+            duration: vesting_duration.seconds(),
         })?,
         funds: vec![],
     };
@@ -298,10 +295,13 @@ pub fn execute_withdraw_all(
     }
 
     if !PAUSED.load(deps.storage)? {
-        let expiration = EXPIRATION.load(deps.storage)?;
-        let available_at = expiration.plus_seconds(VESTING_DURATION_SECONDS);
-        if env.block.time <= available_at {
-            return Err(ContractError::WithdrawAllUnavailable { available_at });
+        let vesting_start = VESTING_START.load(deps.storage)?;
+        let vesting_duration = VESTING_DURATION.load(deps.storage)?;
+        let expiration = vesting_start.plus_nanos(vesting_duration.nanos());
+        if env.block.time <= expiration {
+            return Err(ContractError::WithdrawAllUnavailable {
+                available_at: expiration,
+            });
         }
     }
 
@@ -361,12 +361,14 @@ pub fn execute_pause(
         return Err(ContractError::Unauthorized {});
     }
 
-    let start = START.load(deps.storage)?;
+    let start = AIRDROP_START.load(deps.storage)?;
     if !Scheduled::AtTime(start).is_triggered(&env.block) {
         return Err(ContractError::NotBegun { start });
     }
 
-    let expiration = EXPIRATION.load(deps.storage)?;
+    let vesting_start = VESTING_START.load(deps.storage)?;
+    let vesting_duration = VESTING_DURATION.load(deps.storage)?;
+    let expiration = vesting_start.plus_nanos(vesting_duration.nanos());
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -379,7 +381,6 @@ pub fn execute_resume(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    new_expiration: Option<Timestamp>,
 ) -> Result<Response, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
@@ -387,12 +388,14 @@ pub fn execute_resume(
         return Err(ContractError::Unauthorized {});
     }
 
-    let start = START.load(deps.storage)?;
+    let start = AIRDROP_START.load(deps.storage)?;
     if !Scheduled::AtTime(start).is_triggered(&env.block) {
         return Err(ContractError::NotBegun { start });
     }
 
-    let expiration = EXPIRATION.load(deps.storage)?;
+    let vesting_start = VESTING_START.load(deps.storage)?;
+    let vesting_duration = VESTING_DURATION.load(deps.storage)?;
+    let expiration = vesting_start.plus_nanos(vesting_duration.nanos());
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -400,13 +403,6 @@ pub fn execute_resume(
     let is_paused = PAUSED.load(deps.storage)?;
     if !is_paused {
         return Err(ContractError::NotPaused {});
-    }
-
-    if let Some(new_expiration) = new_expiration {
-        if Expiration::AtTime(new_expiration).is_expired(&env.block) {
-            return Err(ContractError::Expired { expiration });
-        }
-        EXPIRATION.save(deps.storage, &new_expiration)?;
     }
 
     PAUSED.save(deps.storage, &false)?;
@@ -441,18 +437,18 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 
 pub fn query_merkle_root(deps: Deps) -> StdResult<MerkleRootResponse> {
     let merkle_root = MERKLE_ROOT.load(deps.storage)?;
-    let expiration = EXPIRATION.load(deps.storage)?;
-    let start = START.load(deps.storage)?;
+    let airdrop_start = AIRDROP_START.load(deps.storage)?;
+    let vesting_start = VESTING_START.load(deps.storage)?;
+    let vesting_duration = VESTING_DURATION.load(deps.storage)?;
     let total_amount = AMOUNT.load(deps.storage)?;
 
-    let resp = MerkleRootResponse {
+    Ok(MerkleRootResponse {
         merkle_root,
-        expiration,
-        start,
+        airdrop_start,
+        vesting_start,
+        vesting_duration,
         total_amount,
-    };
-
-    Ok(resp)
+    })
 }
 
 pub fn query_is_claimed(deps: Deps, address: String) -> StdResult<IsClaimedResponse> {

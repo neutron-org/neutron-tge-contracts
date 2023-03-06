@@ -48,6 +48,12 @@ pub enum ContractError {
 
     #[error("Reserve contract address is not set")]
     ReserveAddress {},
+
+    #[error("Vesting (at {vesting_start}) cannot start before airdrop (at {airdrop_start})")]
+    VestingBeforeAirdrop {
+        airdrop_start: Timestamp,
+        vesting_start: Timestamp,
+    },
 }
 
 impl From<semver::Error> for ContractError {

@@ -10,8 +10,9 @@ pub struct InstantiateMsg {
     pub reserve_address: Option<String>,
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
-    pub expiration: Timestamp,
-    pub start: Timestamp,
+    pub airdrop_start: Timestamp,
+    pub vesting_start: Timestamp,
+    pub vesting_duration: Timestamp,
     pub total_amount: Option<Uint128>,
     // hrp is the bech32 parameter required for building external network address
     // from signature message during claim action. example "cosmos", "terra", "juno"
@@ -39,9 +40,7 @@ pub enum ExecuteMsg {
     /// Withdraw all remaining tokens that the contract owns (only owner)
     WithdrawAll {},
     Pause {},
-    Resume {
-        new_expiration: Option<Timestamp>,
-    },
+    Resume {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -77,8 +76,9 @@ pub struct ConfigResponse {
 pub struct MerkleRootResponse {
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
-    pub expiration: Timestamp,
-    pub start: Timestamp,
+    pub airdrop_start: Timestamp,
+    pub vesting_start: Timestamp,
+    pub vesting_duration: Timestamp,
     pub total_amount: Uint128,
 }
 
