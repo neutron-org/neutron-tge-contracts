@@ -4,7 +4,9 @@
   "type": "object",
   "required": [
     "airdrop_start",
+    "credits_address",
     "merkle_root",
+    "reserve_address",
     "vesting_duration",
     "vesting_start"
   ],
@@ -13,10 +15,7 @@
       "$ref": "#/definitions/Timestamp"
     },
     "credits_address": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": "string"
     },
     "hrp": {
       "type": [
@@ -29,10 +28,7 @@
       "type": "string"
     },
     "reserve_address": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": "string"
     },
     "total_amount": {
       "anyOf": [

@@ -42,21 +42,12 @@ pub fn instantiate(
 
     PAUSED.save(deps.storage, &false)?;
 
-    let credits_address = match msg.credits_address {
-        Some(addr) => Some(deps.api.addr_validate(&addr)?),
-        None => None,
-    };
-    let reserve_address = match msg.reserve_address {
-        Some(addr) => Some(deps.api.addr_validate(&addr)?),
-        None => None,
-    };
-
     CONFIG.save(
         deps.storage,
         &Config {
             owner: info.sender,
-            credits_address,
-            reserve_address,
+            credits_address: deps.api.addr_validate(&msg.credits_address)?,
+            reserve_address: deps.api.addr_validate(&msg.reserve_address)?,
         },
     )?;
 
@@ -102,18 +93,6 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::UpdateConfig {
-            new_owner,
-            new_credits_address,
-            new_reserve_address,
-        } => execute_update_config(
-            deps,
-            env,
-            info,
-            new_owner,
-            new_credits_address,
-            new_reserve_address,
-        ),
         ExecuteMsg::Claim {
             amount,
             proof,
@@ -123,42 +102,6 @@ pub fn execute(
         ExecuteMsg::Pause {} => execute_pause(deps, env, info),
         ExecuteMsg::Resume {} => execute_resume(deps, env, info),
     }
-}
-
-pub fn execute_update_config(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    new_owner: Option<String>,
-    credits_address: Option<String>,
-    reserve_address: Option<String>,
-) -> Result<Response, ContractError> {
-    // authorize owner
-    let cfg = CONFIG.load(deps.storage)?;
-    if info.sender != cfg.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
-    let owner = new_owner.map_or(Ok(cfg.owner), |addr| deps.api.addr_validate(&addr))?;
-    let credits_address = match credits_address {
-        Some(addr) => Some(deps.api.addr_validate(&addr)?),
-        None => cfg.credits_address,
-    };
-    let reserve_address = match reserve_address {
-        Some(addr) => Some(deps.api.addr_validate(&addr)?),
-        None => cfg.reserve_address,
-    };
-
-    CONFIG.save(
-        deps.storage,
-        &Config {
-            owner,
-            credits_address,
-            reserve_address,
-        },
-    )?;
-
-    Ok(Response::new().add_attribute("action", "update_config"))
 }
 
 pub fn execute_claim(
@@ -243,11 +186,6 @@ pub fn execute_claim(
         return Err(ContractError::VerificationFailed {});
     }
 
-    let credits_address = match config.credits_address {
-        Some(addr) => addr,
-        None => return Err(ContractError::CreditsAddress {}),
-    };
-
     // Update claim index
     CLAIM.save(deps.storage, proof_addr, &true)?;
 
@@ -256,14 +194,14 @@ pub fn execute_claim(
     claimed_amount += amount;
     AMOUNT_CLAIMED.save(deps.storage, &claimed_amount)?;
 
-    let transfer_message = Cw20Contract(credits_address.clone())
+    let transfer_message = Cw20Contract(config.credits_address.clone())
         .call(Cw20ExecuteMsg::Transfer {
             recipient: info.sender.to_string(),
             amount,
         })
         .map_err(ContractError::Std)?;
     let vesting_message = WasmMsg::Execute {
-        contract_addr: credits_address.to_string(),
+        contract_addr: config.credits_address.to_string(),
         msg: to_binary(&AddVesting {
             address: info.sender.to_string(),
             amount,
@@ -305,22 +243,12 @@ pub fn execute_withdraw_all(
         }
     }
 
-    let reserve_address = match cfg.reserve_address {
-        Some(addr) => addr,
-        None => return Err(ContractError::ReserveAddress {}),
-    };
-
-    let credits_address = match cfg.credits_address {
-        Some(addr) => addr,
-        None => return Err(ContractError::CreditsAddress {}),
-    };
-
     // Get the current total balance for the contract and burn it all.
     // By burning, we exchange them for NTRN tokens
     let amount_to_withdraw = deps
         .querier
         .query_wasm_smart::<BalanceResponse>(
-            credits_address.to_string(),
+            cfg.credits_address.to_string(),
             &Cw20QueryMsg::Balance {
                 address: env.contract.address.to_string(),
             },
@@ -329,14 +257,14 @@ pub fn execute_withdraw_all(
 
     // Generate burn submessage and return a response
     let burn_message = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: credits_address.to_string(),
+        contract_addr: cfg.credits_address.to_string(),
         msg: to_binary(&Cw20ExecuteMsg::Burn {
             amount: amount_to_withdraw,
         })?,
         funds: vec![],
     });
     let send_message = CosmosMsg::Bank(BankMsg::Send {
-        to_address: reserve_address.to_string(),
+        to_address: cfg.reserve_address.to_string(),
         amount: vec![coin(amount_to_withdraw.u128(), NEUTRON_DENOM)],
     });
     let res = Response::new()
@@ -345,7 +273,7 @@ pub fn execute_withdraw_all(
             attr("action", "withdraw_all"),
             attr("address", info.sender),
             attr("amount", amount_to_withdraw),
-            attr("recipient", reserve_address),
+            attr("recipient", cfg.reserve_address),
         ]);
     Ok(res)
 }
@@ -430,8 +358,8 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     let cfg = CONFIG.load(deps.storage)?;
     Ok(ConfigResponse {
         owner: cfg.owner.to_string(),
-        credits_address: cfg.credits_address.map(|addr| addr.to_string()),
-        reserve_address: cfg.reserve_address.map(|addr| addr.to_string()),
+        credits_address: cfg.credits_address.to_string(),
+        reserve_address: cfg.reserve_address.to_string(),
     })
 }
 

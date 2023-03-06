@@ -37,78 +37,6 @@ pub fn contract_cw20() -> Box<dyn Contract<Empty>> {
 }
 
 #[test]
-fn update_config() {
-    let mut deps = mock_dependencies();
-    let env = mock_env();
-    let airdrop_start = env.block.time.plus_seconds(5_000);
-    let vesting_start = env.block.time.plus_seconds(10_000);
-    let vesting_duration = Timestamp::from_seconds(20_000);
-
-    let msg = InstantiateMsg {
-        credits_address: Some(String::from("credits0000")),
-        reserve_address: Some(String::from("reserve0000")),
-        merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
-        airdrop_start,
-        vesting_start,
-        vesting_duration,
-        total_amount: None,
-        hrp: None,
-    };
-
-    let info = mock_info("owner0000", &[]);
-    let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-    // update owner
-    let env = mock_env();
-    let info = mock_info("owner0000", &[]);
-    let msg = ExecuteMsg::UpdateConfig {
-        new_owner: Some("owner0001".to_string()),
-        new_credits_address: None,
-        new_reserve_address: None,
-    };
-
-    let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
-    assert_eq!(0, res.messages.len());
-
-    // it worked, let's query the state
-    let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
-    let config: ConfigResponse = from_binary(&res).unwrap();
-    assert_eq!("owner0001", config.owner);
-    assert_eq!("credits0000", config.credits_address.unwrap());
-
-    // Unauthorized err
-    let env = mock_env();
-    let info = mock_info("owner0000", &[]);
-    let msg = ExecuteMsg::UpdateConfig {
-        new_owner: None,
-        new_credits_address: None,
-        new_reserve_address: None,
-    };
-
-    let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-    assert_eq!(res, ContractError::Unauthorized {});
-
-    // update credits and reserve addresses
-    let env = mock_env();
-    let info = mock_info("owner0001", &[]);
-    let msg = ExecuteMsg::UpdateConfig {
-        new_owner: Some("owner0001".to_string()),
-        new_credits_address: Some("credits0001".to_string()),
-        new_reserve_address: Some("reserve0001".to_string()),
-    };
-
-    let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
-    assert_eq!(0, res.messages.len());
-
-    // it worked, let's query the state
-    let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
-    let config: ConfigResponse = from_binary(&res).unwrap();
-    assert_eq!("owner0001", config.owner);
-    assert_eq!("credits0001", config.credits_address.unwrap());
-    assert_eq!("reserve0001", config.reserve_address.unwrap());
-}
-
-#[test]
 fn proper_instantiation() {
     let mut deps = mock_dependencies();
     let env = mock_env();
@@ -117,8 +45,8 @@ fn proper_instantiation() {
     let vesting_duration = Timestamp::from_seconds(20_000);
 
     let msg = InstantiateMsg {
-        credits_address: Some("credits0000".to_string()),
-        reserve_address: Some("reserve0000".to_string()),
+        credits_address: "credits0000".to_string(),
+        reserve_address: "reserve0000".to_string(),
         merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
         airdrop_start,
         vesting_start,
@@ -141,7 +69,7 @@ fn proper_instantiation() {
         ]
     );
 
-    let res = query(deps.as_ref(), env, QueryMsg::MerkleRoot {}).unwrap();
+    let res = query(deps.as_ref(), env.clone(), QueryMsg::MerkleRoot {}).unwrap();
     let merkle_root: MerkleRootResponse = from_binary(&res).unwrap();
     assert_eq!(
         merkle_root,
@@ -152,6 +80,17 @@ fn proper_instantiation() {
             vesting_start,
             vesting_duration,
             total_amount: Uint128::zero(),
+        }
+    );
+
+    let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
+    let config: ConfigResponse = from_binary(&res).unwrap();
+    assert_eq!(
+        config,
+        ConfigResponse {
+            owner: "owner0000".to_string(),
+            credits_address: "credits0000".to_string(),
+            reserve_address: "reserve0000".to_string(),
         }
     );
 }
@@ -170,41 +109,6 @@ struct Encoded {
 }
 
 #[test]
-fn cant_claim_without_credits_address() {
-    let mut deps = mock_dependencies();
-    let env = mock_env();
-    let airdrop_start = env.block.time.minus_seconds(5_000);
-    let vesting_start = env.block.time.plus_seconds(10_000);
-    let vesting_duration = Timestamp::from_seconds(20_000);
-    let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
-
-    let msg = InstantiateMsg {
-        credits_address: None,
-        reserve_address: Some("reserve0000".to_string()),
-        merkle_root: test_data.root,
-        airdrop_start,
-        vesting_start,
-        vesting_duration,
-        total_amount: None,
-        hrp: None,
-    };
-
-    let info = mock_info("owner0000", &[]);
-    let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-    let msg = ExecuteMsg::Claim {
-        amount: test_data.amount,
-        proof: test_data.proofs,
-        sig_info: None,
-    };
-
-    let env = mock_env();
-    let info = mock_info(test_data.account.as_str(), &[]);
-    let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-    assert_eq!(res, ContractError::CreditsAddress {});
-}
-
-#[test]
 fn claim() {
     let mut deps = mock_dependencies();
     let env = mock_env();
@@ -214,8 +118,8 @@ fn claim() {
     let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
     let msg = InstantiateMsg {
-        credits_address: Some("credits0000".to_string()),
-        reserve_address: Some("reserve0000".to_string()),
+        credits_address: "credits0000".to_string(),
+        reserve_address: "reserve0000".to_string(),
         merkle_root: test_data.root,
         airdrop_start,
         vesting_start,
@@ -327,8 +231,8 @@ fn multiple_claim() {
     let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
 
     let msg = InstantiateMsg {
-        credits_address: Some("credits0000".to_string()),
-        reserve_address: Some("reserve0000".to_string()),
+        credits_address: "credits0000".to_string(),
+        reserve_address: "reserve0000".to_string(),
         merkle_root: test_data.root,
         airdrop_start,
         vesting_start,
@@ -408,8 +312,8 @@ fn expiration() {
     let info = mock_info("owner0000", &[]);
 
     let msg = InstantiateMsg {
-        credits_address: Some("credits0000".to_string()),
-        reserve_address: Some("reserve0000".to_string()),
+        credits_address: "credits0000".to_string(),
+        reserve_address: "reserve0000".to_string(),
         merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
         airdrop_start,
         vesting_start,
@@ -436,39 +340,6 @@ fn expiration() {
             expiration: vesting_start.plus_nanos(vesting_duration.nanos())
         }
     )
-}
-
-#[test]
-fn cant_withdraw_all_without_reserve_address() {
-    let mut deps = mock_dependencies();
-    let mut env = mock_env();
-    let airdrop_start = env.block.time.minus_seconds(5_000);
-    let vesting_start = env.block.time.plus_seconds(10_000);
-    let vesting_duration = Timestamp::from_seconds(20_000);
-    let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
-
-    let msg = InstantiateMsg {
-        credits_address: Some("credits0000".to_string()),
-        reserve_address: None,
-        merkle_root: test_data.root,
-        airdrop_start,
-        vesting_start,
-        vesting_duration,
-        total_amount: Some(Uint128::new(10000)),
-        hrp: None,
-    };
-
-    let info = mock_info("owner0000", &[]);
-    let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
-
-    // makes withdraw_all available
-    env.block.time = vesting_start
-        .plus_nanos(vesting_duration.nanos())
-        .plus_seconds(10);
-
-    let info = mock_info("owner0000", &[]);
-    let res = execute(deps.as_mut(), env, info, ExecuteMsg::WithdrawAll {}).unwrap_err();
-    assert_eq!(res, ContractError::ReserveAddress {});
 }
 
 #[test]
@@ -518,8 +389,8 @@ fn withdraw_all() {
         .unwrap();
 
     let merkle_airdrop_instantiate_msg = InstantiateMsg {
-        credits_address: Some(cw20_addr.to_string()),
-        reserve_address: Some("reserve0000".to_string()),
+        credits_address: cw20_addr.to_string(),
+        reserve_address: "reserve0000".to_string(),
         merkle_root: test_data.root,
         airdrop_start: router.block_info().time.plus_seconds(5),
         vesting_start: router.block_info().time.plus_seconds(10),
@@ -674,8 +545,8 @@ fn starts() {
     let vesting_duration = Timestamp::from_seconds(20_000);
 
     let msg = InstantiateMsg {
-        credits_address: Some("credits0000".to_string()),
-        reserve_address: Some("reserve0000".to_string()),
+        credits_address: "credits0000".to_string(),
+        reserve_address: "reserve0000".to_string(),
         merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
         airdrop_start,
         vesting_start,
@@ -753,8 +624,8 @@ mod external_sig {
             .unwrap();
 
         let msg = InstantiateMsg {
-            credits_address: Some("credits0000".to_string()),
-            reserve_address: Some("reserve0000".to_string()),
+            credits_address: "credits0000".to_string(),
+            reserve_address: "reserve0000".to_string(),
             merkle_root: test_data.root,
             airdrop_start,
             vesting_start,
@@ -878,8 +749,8 @@ mod external_sig {
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
-            credits_address: Some("credits0000".to_string()),
-            reserve_address: Some("reserve0000".to_string()),
+            credits_address: "credits0000".to_string(),
+            reserve_address: "reserve0000".to_string(),
             merkle_root: test_data.root,
             airdrop_start,
             vesting_start,
@@ -1011,8 +882,8 @@ mod external_sig {
             .unwrap();
 
         let merkle_airdrop_instantiate_msg = InstantiateMsg {
-            credits_address: Some(cw20_addr.to_string()),
-            reserve_address: Some("reserve0000".to_string()),
+            credits_address: cw20_addr.to_string(),
+            reserve_address: "reserve0000".to_string(),
             merkle_root: test_data.root,
             airdrop_start: router.block_info().time.minus_seconds(5_000),
             vesting_start: router.block_info().time.plus_seconds(10_000),

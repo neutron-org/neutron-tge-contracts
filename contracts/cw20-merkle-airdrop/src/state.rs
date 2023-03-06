@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub struct Config {
     pub owner: Addr,
-    pub credits_address: Option<Addr>,
-    pub reserve_address: Option<Addr>,
+    pub credits_address: Addr,
+    pub reserve_address: Addr,
 }
 
 pub const CONFIG_KEY: &str = "config";

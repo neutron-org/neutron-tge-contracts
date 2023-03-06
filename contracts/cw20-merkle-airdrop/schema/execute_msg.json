@@ -3,38 +3,6 @@
   "title": "ExecuteMsg",
   "oneOf": [
     {
-      "type": "object",
-      "required": [
-        "update_config"
-      ],
-      "properties": {
-        "update_config": {
-          "type": "object",
-          "properties": {
-            "new_credits_address": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "new_owner": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "new_reserve_address": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
       "description": "Claim does not check if contract has enough funds, owner must ensure it.",
       "type": "object",
       "required": [

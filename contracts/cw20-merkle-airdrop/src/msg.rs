@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateMsg {
-    pub credits_address: Option<String>,
-    pub reserve_address: Option<String>,
+    pub credits_address: String,
+    pub reserve_address: String,
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
     pub airdrop_start: Timestamp,
@@ -22,11 +22,6 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    UpdateConfig {
-        new_owner: Option<String>,
-        new_credits_address: Option<String>,
-        new_reserve_address: Option<String>,
-    },
     /// Claim does not check if contract has enough funds, owner must ensure it.
     Claim {
         amount: Uint128,
@@ -67,8 +62,8 @@ pub enum QueryMsg {
 #[serde(rename_all = "snake_case")]
 pub struct ConfigResponse {
     pub owner: String,
-    pub credits_address: Option<String>,
-    pub reserve_address: Option<String>,
+    pub credits_address: String,
+    pub reserve_address: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
