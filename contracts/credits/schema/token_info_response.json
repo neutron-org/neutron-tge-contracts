@@ -1,40 +1,27 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "UserInfoResponse",
+  "title": "TokenInfoResponse",
   "type": "object",
   "required": [
-    "atom_deposited",
-    "atom_lp_amount",
-    "usdc_deposited",
-    "usdc_lp_amount",
-    "withdrawn"
+    "decimals",
+    "name",
+    "symbol",
+    "total_supply"
   ],
   "properties": {
-    "atom_deposited": {
-      "description": "Total stable delegated by the user",
-      "allOf": [
-        {
-          "$ref": "#/definitions/Uint128"
-        }
-      ]
+    "decimals": {
+      "type": "integer",
+      "format": "uint8",
+      "minimum": 0.0
     },
-    "atom_lp_amount": {
+    "name": {
+      "type": "string"
+    },
+    "symbol": {
+      "type": "string"
+    },
+    "total_supply": {
       "$ref": "#/definitions/Uint128"
-    },
-    "usdc_deposited": {
-      "description": "Total stable delegated by the user",
-      "allOf": [
-        {
-          "$ref": "#/definitions/Uint128"
-        }
-      ]
-    },
-    "usdc_lp_amount": {
-      "$ref": "#/definitions/Uint128"
-    },
-    "withdrawn": {
-      "description": "Withdrawal counter to capture if the user already withdrew UST during the \"only withdrawals\" window",
-      "type": "boolean"
     }
   },
   "definitions": {

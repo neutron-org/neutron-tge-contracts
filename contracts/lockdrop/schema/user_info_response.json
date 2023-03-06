@@ -3,14 +3,14 @@
   "title": "UserInfoResponse",
   "type": "object",
   "required": [
-    "claimable_generator_NTRN_debt",
+    "claimable_generator_ntrn_debt",
     "lockup_infos",
     "lockup_positions_index",
     "ntrn_transferred",
     "total_ntrn_rewards"
   ],
   "properties": {
-    "claimable_generator_NTRN_debt": {
+    "claimable_generator_ntrn_debt": {
       "description": "NTRN tokens receivable as generator rewards that user can claim",
       "allOf": [
         {
@@ -50,7 +50,7 @@
       "type": "string"
     },
     "AssetInfo": {
-      "description": "This enum describes available Token types. ## Examples ``` # use cosmwasm_std::Addr; # use astroport::asset::AssetInfo::{NativeToken, Token}; Token { contract_addr: Addr::unchecked(\"terra...\") }; NativeToken { denom: String::from(\"uluna\") }; ```",
+      "description": "This enum describes available Token types. ## Examples ``` # use cosmwasm_std::Addr; # use astroport::asset::AssetInfo::{NativeToken, Token}; Token { contract_addr: Addr::unchecked(\"stake...\") }; NativeToken { denom: String::from(\"uluna\") }; ```",
       "oneOf": [
         {
           "description": "Non-native Token",
@@ -68,7 +68,8 @@
                 "contract_addr": {
                   "$ref": "#/definitions/Addr"
                 }
-              }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
@@ -89,7 +90,8 @@
                 "denom": {
                   "type": "string"
                 }
-              }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false

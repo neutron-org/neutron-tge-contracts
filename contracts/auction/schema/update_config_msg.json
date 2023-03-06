@@ -3,19 +3,13 @@
   "title": "UpdateConfigMsg",
   "type": "object",
   "properties": {
-    "astro_ust_pair_address": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "generator_contract": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
     "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "price_feed_contract": {
       "type": [
         "string",
         "null"

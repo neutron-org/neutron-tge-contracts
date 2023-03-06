@@ -3,42 +3,27 @@
   "title": "Config",
   "type": "object",
   "required": [
-    "airdrop_contract_address",
-    "astro_token_address",
+    "atom_denom",
     "deposit_window",
     "init_timestamp",
     "lockdrop_contract_address",
-    "lp_tokens_vesting_duration",
+    "lp_tokens_lock_window",
+    "min_exchange_rate_age",
+    "min_ntrn_amount",
+    "ntrn_denom",
     "owner",
+    "price_feed_contract",
+    "reserve_contract_address",
+    "usdc_denom",
+    "vesting_atom_contract_address",
+    "vesting_migration_pack_size",
+    "vesting_usdc_contract_address",
     "withdrawal_window"
   ],
   "properties": {
-    "airdrop_contract_address": {
-      "description": "Airdrop Contract address",
-      "allOf": [
-        {
-          "$ref": "#/definitions/Addr"
-        }
-      ]
-    },
-    "astro_incentive_amount": {
-      "description": "Total ASTRO token rewards to be used to incentivize bootstrap auction participants",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Uint128"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "astro_token_address": {
-      "description": "ASTRO token address",
-      "allOf": [
-        {
-          "$ref": "#/definitions/Addr"
-        }
-      ]
+    "atom_denom": {
+      "description": "Volatile denom",
+      "type": "string"
     },
     "deposit_window": {
       "description": "Number of seconds post init_timestamp during which deposits / withdrawals will be allowed",
@@ -46,19 +31,8 @@
       "format": "uint64",
       "minimum": 0.0
     },
-    "generator_contract": {
-      "description": "Astroport Generator contract with which ASTRO-UST LP Tokens are staked",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Addr"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "init_timestamp": {
-      "description": "Timestamp since which ASTRO / UST deposits will be allowed",
+      "description": "Timestamp since which USDC / ATOM deposits will be allowed",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
@@ -71,11 +45,29 @@
         }
       ]
     },
-    "lp_tokens_vesting_duration": {
-      "description": "Number of seconds over which LP Tokens are vested",
+    "lp_tokens_lock_window": {
+      "description": "Lock window for LP tokens",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
+    },
+    "min_exchange_rate_age": {
+      "description": "min exchange freshness rate (seconds)",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "min_ntrn_amount": {
+      "description": "Min NTRN amount to be distributed as pool liquidity",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Uint128"
+        }
+      ]
+    },
+    "ntrn_denom": {
+      "description": "Base denom",
+      "type": "string"
     },
     "owner": {
       "description": "Account who can update config",
@@ -86,13 +78,55 @@
       ]
     },
     "pool_info": {
-      "description": "ASTRO-UST Pool info",
+      "description": "Pool info",
       "anyOf": [
         {
           "$ref": "#/definitions/PoolInfo"
         },
         {
           "type": "null"
+        }
+      ]
+    },
+    "price_feed_contract": {
+      "description": "Price feed contract address",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
+    },
+    "reserve_contract_address": {
+      "description": "Reserve Contract address",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
+    },
+    "usdc_denom": {
+      "description": "Stable denom",
+      "type": "string"
+    },
+    "vesting_atom_contract_address": {
+      "description": "Vesting LP-ATOM Contract address",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
+    },
+    "vesting_migration_pack_size": {
+      "description": "vesting migration users pack size",
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0.0
+    },
+    "vesting_usdc_contract_address": {
+      "description": "Vesting LP-USDC Contract address",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
         }
       ]
     },
@@ -111,20 +145,38 @@
     "PoolInfo": {
       "type": "object",
       "required": [
-        "astro_ust_lp_token_address",
-        "astro_ust_pool_address"
+        "ntrn_atom_lp_token_address",
+        "ntrn_atom_pool_address",
+        "ntrn_usdc_lp_token_address",
+        "ntrn_usdc_pool_address"
       ],
       "properties": {
-        "astro_ust_lp_token_address": {
-          "description": "ASTRO-UST LP Token address",
+        "ntrn_atom_lp_token_address": {
+          "description": "NTRN-ATOM LP Token address",
           "allOf": [
             {
               "$ref": "#/definitions/Addr"
             }
           ]
         },
-        "astro_ust_pool_address": {
-          "description": "ASTRO-UST LP Pool address",
+        "ntrn_atom_pool_address": {
+          "description": "NTRN-ATOM LP Pool address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "ntrn_usdc_lp_token_address": {
+          "description": "NTRN-USDC LP Token address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "ntrn_usdc_pool_address": {
+          "description": "NTRN-USDC LP Pool address",
           "allOf": [
             {
               "$ref": "#/definitions/Addr"
