@@ -14,8 +14,8 @@ pub struct Config {
 pub const CONFIG_KEY: &str = "config";
 pub const CONFIG: Item<Config> = Item::new(CONFIG_KEY);
 
-pub const STAGE_EXPIRATION_KEY: &str = "stage_exp";
-pub const STAGE_EXPIRATION: Item<Timestamp> = Item::new(STAGE_EXPIRATION_KEY);
+pub const EXPIRATION_KEY: &str = "exp";
+pub const EXPIRATION: Item<Timestamp> = Item::new(EXPIRATION_KEY);
 
 pub const START_KEY: &str = "start";
 pub const START: Item<Timestamp> = Item::new(START_KEY);

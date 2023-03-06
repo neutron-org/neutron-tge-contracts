@@ -21,8 +21,8 @@ use crate::msg::{
     TotalClaimedResponse,
 };
 use crate::state::{
-    Config, ACCOUNT_MAP, AMOUNT, AMOUNT_CLAIMED, CLAIM, CONFIG, HRP, MERKLE_ROOT, PAUSED,
-    STAGE_EXPIRATION, START,
+    Config, ACCOUNT_MAP, AMOUNT, AMOUNT_CLAIMED, CLAIM, CONFIG, EXPIRATION, HRP, MERKLE_ROOT,
+    PAUSED, START,
 };
 use credits::msg::ExecuteMsg::AddVesting;
 
@@ -73,7 +73,7 @@ pub fn instantiate(
     MERKLE_ROOT.save(deps.storage, &msg.merkle_root)?;
 
     // save expiration
-    STAGE_EXPIRATION.save(deps.storage, &msg.expiration)?;
+    EXPIRATION.save(deps.storage, &msg.expiration)?;
 
     // save start
     START.save(deps.storage, &msg.start)?;
@@ -176,7 +176,7 @@ pub fn execute_claim(
         return Err(ContractError::NotBegun { start });
     }
     // not expired
-    let expiration = STAGE_EXPIRATION.load(deps.storage)?;
+    let expiration = EXPIRATION.load(deps.storage)?;
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -299,7 +299,7 @@ pub fn execute_withdraw_all(
 
     if !PAUSED.load(deps.storage)?
         && env.block.time
-            <= STAGE_EXPIRATION
+            <= EXPIRATION
                 .load(deps.storage)?
                 .plus_seconds(VESTING_DURATION_SECONDS)
     {
@@ -369,7 +369,7 @@ pub fn execute_pause(
         return Err(ContractError::NotBegun { start });
     }
 
-    let expiration = STAGE_EXPIRATION.load(deps.storage)?;
+    let expiration = EXPIRATION.load(deps.storage)?;
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -395,7 +395,7 @@ pub fn execute_resume(
         return Err(ContractError::NotBegun { start });
     }
 
-    let expiration = STAGE_EXPIRATION.load(deps.storage)?;
+    let expiration = EXPIRATION.load(deps.storage)?;
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -409,7 +409,7 @@ pub fn execute_resume(
         if Expiration::AtTime(new_expiration).is_expired(&env.block) {
             return Err(ContractError::Expired { expiration });
         }
-        STAGE_EXPIRATION.save(deps.storage, &new_expiration)?;
+        EXPIRATION.save(deps.storage, &new_expiration)?;
     }
 
     PAUSED.save(deps.storage, &false)?;
@@ -444,7 +444,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
 
 pub fn query_merkle_root(deps: Deps) -> StdResult<MerkleRootResponse> {
     let merkle_root = MERKLE_ROOT.load(deps.storage)?;
-    let expiration = STAGE_EXPIRATION.load(deps.storage)?;
+    let expiration = EXPIRATION.load(deps.storage)?;
     let start = START.load(deps.storage)?;
     let total_amount = AMOUNT.load(deps.storage)?;
 
