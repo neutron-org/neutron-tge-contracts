@@ -28,6 +28,9 @@ pub enum ContractError {
     #[error("Airdrop expired at {expiration}")]
     Expired { expiration: Timestamp },
 
+    #[error("withdraw_all is unavailable, it will become available at {available_at}")]
+    WithdrawAllUnavailable { available_at: Timestamp },
+
     #[error("Airdrop begins at {start}")]
     NotBegun { start: Timestamp },
 

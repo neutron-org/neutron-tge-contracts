@@ -10,8 +10,8 @@ use crate::{
 use cosmwasm_std::{
     attr, coin, from_binary, from_slice,
     testing::{mock_dependencies, mock_env, mock_info},
-    to_binary, Addr, Attribute, Binary, BlockInfo, CosmosMsg, Empty, StdError, SubMsg, Timestamp,
-    Uint128, WasmMsg,
+    to_binary, Addr, Attribute, Binary, BlockInfo, CosmosMsg, Empty, SubMsg, Timestamp, Uint128,
+    WasmMsg,
 };
 use credits::msg::ExecuteMsg::AddVesting;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, MinterResponse};
@@ -559,9 +559,13 @@ fn withdraw_all() {
         .unwrap();
     assert_eq!(
         err,
-        ContractError::Std(StdError::generic_err(
-            "withdraw_all only works 3 months after the end of the event"
-        ))
+        ContractError::WithdrawAllUnavailable {
+            available_at: router
+                .block_info()
+                .time
+                .plus_seconds(10)
+                .plus_seconds(VESTING_DURATION_SECONDS)
+        }
     );
 
     //update block height

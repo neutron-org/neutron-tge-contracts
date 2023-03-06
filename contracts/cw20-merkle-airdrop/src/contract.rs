@@ -3,7 +3,7 @@ use crate::enumerable::query_all_address_map;
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, coin, from_binary, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, Timestamp, Uint128, WasmMsg,
+    MessageInfo, Response, StdResult, Timestamp, Uint128, WasmMsg,
 };
 use cw2::{get_contract_version, set_contract_version};
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
@@ -297,15 +297,12 @@ pub fn execute_withdraw_all(
         return Err(ContractError::Unauthorized {});
     }
 
-    if !PAUSED.load(deps.storage)?
-        && env.block.time
-            <= EXPIRATION
-                .load(deps.storage)?
-                .plus_seconds(VESTING_DURATION_SECONDS)
-    {
-        return Err(ContractError::Std(StdError::generic_err(
-            "withdraw_all only works 3 months after the end of the event",
-        )));
+    if !PAUSED.load(deps.storage)? {
+        let expiration = EXPIRATION.load(deps.storage)?;
+        let available_at = expiration.plus_seconds(VESTING_DURATION_SECONDS);
+        if env.block.time <= available_at {
+            return Err(ContractError::WithdrawAllUnavailable { available_at });
+        }
     }
 
     let reserve_address = match cfg.reserve_address {
