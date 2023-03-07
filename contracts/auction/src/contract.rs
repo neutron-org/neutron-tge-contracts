@@ -700,7 +700,7 @@ pub fn execute_finalize_init_pool(
             attr("atom_lp_to_reserve", atom_lp_to_reserve),
         ]))
     } else {
-        return Err(StdError::generic_err("Pool info isn't set yet!"));
+        Err(StdError::generic_err("Pool info isn't set yet!"))
     }
 }
 
@@ -722,7 +722,7 @@ fn execute_migrate_to_vesting(
     if state.pool_init_timestamp == 0 {
         return Err(StdError::generic_err("Pool isn't initialized yet!"));
     }
-    if users.len() == 0 {
+    if users.is_empty() {
         return Err(StdError::generic_err("No users to migrate!"));
     }
     let mut atom_users: Vec<VestingMigrationUser> = vec![];
@@ -811,13 +811,13 @@ fn build_provide_liquidity_to_lp_pool_msg(
     let base = Asset {
         amount: base_amount,
         info: AssetInfo::NativeToken {
-            denom: String::from(base_denom.clone()),
+            denom: base_denom.clone(),
         },
     };
     let other = Asset {
         amount: other_amount,
         info: AssetInfo::NativeToken {
-            denom: String::from(other_denom.clone()),
+            denom: other_denom.clone(),
         },
     };
 
@@ -825,11 +825,11 @@ fn build_provide_liquidity_to_lp_pool_msg(
         contract_addr: pool_address.to_string(),
         funds: vec![
             Coin {
-                denom: String::from(base_denom.clone()),
+                denom: base_denom,
                 amount: base_amount,
             },
             Coin {
-                denom: String::from(other_denom),
+                denom: other_denom,
                 amount: other_amount,
             },
         ],
