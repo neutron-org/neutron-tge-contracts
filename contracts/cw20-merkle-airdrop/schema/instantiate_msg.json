@@ -7,7 +7,7 @@
     "credits_address",
     "merkle_root",
     "reserve_address",
-    "vesting_duration",
+    "vesting_duration_seconds",
     "vesting_start"
   ],
   "properties": {
@@ -40,8 +40,10 @@
         }
       ]
     },
-    "vesting_duration": {
-      "$ref": "#/definitions/Timestamp"
+    "vesting_duration_seconds": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     },
     "vesting_start": {
       "$ref": "#/definitions/Timestamp"

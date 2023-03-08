@@ -60,13 +60,13 @@ pub fn instantiate(
     if msg.vesting_start < msg.airdrop_start {
         return Err(ContractError::VestingBeforeAirdrop {
             airdrop_start: msg.airdrop_start,
-            vesting_start: msg.vesting_duration,
+            vesting_start: msg.vesting_start,
         });
     }
 
     AIRDROP_START.save(deps.storage, &msg.airdrop_start)?;
     VESTING_START.save(deps.storage, &msg.vesting_start)?;
-    VESTING_DURATION.save(deps.storage, &msg.vesting_duration)?;
+    VESTING_DURATION.save(deps.storage, &msg.vesting_duration_seconds)?;
 
     // save hrp
     if let Some(hrp) = msg.hrp {
@@ -120,7 +120,7 @@ pub fn execute_claim(
     // not expired
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-    let expiration = vesting_start.plus_nanos(vesting_duration.nanos());
+    let expiration = vesting_start.plus_seconds(vesting_duration);
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -206,7 +206,7 @@ pub fn execute_claim(
             address: info.sender.to_string(),
             amount,
             start_time: vesting_start.seconds(),
-            duration: vesting_duration.seconds(),
+            duration: vesting_duration,
         })?,
         funds: vec![],
     };
@@ -235,7 +235,7 @@ pub fn execute_withdraw_all(
     if !PAUSED.load(deps.storage)? {
         let vesting_start = VESTING_START.load(deps.storage)?;
         let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-        let expiration = vesting_start.plus_nanos(vesting_duration.nanos());
+        let expiration = vesting_start.plus_seconds(vesting_duration);
         if env.block.time <= expiration {
             return Err(ContractError::WithdrawAllUnavailable {
                 available_at: expiration,
@@ -296,7 +296,7 @@ pub fn execute_pause(
 
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-    let expiration = vesting_start.plus_nanos(vesting_duration.nanos());
+    let expiration = vesting_start.plus_seconds(vesting_duration);
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -323,7 +323,7 @@ pub fn execute_resume(
 
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-    let expiration = vesting_start.plus_nanos(vesting_duration.nanos());
+    let expiration = vesting_start.plus_seconds(vesting_duration);
     if Expiration::AtTime(expiration).is_expired(&env.block) {
         return Err(ContractError::Expired { expiration });
     }
@@ -367,14 +367,14 @@ pub fn query_merkle_root(deps: Deps) -> StdResult<MerkleRootResponse> {
     let merkle_root = MERKLE_ROOT.load(deps.storage)?;
     let airdrop_start = AIRDROP_START.load(deps.storage)?;
     let vesting_start = VESTING_START.load(deps.storage)?;
-    let vesting_duration = VESTING_DURATION.load(deps.storage)?;
+    let vesting_duration_seconds = VESTING_DURATION.load(deps.storage)?;
     let total_amount = AMOUNT.load(deps.storage)?;
 
     Ok(MerkleRootResponse {
         merkle_root,
         airdrop_start,
         vesting_start,
-        vesting_duration,
+        vesting_duration_seconds,
         total_amount,
     })
 }

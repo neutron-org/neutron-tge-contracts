@@ -42,7 +42,7 @@ fn proper_instantiation() {
     let env = mock_env();
     let airdrop_start = env.block.time.plus_seconds(5_000);
     let vesting_start = env.block.time.plus_seconds(10_000);
-    let vesting_duration = Timestamp::from_seconds(20_000);
+    let vesting_duration_seconds = 20_000;
 
     let msg = InstantiateMsg {
         credits_address: "credits0000".to_string(),
@@ -50,7 +50,7 @@ fn proper_instantiation() {
         merkle_root: "634de21cde1044f41d90373733b0f0fb1c1c71f9652b905cdf159e73c4cf0d37".to_string(),
         airdrop_start,
         vesting_start,
-        vesting_duration,
+        vesting_duration_seconds,
         total_amount: None,
         hrp: None,
     };
@@ -78,7 +78,7 @@ fn proper_instantiation() {
                 .to_string(),
             airdrop_start,
             vesting_start,
-            vesting_duration,
+            vesting_duration_seconds,
             total_amount: Uint128::zero(),
         }
     );
@@ -114,7 +114,7 @@ fn claim() {
     let env = mock_env();
     let airdrop_start = env.block.time.minus_seconds(5_000);
     let vesting_start = env.block.time.plus_seconds(10_000);
-    let vesting_duration = Timestamp::from_seconds(20_000);
+    let vesting_duration_seconds = 20_000;
     let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
     let msg = InstantiateMsg {
@@ -123,7 +123,7 @@ fn claim() {
         merkle_root: test_data.root,
         airdrop_start,
         vesting_start,
-        vesting_duration,
+        vesting_duration_seconds,
         total_amount: None,
         hrp: None,
     };
@@ -156,7 +156,7 @@ fn claim() {
                 address: test_data.account.clone(),
                 amount: test_data.amount,
                 start_time: vesting_start.seconds(),
-                duration: vesting_duration.seconds(),
+                duration: vesting_duration_seconds,
             })
             .unwrap(),
             funds: vec![],
@@ -227,7 +227,7 @@ fn multiple_claim() {
     let env = mock_env();
     let airdrop_start = env.block.time.minus_seconds(5_000);
     let vesting_start = env.block.time.plus_seconds(10_000);
-    let vesting_duration = Timestamp::from_seconds(20_000);
+    let vesting_duration_seconds = 20_000;
     let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
 
     let msg = InstantiateMsg {
@@ -236,7 +236,7 @@ fn multiple_claim() {
         merkle_root: test_data.root,
         airdrop_start,
         vesting_start,
-        vesting_duration,
+        vesting_duration_seconds,
         total_amount: None,
         hrp: None,
     };
@@ -271,7 +271,7 @@ fn multiple_claim() {
                     address: account.account.clone(),
                     amount: account.amount,
                     start_time: vesting_start.seconds(),
-                    duration: vesting_duration.seconds(),
+                    duration: vesting_duration_seconds,
                 })
                 .unwrap(),
                 funds: vec![],
@@ -308,7 +308,7 @@ fn expiration() {
     let mut env = mock_env();
     let airdrop_start = env.block.time.minus_seconds(5_000);
     let vesting_start = env.block.time.plus_seconds(10_000);
-    let vesting_duration = Timestamp::from_seconds(20_000);
+    let vesting_duration_seconds = 20_000;
     let info = mock_info("owner0000", &[]);
 
     let msg = InstantiateMsg {
@@ -317,7 +317,7 @@ fn expiration() {
         merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
         airdrop_start,
         vesting_start,
-        vesting_duration,
+        vesting_duration_seconds,
         total_amount: None,
         hrp: None,
     };
@@ -337,7 +337,7 @@ fn expiration() {
     assert_eq!(
         res,
         ContractError::Expired {
-            expiration: vesting_start.plus_nanos(vesting_duration.nanos())
+            expiration: vesting_start.plus_seconds(vesting_duration_seconds)
         }
     )
 }
@@ -394,7 +394,7 @@ fn withdraw_all() {
         merkle_root: test_data.root,
         airdrop_start: router.block_info().time.plus_seconds(5),
         vesting_start: router.block_info().time.plus_seconds(10),
-        vesting_duration: Timestamp::from_seconds(10),
+        vesting_duration_seconds: 10,
         total_amount: Some(Uint128::new(10000)),
         hrp: None,
     };
@@ -542,7 +542,7 @@ fn starts() {
     let env = mock_env();
     let airdrop_start = env.block.time.plus_seconds(5_000);
     let vesting_start = env.block.time.plus_seconds(10_000);
-    let vesting_duration = Timestamp::from_seconds(20_000);
+    let vesting_duration_seconds = 20_000;
 
     let msg = InstantiateMsg {
         credits_address: "credits0000".to_string(),
@@ -550,7 +550,7 @@ fn starts() {
         merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
         airdrop_start,
         vesting_start,
-        vesting_duration,
+        vesting_duration_seconds,
         total_amount: None,
         hrp: None,
     };
@@ -614,7 +614,7 @@ mod external_sig {
         let env = mock_env();
         let airdrop_start = env.block.time.minus_seconds(5_000);
         let vesting_start = env.block.time.plus_seconds(10_000);
-        let vesting_duration = Timestamp::from_seconds(20_000);
+        let vesting_duration_seconds = 20_000;
         let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
         let claim_addr = test_data
             .signed_msg
@@ -629,7 +629,7 @@ mod external_sig {
             merkle_root: test_data.root,
             airdrop_start,
             vesting_start,
-            vesting_duration,
+            vesting_duration_seconds,
             total_amount: None,
             hrp: Some(test_data.hrp.unwrap()),
         };
@@ -675,7 +675,7 @@ mod external_sig {
                     address: claim_addr.clone(),
                     amount: test_data.amount,
                     start_time: vesting_start.seconds(),
-                    duration: vesting_duration.seconds(),
+                    duration: vesting_duration_seconds,
                 })
                 .unwrap(),
                 funds: vec![],
@@ -745,7 +745,7 @@ mod external_sig {
         let env = mock_env();
         let airdrop_start = env.block.time.minus_seconds(5_000);
         let vesting_start = env.block.time.plus_seconds(10_000);
-        let vesting_duration = Timestamp::from_seconds(20_000);
+        let vesting_duration_seconds = 20_000;
         let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
         let msg = InstantiateMsg {
@@ -754,7 +754,7 @@ mod external_sig {
             merkle_root: test_data.root,
             airdrop_start,
             vesting_start,
-            vesting_duration,
+            vesting_duration_seconds,
             total_amount: None,
             hrp: None,
         };
@@ -817,7 +817,7 @@ mod external_sig {
                     address: test_data.account.clone(),
                     amount: test_data.amount,
                     start_time: vesting_start.seconds(),
-                    duration: vesting_duration.seconds(),
+                    duration: vesting_duration_seconds,
                 })
                 .unwrap(),
                 funds: vec![],
@@ -887,7 +887,7 @@ mod external_sig {
             merkle_root: test_data.root,
             airdrop_start: router.block_info().time.minus_seconds(5_000),
             vesting_start: router.block_info().time.plus_seconds(10_000),
-            vesting_duration: Timestamp::from_seconds(20_000),
+            vesting_duration_seconds: 20_000,
             total_amount: Some(Uint128::new(10000)),
             hrp: None,
         };

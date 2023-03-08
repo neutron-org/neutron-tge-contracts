@@ -21,7 +21,7 @@ pub const VESTING_START_KEY: &str = "vesting_start";
 pub const VESTING_START: Item<Timestamp> = Item::new(VESTING_START_KEY);
 
 pub const VESTING_DURATION_KEY: &str = "vesting_duration_key";
-pub const VESTING_DURATION: Item<Timestamp> = Item::new(VESTING_DURATION_KEY);
+pub const VESTING_DURATION: Item<u64> = Item::new(VESTING_DURATION_KEY);
 
 pub const AMOUNT_KEY: &str = "amount";
 pub const AMOUNT: Item<Uint128> = Item::new(AMOUNT_KEY);

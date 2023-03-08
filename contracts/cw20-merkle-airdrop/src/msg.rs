@@ -12,7 +12,7 @@ pub struct InstantiateMsg {
     pub merkle_root: String,
     pub airdrop_start: Timestamp,
     pub vesting_start: Timestamp,
-    pub vesting_duration: Timestamp,
+    pub vesting_duration_seconds: u64,
     pub total_amount: Option<Uint128>,
     // hrp is the bech32 parameter required for building external network address
     // from signature message during claim action. example "cosmos", "terra", "juno"
@@ -73,7 +73,7 @@ pub struct MerkleRootResponse {
     pub merkle_root: String,
     pub airdrop_start: Timestamp,
     pub vesting_start: Timestamp,
-    pub vesting_duration: Timestamp,
+    pub vesting_duration_seconds: u64,
     pub total_amount: Uint128,
 }
 
