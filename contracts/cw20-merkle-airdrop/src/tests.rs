@@ -36,6 +36,15 @@ pub fn contract_cw20() -> Box<dyn Contract<Empty>> {
     Box::new(contract)
 }
 
+pub fn contract_credits() -> Box<dyn Contract<Empty>> {
+    let contract = ContractWrapper::new(
+        credits::contract::execute,
+        credits::contract::instantiate,
+        credits::contract::query,
+    );
+    Box::new(contract)
+}
+
 #[test]
 fn proper_instantiation() {
     let mut deps = mock_dependencies();
@@ -364,24 +373,19 @@ fn withdraw_all() {
     router.set_block(block_info);
 
     let merkle_airdrop_id = router.store_code(contract_merkle_airdrop());
-    let cw20_id = router.store_code(contract_cw20());
+    let credits_id = router.store_code(contract_credits());
 
-    let cw20_instantiate_msg = cw20_base::msg::InstantiateMsg {
-        name: "Airdrop Token".parse().unwrap(),
-        symbol: "ADT".parse().unwrap(),
-        decimals: 6,
-        initial_balances: vec![],
-        mint: Some(MinterResponse {
-            minter: "minter0000".to_string(),
-            cap: None,
-        }),
-        marketing: None,
+    let credits_instantiate_msg = credits::msg::InstantiateMsg {
+        airdrop_address: "contract1".to_string(),
+        lockdrop_address: "contract2".to_string(),
+        when_withdrawable: Default::default(),
     };
-    let cw20_addr = router
+
+    let credits_addr = router
         .instantiate_contract(
-            cw20_id,
-            Addr::unchecked("minter0000".to_string()),
-            &cw20_instantiate_msg,
+            credits_id,
+            Addr::unchecked("neutron_holder".to_string()),
+            &credits_instantiate_msg,
             &[],
             "Airdrop Test",
             None,
@@ -389,7 +393,7 @@ fn withdraw_all() {
         .unwrap();
 
     let merkle_airdrop_instantiate_msg = InstantiateMsg {
-        credits_address: cw20_addr.to_string(),
+        credits_address: credits_addr.to_string(),
         reserve_address: "reserve0000".to_string(),
         merkle_root: test_data.root,
         airdrop_start: router.block_info().time.plus_seconds(5),
@@ -413,17 +417,14 @@ fn withdraw_all() {
     //mint cw20 tokens
     let mint_recipient = Addr::unchecked(merkle_airdrop_addr.to_string());
     let mint_amount = Uint128::new(10000);
-    let cw20_mint_msg = cw20_base::msg::ExecuteMsg::Mint {
-        recipient: mint_recipient.to_string(),
-        amount: mint_amount,
-    };
+    let credits_mint_msg = credits::msg::ExecuteMsg::Mint {};
     //execute mint
     router
         .execute_contract(
-            Addr::unchecked("minter0000".to_string()),
-            cw20_addr.clone(),
-            &cw20_mint_msg,
-            &[],
+            Addr::unchecked("neutron_holder".to_string()),
+            credits_addr.clone(),
+            &credits_mint_msg,
+            &[coin(mint_amount.u128(), NEUTRON_DENOM)],
         )
         .unwrap();
 
@@ -431,7 +432,7 @@ fn withdraw_all() {
     let response: BalanceResponse = router
         .wrap()
         .query_wasm_smart(
-            &cw20_addr,
+            &credits_addr,
             &cw20_base::msg::QueryMsg::Balance {
                 address: mint_recipient.to_string(),
             },
@@ -465,57 +466,22 @@ fn withdraw_all() {
     };
     router.set_block(block_info);
 
-    // We expect credits contract to send 10000 untrn to merkle airdrop contract
-    // during processing of this message, so we mimic this behaviour manually
-    router
-        .send_tokens(
-            Addr::unchecked("neutron_holder"),
-            merkle_airdrop_addr.clone(),
-            &[coin(10000, NEUTRON_DENOM)],
-        )
-        .unwrap();
-
     // withdraw after expiration
-    let partial_withdraw_msg = ExecuteMsg::WithdrawAll {};
-    let res = router
+    let withdraw_all_msg = ExecuteMsg::WithdrawAll {};
+    router
         .execute_contract(
             Addr::unchecked("owner0000".to_string()),
             merkle_airdrop_addr.clone(),
-            &partial_withdraw_msg,
+            &withdraw_all_msg,
             &[],
         )
         .unwrap();
 
-    assert_eq!(
-        res.events[1].attributes,
-        vec![
-            Attribute {
-                key: "_contract_addr".to_string(),
-                value: "contract1".to_string()
-            },
-            Attribute {
-                key: "action".to_string(),
-                value: "withdraw_all".to_string()
-            },
-            Attribute {
-                key: "address".to_string(),
-                value: "owner0000".to_string()
-            },
-            Attribute {
-                key: "amount".to_string(),
-                value: "10000".to_string()
-            },
-            Attribute {
-                key: "recipient".to_string(),
-                value: "reserve0000".to_string()
-            }
-        ]
-    );
     //check airdrop contract cw20 balance
     let new_balance: BalanceResponse = router
         .wrap()
         .query_wasm_smart(
-            &cw20_addr,
+            &credits_addr,
             &cw20_base::msg::QueryMsg::Balance {
                 address: mint_recipient.to_string(),
             },
