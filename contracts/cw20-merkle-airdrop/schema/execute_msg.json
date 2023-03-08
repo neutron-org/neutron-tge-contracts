@@ -43,7 +43,7 @@
       "additionalProperties": false
     },
     {
-      "description": "Withdraw all remaining tokens that the contract owns (only owner)",
+      "description": "Permissionless, activated after vesting is over (consult to `[InstantiateMsg]` documentation for more info). Withdraws all remaining cNTRN tokens, burns them, receiving NTRN in exchange, and sends all received NTRN's to reserve.",
       "type": "object",
       "required": [
         "withdraw_all"
