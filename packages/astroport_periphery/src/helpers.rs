@@ -52,7 +52,7 @@ pub fn build_send_cw20_token_msg(
 /// * **token_address** is an object of type [`Addr`].
 ///
 /// * **account_addr** is an object of type [`Addr`].
-pub fn cw20_get_balance(
+pub fn cntrn_get_balance(
     querier: &QuerierWrapper,
     token_address: Addr,
     account_addr: Addr,
@@ -74,7 +74,7 @@ pub fn cw20_get_balance(
 /// * **spender_address** is an object of type [`String`]. Address to which allowance is being provided to, to allow it to transfer the tokens held by the contract
 ///
 /// * **allowance_amount** is an object of type [`Uint128`]. Allowance amount
-pub fn build_approve_cw20_msg(
+pub fn build_approve_cntrn_msg(
     token_contract_address: String,
     spender_address: String,
     allowance_amount: Uint128,
