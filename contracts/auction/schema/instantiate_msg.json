@@ -81,7 +81,7 @@
     },
     "vesting_migration_pack_size": {
       "type": "integer",
-      "format": "uint",
+      "format": "uint16",
       "minimum": 0.0
     },
     "vesting_usdc_contract_address": {

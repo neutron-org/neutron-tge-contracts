@@ -266,6 +266,13 @@ pub fn execute_update_config(
             config.price_feed_contract.to_string(),
         ));
     }
+    if let Some(vesting_migration_pack_size) = new_config.vesting_migration_pack_size {
+        config.vesting_migration_pack_size = vesting_migration_pack_size;
+        attributes.push(attr(
+            "vesting_migration_pack_size",
+            config.vesting_migration_pack_size.to_string(),
+        ));
+    }
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attributes(attributes))
@@ -715,7 +722,7 @@ fn execute_migrate_to_vesting(
         .idx
         .vested
         .range(deps.storage, None, None, Order::Ascending)
-        .take(config.vesting_migration_pack_size)
+        .take(config.vesting_migration_pack_size.into())
         .collect::<StdResult<Vec<_>>>()?;
 
     if state.pool_init_timestamp == 0 {

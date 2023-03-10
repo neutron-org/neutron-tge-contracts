@@ -23,13 +23,14 @@ pub struct InstantiateMsg {
     pub min_lock_period: u16,
     pub min_exchange_rate: u64,
     pub min_ntrn_amount: Uint128,
-    pub vesting_migration_pack_size: usize,
+    pub vesting_migration_pack_size: u16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
     pub owner: Option<String>,
     pub price_feed_contract: Option<String>,
+    pub vesting_migration_pack_size: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -137,7 +138,7 @@ pub struct Config {
     /// min exchange freshness rate (seconds)
     pub min_exchange_rate_age: u64,
     /// vesting migration users pack size
-    pub vesting_migration_pack_size: usize,
+    pub vesting_migration_pack_size: u16,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
