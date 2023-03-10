@@ -809,7 +809,6 @@ dependencies = [
  "cw-storage-plus 1.0.1",
  "cw2 1.0.1",
  "cw20 1.0.1",
- "neutron-price-feed",
  "schemars",
  "serde",
 ]
@@ -837,6 +836,7 @@ dependencies = [
 name = "neutron-price-feed"
 version = "0.1.0"
 dependencies = [
+ "astroport-periphery",
  "base64 0.21.0",
  "cosmos-sdk-proto",
  "cosmwasm-schema",

@@ -39,6 +39,8 @@ optimize = """docker run --rm -v "$(pwd)":/code \
 """
 
 [dependencies]
+astroport-periphery = { path = "../../packages/astroport_periphery" }
+
 cosmwasm-schema = "1.2.1"
 cosmwasm-std = "1.2.1"
 cosmwasm-storage = "1.1.3"

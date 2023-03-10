@@ -11,13 +11,12 @@ use astroport_periphery::auction::{
     State, UpdateConfigMsg, UserInfoResponse, UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
 };
 use astroport_periphery::lockdrop::{ExecuteMsg as LockDropExecuteMsg, PoolType};
-use neutron_price_feed::state::PriceFeedRate;
 
 use crate::state::{get_users_store, CONFIG, STATE};
 use astroport::querier::query_token_balance;
+use astroport_periphery::pricefeed::{PriceFeedRate, QueryMsg as PriceFeedQueryMsg};
 use cw2::set_contract_version;
 use cw20::Cw20ExecuteMsg;
-use neutron_price_feed::msg::QueryMsg as PriceFeedQueryMsg;
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "auction";

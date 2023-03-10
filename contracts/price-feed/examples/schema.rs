@@ -1,9 +1,8 @@
 use std::env::current_dir;
 use std::fs::create_dir_all;
 
+use astroport_periphery::pricefeed::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
-
-use neutron_price_feed::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use neutron_price_feed::state::{PriceFeedRate, ReferenceData};
 
 fn main() {

@@ -1,6 +1,6 @@
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::{Config, PriceFeedRate, BAND_CONFIG, ENDPOINT, ERROR, RATES};
+use astroport_periphery::pricefeed::{ExecuteMsg, InstantiateMsg, QueryMsg};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
