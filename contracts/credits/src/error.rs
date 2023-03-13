@@ -22,6 +22,15 @@ pub enum ContractError {
     #[error("No funds supplied")]
     NoFundsSupplied(),
 
+    #[error("Airdrop address is not set")]
+    AirdropNotConfigured,
+
+    #[error("Lockdrop address is not set")]
+    LockdropNotConfigured,
+
+    #[error("When withdrawable is not set")]
+    WhenWithdrawableIsNotConfigured,
+
     #[error("Address {address} is already vested")]
     AlreadyVested { address: String },
 
