@@ -9,11 +9,11 @@ pub struct Config {
     /// DAO contract address
     pub dao_address: Addr,
     /// Airdrop contract address
-    pub airdrop_address: Addr,
+    pub airdrop_address: Option<Addr>,
     /// Lockdrop contract address
-    pub lockdrop_address: Addr,
+    pub lockdrop_address: Option<Addr>,
     /// When can start withdrawing untrn tokens
-    pub when_withdrawable: Timestamp,
+    pub when_withdrawable: Option<Timestamp>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
