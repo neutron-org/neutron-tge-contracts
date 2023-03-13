@@ -68,7 +68,9 @@ fn _instantiate_vest_to_somebody(
 }
 
 fn _do_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env) {
-    let instantiate_msg = InstantiateMsg {};
+    let instantiate_msg = InstantiateMsg {
+        dao_address: "dao_address".to_string(),
+    };
     let info = mock_info("dao_address", &funds.unwrap_or_default());
     let env = mock_env();
     let res = instantiate(deps, env.clone(), info.clone(), instantiate_msg).unwrap();

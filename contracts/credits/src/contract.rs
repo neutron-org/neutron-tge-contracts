@@ -43,12 +43,13 @@ pub const VESTING_CLIFF: u64 = 0;
 pub fn instantiate(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
-    _msg: InstantiateMsg,
+    _info: MessageInfo,
+    msg: InstantiateMsg,
 ) -> Result<Response, Cw20ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    let dao_address = deps.api.addr_validate(&msg.dao_address)?;
     let config = Config {
-        dao_address: info.sender.clone(),
+        dao_address: dao_address.clone(),
         airdrop_address: None,
         lockdrop_address: None,
         when_withdrawable: None,
@@ -61,7 +62,7 @@ pub fn instantiate(
         decimals: TOKEN_DECIMALS,
         total_supply: Uint128::zero(),
         mint: Some(Cw20State::MinterData {
-            minter: info.sender,
+            minter: dao_address,
             cap: None,
         }),
     };
