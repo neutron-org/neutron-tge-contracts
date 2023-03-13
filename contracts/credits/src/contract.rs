@@ -110,17 +110,22 @@ pub fn execute_update_config(
     info: MessageInfo,
     msg: UpdateConfigMsg,
 ) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
+    let mut config = CONFIG.load(deps.storage)?;
     if info.sender != config.dao_address {
         return Err(Unauthorized);
     }
 
-    let config = Config {
-        dao_address: info.sender,
-        airdrop_address: Some(deps.api.addr_validate(&msg.airdrop_address)?),
-        lockdrop_address: Some(deps.api.addr_validate(&msg.lockdrop_address)?),
-        when_withdrawable: Some(msg.when_withdrawable),
-    };
+    if let Some(airdrop_address) = msg.airdrop_address {
+        config.airdrop_address = Some(deps.api.addr_validate(&airdrop_address)?);
+    }
+
+    if let Some(lockdrop_address) = msg.lockdrop_address {
+        config.lockdrop_address = Some(deps.api.addr_validate(&lockdrop_address)?);
+    }
+
+    if let Some(when_withdrawable) = msg.when_withdrawable {
+        config.when_withdrawable = Some(when_withdrawable);
+    }
 
     CONFIG.save(deps.storage, &config)?;
 

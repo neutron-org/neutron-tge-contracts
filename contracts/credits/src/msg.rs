@@ -12,11 +12,11 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub struct UpdateConfigMsg {
     /// Airdrop contract address
-    pub airdrop_address: String,
+    pub airdrop_address: Option<String>,
     /// Lockdrop contract address,
-    pub lockdrop_address: String,
+    pub lockdrop_address: Option<String>,
     /// When can start withdrawing untrn tokens
-    pub when_withdrawable: Timestamp,
+    pub when_withdrawable: Option<Timestamp>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

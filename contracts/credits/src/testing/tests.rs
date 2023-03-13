@@ -81,9 +81,9 @@ fn _do_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env
 
 fn _do_simple_update_config(deps: DepsMut) -> (MessageInfo, Env) {
     let update_config_msg = UpdateConfigMsg {
-        airdrop_address: "airdrop_address".to_string(),
-        lockdrop_address: "lockdrop_address".to_string(),
-        when_withdrawable: Timestamp::from_seconds(0),
+        airdrop_address: Some("airdrop_address".to_string()),
+        lockdrop_address: Some("lockdrop_address".to_string()),
+        when_withdrawable: Some(Timestamp::from_seconds(0)),
     };
     let info = mock_info("dao_address", &[]);
     let env = mock_env();
@@ -193,9 +193,9 @@ mod instantiate {
         _do_update_config(
             deps.as_mut(),
             UpdateConfigMsg {
-                airdrop_address: "airdrop_address".to_string(),
-                lockdrop_address: "lockdrop_address".to_string(),
-                when_withdrawable: Timestamp::from_seconds(0),
+                airdrop_address: Some("airdrop_address".to_string()),
+                lockdrop_address: Some("lockdrop_address".to_string()),
+                when_withdrawable: Some(Timestamp::from_seconds(0)),
             },
         );
         let config = query_config(deps.as_ref()).unwrap();
@@ -517,9 +517,9 @@ mod withdraw {
         _do_update_config(
             deps.as_mut(),
             UpdateConfigMsg {
-                airdrop_address: "airdrop_address".to_string(),
-                lockdrop_address: "lockdrop_address".to_string(),
-                when_withdrawable: mock_env().block.time.plus_seconds(1_000_000),
+                airdrop_address: Some("airdrop_address".to_string()),
+                lockdrop_address: Some("lockdrop_address".to_string()),
+                when_withdrawable: Some(mock_env().block.time.plus_seconds(1_000_000)),
             },
         );
 
