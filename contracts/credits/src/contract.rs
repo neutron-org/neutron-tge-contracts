@@ -14,8 +14,8 @@ use cw20_base::state as Cw20State;
 use cw20_base::state::{BALANCES, TOKEN_INFO};
 
 use crate::msg::{
-    ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, TotalSupplyResponse, VestedAmountResponse,
-    WithdrawableAmountResponse,
+    ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, TotalSupplyResponse, UpdateConfigMsg,
+    VestedAmountResponse, WithdrawableAmountResponse,
 };
 use crate::state::{Allocation, Config, Schedule, ALLOCATIONS, CONFIG};
 
@@ -43,19 +43,17 @@ pub const VESTING_CLIFF: u64 = 0;
 pub fn instantiate(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, Cw20ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
+    let dao_address = deps.api.addr_validate(&msg.dao_address)?;
     let config = Config {
-        dao_address: info.sender,
-        airdrop_address: deps.api.addr_validate(&msg.airdrop_address)?,
-        lockdrop_address: deps.api.addr_validate(&msg.lockdrop_address)?,
-        when_withdrawable: msg.when_withdrawable,
+        dao_address: dao_address.clone(),
+        airdrop_address: None,
+        lockdrop_address: None,
+        when_withdrawable: None,
     };
-
-    CONFIG.save(deps.storage, &config)?;
 
     // store token info
     let info = Cw20State::TokenInfo {
@@ -64,10 +62,12 @@ pub fn instantiate(
         decimals: TOKEN_DECIMALS,
         total_supply: Uint128::zero(),
         mint: Some(Cw20State::MinterData {
-            minter: config.dao_address,
+            minter: dao_address,
             cap: None,
         }),
     };
+
+    CONFIG.save(deps.storage, &config)?;
     TOKEN_INFO.save(deps.storage, &info, env.block.height)?;
 
     Ok(Response::new())
@@ -81,6 +81,7 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
+        ExecuteMsg::UpdateConfig { config } => execute_update_config(deps, env, info, config),
         ExecuteMsg::AddVesting {
             address,
             amount,
@@ -100,6 +101,34 @@ pub fn execute(
 #[entry_point]
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    Ok(Response::default())
+}
+
+pub fn execute_update_config(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    msg: UpdateConfigMsg,
+) -> Result<Response, ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+    if info.sender != config.dao_address {
+        return Err(Unauthorized);
+    }
+
+    if let Some(airdrop_address) = msg.airdrop_address {
+        config.airdrop_address = Some(deps.api.addr_validate(&airdrop_address)?);
+    }
+
+    if let Some(lockdrop_address) = msg.lockdrop_address {
+        config.lockdrop_address = Some(deps.api.addr_validate(&lockdrop_address)?);
+    }
+
+    if let Some(when_withdrawable) = msg.when_withdrawable {
+        config.when_withdrawable = Some(when_withdrawable);
+    }
+
+    CONFIG.save(deps.storage, &config)?;
+
     Ok(Response::default())
 }
 
@@ -129,7 +158,10 @@ pub fn execute_add_vesting(
     duration: u64,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender != config.airdrop_address {
+    let airdrop_address = config
+        .airdrop_address
+        .ok_or(ContractError::AirdropNotConfigured)?;
+    if info.sender != airdrop_address {
         return Err(Unauthorized);
     }
 
@@ -179,8 +211,10 @@ pub fn execute_transfer(
     amount: Uint128,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-
-    if info.sender != config.airdrop_address {
+    let airdrop_address = config
+        .airdrop_address
+        .ok_or(ContractError::AirdropNotConfigured)?;
+    if info.sender != airdrop_address {
         return Err(Unauthorized);
     }
 
@@ -208,7 +242,10 @@ pub fn execute_withdraw(
     info: MessageInfo,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if config.when_withdrawable > env.block.time {
+    let when_withdrawable = config
+        .when_withdrawable
+        .ok_or(ContractError::WhenWithdrawableIsNotConfigured)?;
+    if when_withdrawable > env.block.time {
         return Err(ContractError::TooEarlyToClaim);
     }
 
@@ -267,8 +304,10 @@ pub fn execute_burn(
     amount: Uint128,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-
-    if info.sender != config.airdrop_address {
+    let airdrop_address = config
+        .airdrop_address
+        .ok_or(ContractError::AirdropNotConfigured)?;
+    if info.sender != airdrop_address {
         return Err(Unauthorized);
     }
 
@@ -303,7 +342,10 @@ pub fn execute_burn_from(
     amount: Uint128,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    if info.sender != config.lockdrop_address {
+    let lockdrop_address = config
+        .lockdrop_address
+        .ok_or(ContractError::LockdropNotConfigured)?;
+    if info.sender != lockdrop_address {
         return Err(Unauthorized);
     }
 
@@ -332,7 +374,9 @@ pub fn execute_mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respon
     let untrn_amount = try_find_untrns(info.funds.clone())?;
 
     let config = CONFIG.load(deps.storage)?;
-    let recipient = config.airdrop_address;
+    let recipient = config
+        .airdrop_address
+        .ok_or(ContractError::AirdropNotConfigured)?;
 
     ::cw20_base::contract::execute_mint(deps, env, info, recipient.to_string(), untrn_amount)
         .map_err(Cw20Error)
