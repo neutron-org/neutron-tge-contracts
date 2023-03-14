@@ -121,7 +121,7 @@ pub fn instantiate(
             .transpose()?
             .unwrap_or(info.sender),
         credit_contract: deps.api.addr_validate(&msg.credit_contract)?,
-        auction_contract: None,
+        auction_contract: deps.api.addr_validate(&msg.auction_contract)?,
         generator: None,
         init_timestamp: msg.init_timestamp,
         lock_window: msg.deposit_window,
@@ -432,15 +432,8 @@ pub fn handle_update_config(
     }
 
     if let Some(auction) = new_config.auction_contract_address {
-        match config.auction_contract {
-            Some(_) => {
-                return Err(StdError::generic_err("Auction contract already set."));
-            }
-            None => {
-                config.auction_contract = Some(deps.api.addr_validate(&auction)?);
-                attributes.push(attr("auction_contract", auction))
-            }
-        }
+        config.auction_contract = deps.api.addr_validate(&auction)?;
+        attributes.push(attr("auction_contract", auction));
     };
 
     if let Some(generator) = new_config.generator_address {
@@ -532,7 +525,7 @@ pub fn handle_initialize_pool(
     let mut state = STATE.load(deps.storage)?;
 
     // CHECK ::: Only auction can call this function
-    if Some(cw20_sender_addr) != config.auction_contract {
+    if cw20_sender_addr != config.auction_contract {
         return Err(StdError::generic_err("Unauthorized"));
     }
 
@@ -640,7 +633,7 @@ pub fn handle_increase_lockup(
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
 
-    if Some(info.sender) != config.auction_contract {
+    if info.sender != config.auction_contract {
         return Err(StdError::generic_err("Unauthorized"));
     }
 
@@ -752,7 +745,7 @@ pub fn handle_withdraw_from_lockup(
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
 
-    if Some(info.sender.clone()) != config.auction_contract {
+    if info.sender != config.auction_contract {
         return Err(StdError::generic_err("Unauthorized"));
     }
 
