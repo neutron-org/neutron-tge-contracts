@@ -376,9 +376,7 @@ fn withdraw_all() {
     let credits_id = router.store_code(contract_credits());
 
     let credits_instantiate_msg = credits::msg::InstantiateMsg {
-        airdrop_address: "contract1".to_string(),
-        lockdrop_address: "contract2".to_string(),
-        when_withdrawable: Default::default(),
+        dao_address: "neutron_holder".to_string(),
     };
 
     let credits_addr = router
@@ -391,6 +389,19 @@ fn withdraw_all() {
             None,
         )
         .unwrap();
+
+    let _res = router.execute_contract(
+        Addr::unchecked("neutron_holder".to_string()),
+        credits_addr.clone(),
+        &credits::msg::ExecuteMsg::UpdateConfig {
+            config: credits::msg::UpdateConfigMsg {
+                airdrop_address: Some("contract1".to_string()),
+                lockdrop_address: Some("contract2".to_string()),
+                when_withdrawable: Some(Default::default()),
+            },
+        },
+        &[],
+    );
 
     let merkle_airdrop_instantiate_msg = InstantiateMsg {
         credits_address: credits_addr.to_string(),
@@ -413,6 +424,19 @@ fn withdraw_all() {
             None,
         )
         .unwrap();
+
+    let _res = router.execute_contract(
+        Addr::unchecked("neutron_holder".to_string()),
+        credits_addr.clone(),
+        &credits::msg::ExecuteMsg::UpdateConfig {
+            config: credits::msg::UpdateConfigMsg {
+                airdrop_address: Some("contract1".to_string()),
+                lockdrop_address: Some("contract2".to_string()),
+                when_withdrawable: Some(Default::default()),
+            },
+        },
+        &[],
+    );
 
     //mint cw20 tokens
     let mint_recipient = Addr::unchecked(merkle_airdrop_addr.to_string());

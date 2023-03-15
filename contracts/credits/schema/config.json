@@ -3,17 +3,17 @@
   "title": "Config",
   "type": "object",
   "required": [
-    "airdrop_address",
-    "dao_address",
-    "lockdrop_address",
-    "when_withdrawable"
+    "dao_address"
   ],
   "properties": {
     "airdrop_address": {
       "description": "Airdrop contract address",
-      "allOf": [
+      "anyOf": [
         {
           "$ref": "#/definitions/Addr"
+        },
+        {
+          "type": "null"
         }
       ]
     },
@@ -27,17 +27,23 @@
     },
     "lockdrop_address": {
       "description": "Lockdrop contract address",
-      "allOf": [
+      "anyOf": [
         {
           "$ref": "#/definitions/Addr"
+        },
+        {
+          "type": "null"
         }
       ]
     },
     "when_withdrawable": {
       "description": "When can start withdrawing untrn tokens",
-      "allOf": [
+      "anyOf": [
         {
           "$ref": "#/definitions/Timestamp"
+        },
+        {
+          "type": "null"
         }
       ]
     }
