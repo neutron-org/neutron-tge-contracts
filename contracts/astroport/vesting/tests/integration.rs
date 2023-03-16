@@ -205,6 +205,12 @@ fn claim() {
     assert_eq!(user1_vesting_amount.clone(), Uint128::new(0u128));
 }
 
+
+#[test]
+fn query_unclaimed() {
+    
+}
+
 #[test]
 fn claim_native() {
     let user1 = Addr::unchecked(USER1);

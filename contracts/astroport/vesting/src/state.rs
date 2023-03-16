@@ -2,9 +2,9 @@ use cosmwasm_schema::cw_serde;
 
 use astroport::asset::AssetInfo;
 use astroport::common::OwnershipProposal;
-use astroport::vesting::{OrderBy, VestingInfo};
+use astroport::vesting::{OrderBy, VestingInfo, VestingState};
 use cosmwasm_std::{Addr, Deps, StdResult};
-use cw_storage_plus::{Bound, Item, Map};
+use cw_storage_plus::{Bound, Item, SnapshotItem, SnapshotMap, Strategy};
 
 /// This structure stores the main parameters for the generator vesting contract.
 #[cw_serde]
@@ -18,8 +18,21 @@ pub struct Config {
 /// Stores the contract config at the given key.
 pub const CONFIG: Item<Config> = Item::new("config");
 
+/// Stores the total granted/claimed amount of tokens
+pub const VESTING_STATE: SnapshotItem<VestingState> = SnapshotItem::new(
+    "vesting_state",
+    "vesting_state__checkpoints",
+    "vesting_state__changelog",
+    Strategy::EveryBlock,
+);
+
 /// The first key is the address of an account that's vesting, the second key is an object of type [`VestingInfo`].
-pub const VESTING_INFO: Map<&Addr, VestingInfo> = Map::new("vesting_info");
+pub const VESTING_INFO: SnapshotMap<&Addr, VestingInfo> = SnapshotMap::new(
+    "vesting_info",
+    "vesting_info__checkpoints",
+    "vesting_info__changelog",
+    Strategy::EveryBlock,
+);
 
 /// Contains a proposal to change contract ownership.
 pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
@@ -83,7 +96,7 @@ mod testing {
             let key = Addr::unchecked(format! {"address{}", i});
 
             VESTING_INFO
-                .save(&mut deps.storage, &key, &vi_mock)
+                .save(&mut deps.storage, &key, &vi_mock, 1)
                 .unwrap();
         }
 

@@ -3,7 +3,9 @@ use cosmwasm_std::{
     Response, StdError, StdResult, SubMsg, Uint128,
 };
 
-use crate::state::{read_vesting_infos, Config, CONFIG, OWNERSHIP_PROPOSAL, VESTING_INFO};
+use crate::state::{
+    read_vesting_infos, Config, CONFIG, OWNERSHIP_PROPOSAL, VESTING_INFO, VESTING_STATE,
+};
 
 use crate::error::ContractError;
 use crate::migration::migrate_from_v100;
@@ -61,14 +63,14 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Claim { recipient, amount } => claim(deps, env, info, recipient, amount),
-        ExecuteMsg::Receive(msg) => receive_cw20(deps, info, msg),
+        ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::RegisterVestingAccounts { vesting_accounts } => {
             let config = CONFIG.load(deps.storage)?;
 
             match &config.vesting_token {
                 AssetInfo::NativeToken { denom } if info.sender == config.owner => {
                     let amount = must_pay(&info, denom)?;
-                    register_vesting_accounts(deps, vesting_accounts, amount)
+                    register_vesting_accounts(deps, vesting_accounts, amount, env.block.height)
                 }
                 _ => Err(ContractError::Unauthorized {}),
             }
@@ -112,6 +114,7 @@ pub fn execute(
 /// * **cw20_msg** CW20 message to process.
 fn receive_cw20(
     deps: DepsMut,
+    env: Env,
     info: MessageInfo,
     cw20_msg: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
@@ -124,7 +127,7 @@ fn receive_cw20(
 
     match from_binary(&cw20_msg.msg)? {
         Cw20HookMsg::RegisterVestingAccounts { vesting_accounts } => {
-            register_vesting_accounts(deps, vesting_accounts, cw20_msg.amount)
+            register_vesting_accounts(deps, vesting_accounts, cw20_msg.amount, env.block.height)
         }
     }
 }
@@ -138,6 +141,7 @@ pub fn register_vesting_accounts(
     deps: DepsMut,
     vesting_accounts: Vec<VestingAccount>,
     amount: Uint128,
+    height: u64,
 ) -> Result<Response, ContractError> {
     let response = Response::new();
 
@@ -170,12 +174,19 @@ pub fn register_vesting_accounts(
                 schedules: vesting_account.schedules,
                 released_amount,
             },
+            height,
         )?;
     }
 
     if to_deposit != amount {
         return Err(ContractError::VestingScheduleAmountError {});
     }
+
+    VESTING_STATE.update::<_, ContractError>(deps.storage, height, |s| {
+        let mut state = s.unwrap_or_default();
+        state.total_granted = state.total_granted.checked_add(to_deposit)?;
+        Ok(state)
+    })?;
 
     Ok(response.add_attributes({
         vec![
@@ -242,7 +253,12 @@ pub fn claim(
         response = response.add_submessage(SubMsg::new(transfer_msg));
 
         vesting_info.released_amount = vesting_info.released_amount.checked_add(claim_amount)?;
-        VESTING_INFO.save(deps.storage, &info.sender, &vesting_info)?;
+        VESTING_INFO.save(deps.storage, &info.sender, &vesting_info, env.block.height)?;
+        VESTING_STATE.update::<_, ContractError>(deps.storage, env.block.height, |s| {
+            let mut state = s.ok_or_else(|| ContractError::AmountIsNotAvailable {})?;
+            state.total_released = state.total_released.checked_add(claim_amount)?;
+            Ok(state)
+        })?;
     };
 
     Ok(response.add_attributes(vec![
@@ -288,6 +304,26 @@ fn compute_available_amount(current_time: u64, vesting_info: &VestingInfo) -> St
         .map_err(StdError::from)
 }
 
+/// Computes the amount of distributed and yet unclaimed tokens for a specific vesting recipient at certain height.
+/// Returns the computed amount if the operation is successful.
+///
+/// * **vesting_info** vesting schedules for which to compute the amount of tokens
+/// that are vested and can be claimed by the recipient.
+fn compute_unclaimed_amount(vesting_info: &VestingInfo) -> StdResult<Uint128> {
+    let mut available_amount: Uint128 = Uint128::zero();
+    for sch in &vesting_info.schedules {
+        if let Some(end_point) = &sch.end_point {
+            available_amount.checked_add(end_point.amount)?;
+        } else {
+            available_amount = available_amount.checked_add(sch.start_point.amount)?;
+        }
+    }
+
+    available_amount
+        .checked_sub(vesting_info.released_amount)
+        .map_err(StdError::from)
+}
+
 /// Exposes all the queries available in the contract.
 ///
 /// ## Queries
@@ -323,6 +359,12 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             deps, env, address,
         )?)?),
         QueryMsg::Timestamp {} => Ok(to_binary(&query_timestamp(env)?)?),
+        QueryMsg::UnclaimedAmountAtHeight { address, height } => Ok(to_binary(
+            &query_unclaimed_amount_at_height(deps, address, height)?,
+        )?),
+        QueryMsg::UnclaimedTotalAmountAtHeight { height } => Ok(to_binary(
+            &query_total_unclaimed_amount_at_height(deps, height)?,
+        )?),
     }
 }
 
@@ -386,6 +428,32 @@ pub fn query_vesting_available_amount(deps: Deps, env: Env, address: String) -> 
     let info = VESTING_INFO.load(deps.storage, &address)?;
     let available_amount = compute_available_amount(env.block.time.seconds(), &info)?;
     Ok(available_amount)
+}
+
+/// Returns the available amount of distributed and yet to be claimed tokens for a specific vesting recipient at certain height.
+///
+/// * **address** vesting recipient for which to return the available amount of tokens to claim.
+pub fn query_unclaimed_amount_at_height(
+    deps: Deps,
+    address: String,
+    height: u64,
+) -> StdResult<Uint128> {
+    let address = deps.api.addr_validate(&address)?;
+
+    let maybe_info = VESTING_INFO.may_load_at_height(deps.storage, &address, height)?;
+    match &maybe_info {
+        Some(info) => compute_unclaimed_amount(&info),
+        None => Ok(Uint128::zero()),
+    }
+}
+
+/// Returns the available amount of distributed and yet to be claimed tokens for all the recipients at certain height.
+pub fn query_total_unclaimed_amount_at_height(deps: Deps, height: u64) -> StdResult<Uint128> {
+    let maybe_info = VESTING_STATE.may_load_at_height(deps.storage, height)?;
+    match &maybe_info {
+        Some(info) => Ok(info.total_granted.checked_sub(info.total_released)?),
+        None => Ok(Uint128::zero()),
+    }
 }
 
 /// Manages contract migration.

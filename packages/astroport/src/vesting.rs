@@ -49,6 +49,16 @@ pub enum ExecuteMsg {
     ClaimOwnership {},
 }
 
+/// This structure stores the accumulated vesting information for all addresses.
+#[cw_serde]
+#[derive(Default)]
+pub struct VestingState {
+    /// The total amount of tokens granted to the users
+    pub total_granted: Uint128,
+    /// The total amount of tokens already claimed
+    pub total_released: Uint128,
+}
+
 /// This structure stores vesting information for a specific address that is getting tokens.
 #[cw_serde]
 pub struct VestingAccount {
@@ -108,6 +118,12 @@ pub enum QueryMsg {
     /// Timestamp returns the current timestamp
     #[returns(u64)]
     Timestamp {},
+    /// Returns the total unclaimed amount of tokens for a specific address at certain height.
+    #[returns(Uint128)]
+    UnclaimedAmountAtHeight { address: String, height: u64 },
+    /// Returns the total unclaimed amount of tokens for a specific address at certain height.
+    #[returns(Uint128)]
+    UnclaimedTotalAmountAtHeight { height: u64 },
 }
 
 /// This structure describes a custom struct used to return the contract configuration.
