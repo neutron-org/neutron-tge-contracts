@@ -1,5 +1,6 @@
-use crate::asset::AssetInfo;
+use crate::asset::{AssetInfo, PairInfo};
 use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::Addr;
 use cosmwasm_std::{Decimal256, Uint128, Uint256, Uint64};
 
 /// This structure stores general parameters for the contract.
@@ -42,9 +43,30 @@ pub enum QueryMsg {
         /// The amount of tokens for which to compute the token price
         height: Uint64,
     },
+    /// Returns the contract's conriguration structure
+    #[returns(Config)]
+    Config {},
+    ///
+    #[returns(Uint64)]
+    LastUpdateHeight {},
 }
 
 /// This structure describes a migration message.
 /// We currently take no arguments for migrations.
 #[cw_serde]
 pub struct MigrateMsg {}
+
+/// Global configuration for the contract
+#[cw_serde]
+pub struct Config {
+    /// The address that's allowed to change contract parameters
+    pub owner: Addr,
+    /// The factory contract address
+    pub factory: Addr,
+    /// The assets in the pool. Each asset is described using a [`AssetInfo`]
+    pub asset_infos: Vec<AssetInfo>,
+    /// Information about the pair (LP token address, pair type etc)
+    pub pair: PairInfo,
+    /// Time between two consecutive TWAP updates.
+    pub period: u64,
+}

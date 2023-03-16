@@ -1,9 +1,9 @@
 use crate::error::ContractError;
 use crate::querier::{query_cumulative_prices, query_prices};
-use crate::state::{Config, PriceCumulativeLast, CONFIG, LAST_UPDATE_HEIGHT, PRICE_LAST};
+use crate::state::{PriceCumulativeLast, CONFIG, LAST_UPDATE_HEIGHT, PRICE_LAST};
 use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext};
 use astroport::cosmwasm_ext::IntegerToDecimal;
-use astroport::oracle::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use astroport::oracle::{Config, ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::{query_pair_info, query_token_precision};
 use cosmwasm_std::{
@@ -147,6 +147,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::TWAPAtHeight { token, height } => {
             to_binary(&twap_at_height(deps, token, height)?)
         }
+        QueryMsg::Config {} => to_binary(&query_config(deps)?),
+        QueryMsg::LastUpdateHeight {} => to_binary(&query_last_update_height(deps)?),
     }
 }
 
@@ -267,4 +269,14 @@ fn twap_at_height(
             }
         })
         .collect::<Result<Vec<(AssetInfo, Decimal256)>, StdError>>()
+}
+
+/// Returns the configuration of the contract.
+fn query_config(deps: Deps) -> Result<Config, StdError> {
+    CONFIG.load(deps.storage)
+}
+
+/// Returns the height at which the contract's Update{} handler was called last time.
+fn query_last_update_height(deps: Deps) -> Result<Uint64, StdError> {
+    LAST_UPDATE_HEIGHT.load(deps.storage)
 }
