@@ -3,7 +3,7 @@ use cosmwasm_std::{
     StdError, StdResult, SubMsg, Uint128,
 };
 
-use crate::state::{BaseVesting, Config, CONFIG, OWNERSHIP_PROPOSAL};
+use crate::state::{BaseVesting, Config};
 
 use crate::error::ContractError;
 use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfoExt};
@@ -34,7 +34,7 @@ impl BaseVesting {
 
         msg.vesting_token.check(deps.api)?;
 
-        CONFIG.save(
+        self.config.save(
             deps.storage,
             &Config {
                 owner: deps.api.addr_validate(&msg.owner)?,
@@ -65,7 +65,7 @@ impl BaseVesting {
             }
             ExecuteMsg::Receive(msg) => self.receive_cw20(deps, env, info, msg),
             ExecuteMsg::RegisterVestingAccounts { vesting_accounts } => {
-                let config = CONFIG.load(deps.storage)?;
+                let config = self.config.load(deps.storage)?;
 
                 match &config.vesting_token {
                     AssetInfo::NativeToken { denom } if info.sender == config.owner => {
@@ -81,7 +81,7 @@ impl BaseVesting {
                 }
             }
             ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
-                let config: Config = CONFIG.load(deps.storage)?;
+                let config: Config = self.config.load(deps.storage)?;
 
                 propose_new_owner(
                     deps,
@@ -90,19 +90,19 @@ impl BaseVesting {
                     owner,
                     expires_in,
                     config.owner,
-                    OWNERSHIP_PROPOSAL,
+                    &self.ownership_proposal,
                 )
                 .map_err(Into::into)
             }
             ExecuteMsg::DropOwnershipProposal {} => {
-                let config: Config = CONFIG.load(deps.storage)?;
+                let config: Config = self.config.load(deps.storage)?;
 
-                drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
+                drop_ownership_proposal(deps, info, config.owner, &self.ownership_proposal)
                     .map_err(Into::into)
             }
             ExecuteMsg::ClaimOwnership {} => {
-                claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
-                    CONFIG.update::<_, StdError>(deps.storage, |mut v| {
+                claim_ownership(deps, info, env, &self.ownership_proposal, |deps, new_owner| {
+                    self.config.update::<_, StdError>(deps.storage, |mut v| {
                         v.owner = new_owner;
                         Ok(v)
                     })?;
@@ -124,7 +124,7 @@ impl BaseVesting {
         info: MessageInfo,
         cw20_msg: Cw20ReceiveMsg,
     ) -> Result<Response, ContractError> {
-        let config = CONFIG.load(deps.storage)?;
+        let config = self.config.load(deps.storage)?;
 
         // Permission check
         if cw20_msg.sender != config.owner || token_asset_info(info.sender) != config.vesting_token
@@ -224,7 +224,7 @@ impl BaseVesting {
         recipient: Option<String>,
         amount: Option<Uint128>,
     ) -> Result<Response, ContractError> {
-        let config = CONFIG.load(deps.storage)?;
+        let config = self.config.load(deps.storage)?;
         let mut vesting_info = self.vesting_info.load(deps.storage, &info.sender)?;
 
         let available_amount = compute_available_amount(env.block.time.seconds(), &vesting_info)?;
@@ -306,7 +306,7 @@ impl BaseVesting {
 
     /// Returns the vesting contract configuration using a [`ConfigResponse`] object.
     pub fn query_config(&self, deps: Deps) -> StdResult<ConfigResponse> {
-        let config = CONFIG.load(deps.storage)?;
+        let config = self.config.load(deps.storage)?;
 
         Ok(ConfigResponse {
             owner: config.owner,
