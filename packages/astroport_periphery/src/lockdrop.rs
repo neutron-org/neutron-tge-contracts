@@ -70,8 +70,10 @@ pub struct InstantiateMsg {
     pub atom_token: String,
     /// Address of USDC/NTRN token
     pub usdc_token: String,
-    /// Credit cintract address
+    /// Credit contract address
     pub credit_contract: String,
+    /// Auction contract address
+    pub auction_contract: String,
     /// Timestamp when Contract will start accepting LP Token deposits
     pub init_timestamp: u64,
     /// Number of seconds during which lockup deposits will be accepted
@@ -253,7 +255,7 @@ pub struct Config {
     /// Credit contract address
     pub credit_contract: Addr,
     /// Bootstrap Auction contract address
-    pub auction_contract: Option<Addr>,
+    pub auction_contract: Addr,
     /// Generator (Staking for dual rewards) contract address
     pub generator: Option<Addr>,
     /// Timestamp when Contract will start accepting LP Token deposits

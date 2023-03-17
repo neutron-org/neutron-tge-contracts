@@ -32,6 +32,7 @@ fn update_owner() {
             duration: 1,
             coefficient: Decimal256::zero(),
         }],
+        auction_contract: "auction_contract".to_string(),
     };
 
     // We can just call .unwrap() to assert this was a success
@@ -113,6 +114,7 @@ fn increase_ntrn_incentives() {
         max_lock_duration: 52u64,
         max_positions_per_user: 14,
         credit_contract: "credit_contract".to_string(),
+        auction_contract: "auction_contract".to_string(),
         atom_token: ATOM_LP_TOKEN_ADDR.to_string(),
         usdc_token: USDC_LP_TOKEN_ADDR.to_string(),
         lockup_rewards_info: vec![LockupRewardsInfo {
