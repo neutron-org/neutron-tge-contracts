@@ -474,7 +474,9 @@ pub fn handle_increasing_ntrn_incentives(
 ) -> Result<Response, StdError> {
     let mut config = CONFIG.load(deps.storage)?;
 
-    if env.block.time.seconds() >= config.init_timestamp + config.lock_window + config.withdrawal_window {
+    if env.block.time.seconds()
+        >= config.init_timestamp + config.lock_window + config.withdrawal_window
+    {
         return Err(StdError::generic_err("Lock window is closed"));
     };
 
