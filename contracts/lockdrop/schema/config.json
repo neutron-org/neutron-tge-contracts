@@ -3,8 +3,8 @@
   "title": "Config",
   "type": "object",
   "required": [
-    "credit_contract",
-    "deposit_window",
+    "auction_contract",
+    "credits_contract",
     "init_timestamp",
     "lock_window",
     "lockdrop_incentives",
@@ -18,28 +18,19 @@
   "properties": {
     "auction_contract": {
       "description": "Bootstrap Auction contract address",
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Addr"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "credit_contract": {
-      "description": "Credit contract address",
       "allOf": [
         {
           "$ref": "#/definitions/Addr"
         }
       ]
     },
-    "deposit_window": {
-      "description": "Number of seconds during which lockup deposits will be accepted",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
+    "credits_contract": {
+      "description": "Credits contract address",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
     },
     "generator": {
       "description": "Generator (Staking for dual rewards) contract address",

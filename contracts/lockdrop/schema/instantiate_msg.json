@@ -4,9 +4,10 @@
   "type": "object",
   "required": [
     "atom_token",
-    "credit_contract",
-    "deposit_window",
+    "auction_contract",
+    "credits_contract",
     "init_timestamp",
+    "lock_window",
     "lockup_rewards_info",
     "max_lock_duration",
     "max_positions_per_user",
@@ -19,18 +20,22 @@
       "description": "Address of ATOM/NTRN token",
       "type": "string"
     },
-    "credit_contract": {
-      "description": "Credit cintract address",
+    "auction_contract": {
+      "description": "Auction contract address",
       "type": "string"
     },
-    "deposit_window": {
-      "description": "Number of seconds during which lockup deposits will be accepted",
+    "credits_contract": {
+      "description": "Credits contract address",
+      "type": "string"
+    },
+    "init_timestamp": {
+      "description": "Timestamp when Contract will start accepting LP Token deposits",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
     },
-    "init_timestamp": {
-      "description": "Timestamp when Contract will start accepting LP Token deposits",
+    "lock_window": {
+      "description": "Number of seconds during which lockup deposits will be accepted",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0

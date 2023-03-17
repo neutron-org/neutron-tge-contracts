@@ -30,7 +30,7 @@ use crate::state::{
     TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
 
-const AIRDROP_REWARDS_MULTIPLIER: &str = "2.5";
+const AIRDROP_REWARDS_MULTIPLIER: &str = "1.0";
 
 pub const UNTRN_DENOM: &str = "untrn";
 
@@ -92,7 +92,7 @@ pub fn instantiate(
 
     // POOL INFO :: Initialize new pool
     let pool_info = PoolInfo {
-        pool: deps.api.addr_validate(&msg.atom_token)?,
+        lp_token: deps.api.addr_validate(&msg.atom_token)?,
         amount_in_lockups: Default::default(),
         incentives_share: 0,
         weighted_amount: Default::default(),
@@ -104,7 +104,7 @@ pub fn instantiate(
 
     // POOL INFO :: Initialize new pool
     let pool_info = PoolInfo {
-        pool: deps.api.addr_validate(&msg.usdc_token)?,
+        lp_token: deps.api.addr_validate(&msg.usdc_token)?,
         amount_in_lockups: Default::default(),
         incentives_share: 0,
         weighted_amount: Default::default(),
@@ -120,12 +120,11 @@ pub fn instantiate(
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
-        credit_contract: deps.api.addr_validate(&msg.credit_contract)?,
+        credits_contract: deps.api.addr_validate(&msg.credits_contract)?,
         auction_contract: deps.api.addr_validate(&msg.auction_contract)?,
         generator: None,
         init_timestamp: msg.init_timestamp,
-        lock_window: msg.deposit_window,
-        deposit_window: msg.deposit_window,
+        lock_window: msg.lock_window,
         withdrawal_window: msg.withdrawal_window,
         min_lock_duration: msg.min_lock_duration,
         max_lock_duration: msg.max_lock_duration,
@@ -475,7 +474,7 @@ pub fn handle_increasing_ntrn_incentives(
 ) -> Result<Response, StdError> {
     let mut config = CONFIG.load(deps.storage)?;
 
-    if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
+    if env.block.time.seconds() >= config.init_timestamp + config.lock_window + config.withdrawal_window {
         return Err(StdError::generic_err("Lock window is closed"));
     };
 
@@ -532,14 +531,14 @@ pub fn handle_initialize_pool(
     // CHECK :: Is lockdrop deposit window closed
     if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
         return Err(StdError::generic_err(
-            "Pools cannot be added post deposit window closure",
+            "Pools cannot be staked post deposit window closure",
         ));
     }
 
     // CHECK ::: Is LP Token Pool initialized
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
-    if info.sender != pool_info.pool {
+    if info.sender != pool_info.lp_token {
         return Err(StdError::generic_err("Unknown cw20 token address"));
     }
 
@@ -549,7 +548,7 @@ pub fn handle_initialize_pool(
     let stake_msgs = stake_messages(
         config,
         env.block.height + 1u64,
-        pool_info.pool.clone(),
+        pool_info.lp_token.clone(),
         amount,
     )?;
     pool_info.is_staked = true;
@@ -781,7 +780,7 @@ pub fn handle_withdraw_from_lockup(
     }
 
     // Update withdrawal flag after the deposit window
-    if env.block.time.seconds() >= config.init_timestamp + config.deposit_window {
+    if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
         lockup_info.withdrawal_flag = true;
     }
 
@@ -833,7 +832,7 @@ pub fn handle_withdraw_from_lockup(
 ///
 /// * **config** is an object of type [`Config`]. Contract configuration
 fn calculate_max_withdrawal_percent_allowed(current_timestamp: u64, config: &Config) -> Decimal {
-    let withdrawal_cutoff_init_point = config.init_timestamp + config.deposit_window;
+    let withdrawal_cutoff_init_point = config.init_timestamp + config.lock_window;
 
     // Deposit window :: 100% withdrawals allowed
     if current_timestamp < withdrawal_cutoff_init_point {
@@ -932,7 +931,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
 
     let mut cosmos_msgs = vec![];
 
-    let astroport_lp_token = pool_info.pool;
+    let astroport_lp_token = pool_info.lp_token;
 
     if pool_info.is_staked {
         let generator = config
@@ -1097,7 +1096,7 @@ pub fn update_pool_on_dual_rewards_claim(
         .generator
         .as_ref()
         .ok_or_else(|| StdError::generic_err("Generator hasn't been set yet!"))?;
-    let astroport_lp_token = pool_info.pool.clone();
+    let astroport_lp_token = pool_info.lp_token.clone();
 
     let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
         generator,
@@ -1192,7 +1191,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         attr("duration", duration.to_string()),
     ];
 
-    let astroport_lp_token = pool_info.pool.clone();
+    let astroport_lp_token = pool_info.lp_token.clone();
 
     let generator = config
         .generator
@@ -1355,7 +1354,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         // claim airdrop rewards
         cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(
             deps.as_ref(),
-            config.credit_contract,
+            config.credits_contract,
             user_address.clone(),
             total_claimable_ntrn_rewards,
         )?);
@@ -1551,9 +1550,9 @@ pub fn query_lockup_info(
         RestrictedVector::default();
     if let Some(astroport_lp_transferred) = lockup_info.astroport_lp_transferred {
         lockup_astroport_lp_units_opt = Some(astroport_lp_transferred);
-        astroport_lp_token_opt = pool_info.pool;
+        astroport_lp_token_opt = pool_info.lp_token;
     } else {
-        let astroport_lp_token = pool_info.pool;
+        let astroport_lp_token = pool_info.lp_token;
         let pool_astroport_lp_units;
         let lockup_astroport_lp_units = {
             // Query Astro LP Tokens balance for the pool

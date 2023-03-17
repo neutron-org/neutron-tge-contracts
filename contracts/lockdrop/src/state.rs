@@ -65,7 +65,7 @@ impl CompatibleLoader<(PoolType, &Addr, U64Key), LockupInfoV2>
 
             if !old_lockup_info.generator_proxy_debt.is_zero() {
                 let asset = ASSET_POOLS.load(deps.storage, key.0)?;
-                let astro_lp = asset.pool;
+                let astro_lp = asset.lp_token;
                 let pool_info: PoolInfoResponse = deps.querier.query_wasm_smart(
                     generator,
                     &GenQueryMsg::PoolInfo {
