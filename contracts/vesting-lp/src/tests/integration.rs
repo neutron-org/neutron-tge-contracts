@@ -8,12 +8,12 @@ use astroport::{
         VestingSchedulePoint,
     },
 };
-use astroport_vesting::error::ContractError;
-use astroport_vesting::state::Config;
 use cosmwasm_std::{coin, coins, to_binary, Addr, StdResult, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use cw_utils::PaymentError;
+use vesting_base::error::ContractError;
+use vesting_base::state::Config;
 
 const OWNER1: &str = "owner1";
 const USER1: &str = "user1";
@@ -205,11 +205,8 @@ fn claim() {
     assert_eq!(user1_vesting_amount.clone(), Uint128::new(0u128));
 }
 
-
 #[test]
-fn query_unclaimed() {
-    
-}
+fn query_unclaimed() {}
 
 #[test]
 fn claim_native() {
@@ -934,9 +931,9 @@ fn instantiate_token(app: &mut App, token_code_id: u64, name: &str, cap: Option<
 
 fn instantiate_vesting(mut app: &mut App, astro_token_instance: &Addr) -> Addr {
     let vesting_contract = Box::new(ContractWrapper::new_with_empty(
-        astroport_vesting::contract::execute,
-        astroport_vesting::contract::instantiate,
-        astroport_vesting::contract::query,
+        crate::contract::execute,
+        crate::contract::instantiate,
+        crate::contract::query,
     ));
     let owner = Addr::unchecked(OWNER1);
     let vesting_code_id = app.store_code(vesting_contract);
@@ -985,9 +982,9 @@ fn instantiate_vesting(mut app: &mut App, astro_token_instance: &Addr) -> Addr {
 
 fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
     let vesting_contract = Box::new(ContractWrapper::new_with_empty(
-        astroport_vesting::contract::execute,
-        astroport_vesting::contract::instantiate,
-        astroport_vesting::contract::query,
+        crate::contract::execute,
+        crate::contract::instantiate,
+        crate::contract::query,
     ));
     let owner = Addr::unchecked(OWNER1);
     let vesting_code_id = app.store_code(vesting_contract);

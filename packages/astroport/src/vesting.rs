@@ -118,12 +118,6 @@ pub enum QueryMsg {
     /// Timestamp returns the current timestamp
     #[returns(u64)]
     Timestamp {},
-    /// Returns the total unclaimed amount of tokens for a specific address at certain height.
-    #[returns(Uint128)]
-    UnclaimedAmountAtHeight { address: String, height: u64 },
-    /// Returns the total unclaimed amount of tokens for a specific address at certain height.
-    #[returns(Uint128)]
-    UnclaimedTotalAmountAtHeight { height: u64 },
 }
 
 /// This structure describes a custom struct used to return the contract configuration.

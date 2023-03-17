@@ -6,6 +6,32 @@ use astroport::vesting::{OrderBy, VestingInfo, VestingState};
 use cosmwasm_std::{Addr, Deps, StdResult};
 use cw_storage_plus::{Bound, Item, SnapshotItem, SnapshotMap, Strategy};
 
+pub struct BaseVesting {
+    /// Stores the total granted/claimed amount of tokens
+    pub vesting_state: SnapshotItem<'static, VestingState>,
+    /// The first key is the address of an account that's vesting, the second key is an object of type [`VestingInfo`].
+    pub vesting_info: SnapshotMap<'static, &'static Addr, VestingInfo>,
+}
+
+impl BaseVesting {
+    pub fn new(snapshot_strategy: Strategy) -> Self {
+        BaseVesting {
+            vesting_state: SnapshotItem::new(
+                "vesting_state",
+                "vesting_state__checkpoints",
+                "vesting_state__changelog",
+                snapshot_strategy,
+            ),
+            vesting_info: SnapshotMap::new(
+                "vesting_info",
+                "vesting_info__checkpoints",
+                "vesting_info__changelog",
+                snapshot_strategy,
+            ),
+        }
+    }
+}
+
 /// This structure stores the main parameters for the generator vesting contract.
 #[cw_serde]
 pub struct Config {
@@ -18,63 +44,50 @@ pub struct Config {
 /// Stores the contract config at the given key.
 pub const CONFIG: Item<Config> = Item::new("config");
 
-/// Stores the total granted/claimed amount of tokens
-pub const VESTING_STATE: SnapshotItem<VestingState> = SnapshotItem::new(
-    "vesting_state",
-    "vesting_state__checkpoints",
-    "vesting_state__changelog",
-    Strategy::EveryBlock,
-);
-
-/// The first key is the address of an account that's vesting, the second key is an object of type [`VestingInfo`].
-pub const VESTING_INFO: SnapshotMap<&Addr, VestingInfo> = SnapshotMap::new(
-    "vesting_info",
-    "vesting_info__checkpoints",
-    "vesting_info__changelog",
-    Strategy::EveryBlock,
-);
-
 /// Contains a proposal to change contract ownership.
 pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
 
 const MAX_LIMIT: u32 = 30;
 const DEFAULT_LIMIT: u32 = 10;
 
-/// Returns an empty vector if it does not find data, otherwise returns a vector that
-/// contains objects of type [`VESTING_INFO`].
-/// ## Params
-///
-/// * **start_after** index from which to start reading vesting schedules.
-///
-/// * **limit** amount of vesting schedules to read.
-///
-/// * **order_by** whether results should be returned in an ascending or descending order.
-pub fn read_vesting_infos(
-    deps: Deps,
-    start_after: Option<Addr>,
-    limit: Option<u32>,
-    order_by: Option<OrderBy>,
-) -> StdResult<Vec<(Addr, VestingInfo)>> {
-    let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
-    let start_after = start_after.as_ref().map(Bound::exclusive);
+impl BaseVesting {
+    /// Returns an empty vector if it does not find data, otherwise returns a vector that
+    /// contains objects of type [`VESTING_INFO`].
+    /// ## Params
+    ///
+    /// * **start_after** index from which to start reading vesting schedules.
+    ///
+    /// * **limit** amount of vesting schedules to read.
+    ///
+    /// * **order_by** whether results should be returned in an ascending or descending order.
+    pub fn read_vesting_infos(
+        &self,
+        deps: Deps,
+        start_after: Option<Addr>,
+        limit: Option<u32>,
+        order_by: Option<OrderBy>,
+    ) -> StdResult<Vec<(Addr, VestingInfo)>> {
+        let limit = limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT) as usize;
+        let start_after = start_after.as_ref().map(Bound::exclusive);
 
-    let (start, end) = match &order_by {
-        Some(OrderBy::Asc) => (start_after, None),
-        _ => (None, start_after),
-    };
+        let (start, end) = match &order_by {
+            Some(OrderBy::Asc) => (start_after, None),
+            _ => (None, start_after),
+        };
 
-    let info: Vec<(Addr, VestingInfo)> = VESTING_INFO
-        .range(
-            deps.storage,
-            start,
-            end,
-            order_by.unwrap_or(OrderBy::Desc).into(),
-        )
-        .take(limit)
-        .filter_map(|v| v.ok())
-        .collect();
+        let info: Vec<(Addr, VestingInfo)> = self.vesting_info
+            .range(
+                deps.storage,
+                start,
+                end,
+                order_by.unwrap_or(OrderBy::Desc).into(),
+            )
+            .take(limit)
+            .filter_map(|v| v.ok())
+            .collect();
 
-    Ok(info)
+        Ok(info)
+    }
 }
 
 #[cfg(test)]
@@ -84,6 +97,7 @@ mod testing {
     #[test]
     fn read_vesting_infos_as_expected() {
         use cosmwasm_std::{testing::mock_dependencies, Uint128};
+        let vest_app = BaseVesting::new(Strategy::Never);
 
         let mut deps = mock_dependencies();
 
@@ -95,12 +109,13 @@ mod testing {
         for i in 1..5 {
             let key = Addr::unchecked(format! {"address{}", i});
 
-            VESTING_INFO
+            vest_app
+                .vesting_info
                 .save(&mut deps.storage, &key, &vi_mock, 1)
                 .unwrap();
         }
 
-        let res = read_vesting_infos(
+        let res = vest_app.read_vesting_infos(
             deps.as_ref(),
             Some(Addr::unchecked("address2")),
             None,
@@ -115,7 +130,7 @@ mod testing {
             ]
         );
 
-        let res = read_vesting_infos(
+        let res = vest_app.read_vesting_infos(
             deps.as_ref(),
             Some(Addr::unchecked("address2")),
             Some(1),
@@ -124,7 +139,7 @@ mod testing {
         .unwrap();
         assert_eq!(res, vec![(Addr::unchecked("address3"), vi_mock.clone())]);
 
-        let res = read_vesting_infos(
+        let res = vest_app.read_vesting_infos(
             deps.as_ref(),
             Some(Addr::unchecked("address3")),
             None,
@@ -139,7 +154,7 @@ mod testing {
             ]
         );
 
-        let res = read_vesting_infos(
+        let res = vest_app.read_vesting_infos(
             deps.as_ref(),
             Some(Addr::unchecked("address3")),
             Some(1),
