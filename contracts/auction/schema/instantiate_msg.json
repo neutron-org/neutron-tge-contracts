@@ -3,26 +3,24 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
-    "base_denom",
+    "atom_denom",
     "deposit_window",
     "init_timestamp",
-    "lockdrop_contract_address",
     "lp_tokens_lock_window",
+    "max_exchange_rate_age",
     "max_lock_period",
-    "min_exchange_rate",
     "min_lock_period",
     "min_ntrn_amount",
     "price_feed_contract",
     "reserve_contract_address",
-    "stable_denom",
+    "usdc_denom",
     "vesting_atom_contract_address",
     "vesting_migration_pack_size",
     "vesting_usdc_contract_address",
-    "volatile_denom",
     "withdrawal_window"
   ],
   "properties": {
-    "base_denom": {
+    "atom_denom": {
       "type": "string"
     },
     "deposit_window": {
@@ -36,9 +34,17 @@
       "minimum": 0.0
     },
     "lockdrop_contract_address": {
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "lp_tokens_lock_window": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "max_exchange_rate_age": {
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
@@ -46,11 +52,6 @@
     "max_lock_period": {
       "type": "integer",
       "format": "uint16",
-      "minimum": 0.0
-    },
-    "min_exchange_rate": {
-      "type": "integer",
-      "format": "uint64",
       "minimum": 0.0
     },
     "min_lock_period": {
@@ -73,7 +74,7 @@
     "reserve_contract_address": {
       "type": "string"
     },
-    "stable_denom": {
+    "usdc_denom": {
       "type": "string"
     },
     "vesting_atom_contract_address": {
@@ -85,9 +86,6 @@
       "minimum": 0.0
     },
     "vesting_usdc_contract_address": {
-      "type": "string"
-    },
-    "volatile_denom": {
       "type": "string"
     },
     "withdrawal_window": {

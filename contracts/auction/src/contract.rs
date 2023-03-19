@@ -22,6 +22,7 @@ use cw20::Cw20ExecuteMsg;
 const CONTRACT_NAME: &str = "auction";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const UNTRN_DENOM: &str = "untrn";
 
 /// ## Description
 /// Creates a new contract with the specified parameters
@@ -51,13 +52,20 @@ pub fn instantiate(
         )));
     }
 
+    let lockdrop_contract_address =
+        if let Some(lockdrop_contract_address) = msg.lockdrop_contract_address {
+            Some(deps.api.addr_validate(&lockdrop_contract_address)?)
+        } else {
+            None
+        };
+
     let config = Config {
         owner: msg
             .owner
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
-        lockdrop_contract_address: deps.api.addr_validate(&msg.lockdrop_contract_address)?,
+        lockdrop_contract_address,
         price_feed_contract: deps.api.addr_validate(msg.price_feed_contract.as_str())?,
         reserve_contract_address: deps.api.addr_validate(&msg.reserve_contract_address)?,
         vesting_usdc_contract_address: deps
@@ -71,10 +79,10 @@ pub fn instantiate(
         init_timestamp: msg.init_timestamp,
         deposit_window: msg.deposit_window,
         withdrawal_window: msg.withdrawal_window,
-        usdc_denom: msg.stable_denom,
-        atom_denom: msg.volatile_denom,
-        ntrn_denom: msg.base_denom,
-        min_exchange_rate_age: msg.min_exchange_rate,
+        usdc_denom: msg.usdc_denom,
+        atom_denom: msg.atom_denom,
+        ntrn_denom: UNTRN_DENOM.to_string(),
+        max_exchange_rate_age: msg.max_exchange_rate_age,
         min_ntrn_amount: msg.min_ntrn_amount,
         vesting_migration_pack_size: msg.vesting_migration_pack_size,
     };
@@ -257,6 +265,11 @@ pub fn execute_update_config(
     if let Some(owner) = new_config.owner {
         config.owner = deps.api.addr_validate(&owner)?;
         attributes.push(attr("owner", config.owner.to_string()));
+    }
+    if let Some(lockdrop_contract_address) = new_config.lockdrop_contract_address {
+        config.lockdrop_contract_address =
+            Some(deps.api.addr_validate(&lockdrop_contract_address)?);
+        attributes.push(attr("lockdrop_contract_address", lockdrop_contract_address));
     }
 
     if let Some(price_feed_contract) = new_config.price_feed_contract {
@@ -497,7 +510,7 @@ pub fn execute_set_pool_size(
         .querier
         .query_wasm_smart(config.price_feed_contract, &PriceFeedQueryMsg::GetRate {})?;
 
-    if exchange_data[0].resolve_time.u64() < env.block.time.seconds() - config.min_exchange_rate_age
+    if exchange_data[0].resolve_time.u64() < env.block.time.seconds() - config.max_exchange_rate_age
     {
         return Err(StdError::generic_err("Price feed data is too old"));
     }
@@ -634,6 +647,9 @@ pub fn execute_finalize_init_pool(
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
+    let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
+        StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
+    })?;
     if let Some(PoolInfo {
         ntrn_usdc_pool_address: _,
         ntrn_atom_pool_address: _,
@@ -684,7 +700,7 @@ pub fn execute_finalize_init_pool(
                 contract_addr: ntrn_atom_lp_token_address.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: config.lockdrop_contract_address.to_string(),
+                    recipient: lockdrop_address.to_string(),
                     amount: state.atom_lp_locked,
                 })?,
             }))
@@ -694,7 +710,7 @@ pub fn execute_finalize_init_pool(
                 contract_addr: ntrn_usdc_lp_token_address.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: config.lockdrop_contract_address.to_string(),
+                    recipient: lockdrop_address.to_string(),
                     amount: state.usdc_lp_locked,
                 })?,
             }))
@@ -901,6 +917,10 @@ pub fn execute_lock_lp_tokens(
         return Err(StdError::generic_err("Lock window is closed!"));
     }
 
+    let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
+        StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
+    })?;
+
     let user_lp_info = get_user_lp_info(
         user_info.usdc_deposited,
         user_info.atom_deposited,
@@ -934,7 +954,7 @@ pub fn execute_lock_lp_tokens(
     }
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config.lockdrop_contract_address.to_string(),
+        contract_addr: lockdrop_address.to_string(),
         funds: vec![],
         msg: to_binary(&LockDropExecuteMsg::IncreaseLockupFor {
             user_address: info.sender.to_string(),
@@ -983,6 +1003,10 @@ pub fn execute_withdraw_lp_tokens(
         return Err(StdError::generic_err("Lock window is closed!"));
     }
 
+    let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
+        StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
+    })?;
+
     match asset {
         PoolType::USDC => {
             user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_sub(amount)?;
@@ -995,7 +1019,7 @@ pub fn execute_withdraw_lp_tokens(
     }
 
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: config.lockdrop_contract_address.to_string(),
+        contract_addr: lockdrop_address.to_string(),
         funds: vec![],
         msg: to_binary(&LockDropExecuteMsg::WithdrawFromLockup {
             pool_type: asset,

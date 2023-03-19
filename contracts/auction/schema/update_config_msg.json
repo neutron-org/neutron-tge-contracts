@@ -3,6 +3,12 @@
   "title": "UpdateConfigMsg",
   "type": "object",
   "properties": {
+    "lockdrop_contract_address": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "owner": {
       "type": [
         "string",

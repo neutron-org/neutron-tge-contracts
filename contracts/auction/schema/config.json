@@ -6,9 +6,8 @@
     "atom_denom",
     "deposit_window",
     "init_timestamp",
-    "lockdrop_contract_address",
     "lp_tokens_lock_window",
-    "min_exchange_rate_age",
+    "max_exchange_rate_age",
     "min_ntrn_amount",
     "ntrn_denom",
     "owner",
@@ -39,9 +38,12 @@
     },
     "lockdrop_contract_address": {
       "description": "Lockdrop Contract address",
-      "allOf": [
+      "anyOf": [
         {
           "$ref": "#/definitions/Addr"
+        },
+        {
+          "type": "null"
         }
       ]
     },
@@ -51,7 +53,7 @@
       "format": "uint64",
       "minimum": 0.0
     },
-    "min_exchange_rate_age": {
+    "max_exchange_rate_age": {
       "description": "min exchange freshness rate (seconds)",
       "type": "integer",
       "format": "uint64",

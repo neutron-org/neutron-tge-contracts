@@ -4,6 +4,7 @@
   "type": "object",
   "required": [
     "atom_token",
+    "auction_contract",
     "credit_contract",
     "deposit_window",
     "init_timestamp",
@@ -19,8 +20,12 @@
       "description": "Address of ATOM/NTRN token",
       "type": "string"
     },
+    "auction_contract": {
+      "description": "Auction contract address",
+      "type": "string"
+    },
     "credit_contract": {
-      "description": "Credit cintract address",
+      "description": "Credit contract address",
       "type": "string"
     },
     "deposit_window": {

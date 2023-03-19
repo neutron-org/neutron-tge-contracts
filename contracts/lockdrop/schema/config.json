@@ -3,6 +3,7 @@
   "title": "Config",
   "type": "object",
   "required": [
+    "auction_contract",
     "credit_contract",
     "deposit_window",
     "init_timestamp",
@@ -18,12 +19,9 @@
   "properties": {
     "auction_contract": {
       "description": "Bootstrap Auction contract address",
-      "anyOf": [
+      "allOf": [
         {
           "$ref": "#/definitions/Addr"
-        },
-        {
-          "type": "null"
         }
       ]
     },

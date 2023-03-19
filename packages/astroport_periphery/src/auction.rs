@@ -8,7 +8,7 @@ use crate::lockdrop::PoolType;
 pub struct InstantiateMsg {
     pub owner: Option<String>,
     pub price_feed_contract: String,
-    pub lockdrop_contract_address: String,
+    pub lockdrop_contract_address: Option<String>,
     pub reserve_contract_address: String,
     pub vesting_usdc_contract_address: String,
     pub vesting_atom_contract_address: String,
@@ -16,12 +16,11 @@ pub struct InstantiateMsg {
     pub init_timestamp: u64,
     pub deposit_window: u64,
     pub withdrawal_window: u64,
-    pub stable_denom: String,
-    pub volatile_denom: String,
-    pub base_denom: String,
+    pub usdc_denom: String,
+    pub atom_denom: String,
     pub max_lock_period: u16,
     pub min_lock_period: u16,
-    pub min_exchange_rate: u64,
+    pub max_exchange_rate_age: u64,
     pub min_ntrn_amount: Uint128,
     pub vesting_migration_pack_size: u16,
 }
@@ -30,6 +29,7 @@ pub struct InstantiateMsg {
 pub struct UpdateConfigMsg {
     pub owner: Option<String>,
     pub price_feed_contract: Option<String>,
+    pub lockdrop_contract_address: Option<String>,
     pub vesting_migration_pack_size: Option<u16>,
 }
 
@@ -114,7 +114,7 @@ pub struct Config {
     /// Vesting LP-ATOM Contract address
     pub vesting_atom_contract_address: Addr,
     /// Lockdrop Contract address
-    pub lockdrop_contract_address: Addr,
+    pub lockdrop_contract_address: Option<Addr>,
     /// Price feed contract address
     pub price_feed_contract: Addr,
     /// Pool info
@@ -136,7 +136,7 @@ pub struct Config {
     /// Min NTRN amount to be distributed as pool liquidity
     pub min_ntrn_amount: Uint128,
     /// min exchange freshness rate (seconds)
-    pub min_exchange_rate_age: u64,
+    pub max_exchange_rate_age: u64,
     /// vesting migration users pack size
     pub vesting_migration_pack_size: u16,
 }
