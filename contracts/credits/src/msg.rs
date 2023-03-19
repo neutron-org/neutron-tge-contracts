@@ -5,17 +5,26 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateMsg {
+    pub dao_address: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct UpdateConfigMsg {
     /// Airdrop contract address
-    pub airdrop_address: String,
+    pub airdrop_address: Option<String>,
     /// Lockdrop contract address,
-    pub lockdrop_address: String,
+    pub lockdrop_address: Option<String>,
     /// When can start withdrawing untrn tokens
-    pub when_withdrawable: Timestamp,
+    pub when_withdrawable: Option<Timestamp>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
+    /// UpdateConfig is a message that allows to update config of the contract.
+    /// [Permissioned - DAO]
+    UpdateConfig { config: UpdateConfigMsg },
     /// AddVesting is a message that allows address to claim particular amount of untrn tokens at particular time.
     /// Can only store one vesting amount per address.
     /// [Permissioned - Airdrop address]

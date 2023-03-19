@@ -4,8 +4,7 @@
   "type": "object",
   "required": [
     "auction_contract",
-    "credit_contract",
-    "deposit_window",
+    "credits_contract",
     "init_timestamp",
     "lock_window",
     "lockdrop_incentives",
@@ -25,19 +24,13 @@
         }
       ]
     },
-    "credit_contract": {
-      "description": "Credit contract address",
+    "credits_contract": {
+      "description": "Credits contract address",
       "allOf": [
         {
           "$ref": "#/definitions/Addr"
         }
       ]
-    },
-    "deposit_window": {
-      "description": "Number of seconds during which lockup deposits will be accepted",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
     },
     "generator": {
       "description": "Generator (Staking for dual rewards) contract address",

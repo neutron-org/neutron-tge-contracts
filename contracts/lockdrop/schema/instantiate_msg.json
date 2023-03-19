@@ -5,9 +5,9 @@
   "required": [
     "atom_token",
     "auction_contract",
-    "credit_contract",
-    "deposit_window",
+    "credits_contract",
     "init_timestamp",
+    "lock_window",
     "lockup_rewards_info",
     "max_lock_duration",
     "max_positions_per_user",
@@ -24,18 +24,18 @@
       "description": "Auction contract address",
       "type": "string"
     },
-    "credit_contract": {
-      "description": "Credit contract address",
+    "credits_contract": {
+      "description": "Credits contract address",
       "type": "string"
     },
-    "deposit_window": {
-      "description": "Number of seconds during which lockup deposits will be accepted",
+    "init_timestamp": {
+      "description": "Timestamp when Contract will start accepting LP Token deposits",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
     },
-    "init_timestamp": {
-      "description": "Timestamp when Contract will start accepting LP Token deposits",
+    "lock_window": {
+      "description": "Number of seconds during which lockup deposits will be accepted",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0

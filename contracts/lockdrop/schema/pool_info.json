@@ -8,7 +8,7 @@
     "generator_proxy_per_share",
     "incentives_share",
     "is_staked",
-    "pool",
+    "lp_token",
     "weighted_amount"
   ],
   "properties": {
@@ -41,7 +41,7 @@
       "description": "Boolean value indicating if the LP Tokens are staked with the Generator contract or not",
       "type": "boolean"
     },
-    "pool": {
+    "lp_token": {
       "$ref": "#/definitions/Addr"
     },
     "weighted_amount": {

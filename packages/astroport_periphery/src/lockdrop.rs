@@ -70,14 +70,14 @@ pub struct InstantiateMsg {
     pub atom_token: String,
     /// Address of USDC/NTRN token
     pub usdc_token: String,
-    /// Credit contract address
-    pub credit_contract: String,
+    /// Credits contract address
+    pub credits_contract: String,
     /// Auction contract address
     pub auction_contract: String,
     /// Timestamp when Contract will start accepting LP Token deposits
     pub init_timestamp: u64,
     /// Number of seconds during which lockup deposits will be accepted
-    pub deposit_window: u64,
+    pub lock_window: u64,
     /// Withdrawal Window Length :: Post the deposit window
     pub withdrawal_window: u64,
     /// Min. no. of weeks allowed for lockup
@@ -109,6 +109,7 @@ pub enum ExecuteMsg {
     },
     // Receive hook used to accept LP Token deposits
     Receive(Cw20ReceiveMsg),
+    #[serde(rename = "increase_ntrn_incentives")]
     IncreaseNTRNIncentives {},
     // ADMIN Function ::: To update configuration
     UpdateConfig {
@@ -252,8 +253,8 @@ pub struct LockupRewardsInfo {
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
-    /// Credit contract address
-    pub credit_contract: Addr,
+    /// Credits contract address
+    pub credits_contract: Addr,
     /// Bootstrap Auction contract address
     pub auction_contract: Addr,
     /// Generator (Staking for dual rewards) contract address
@@ -262,8 +263,6 @@ pub struct Config {
     pub init_timestamp: u64,
     /// Number of seconds during which lockup positions be accepted
     pub lock_window: u64,
-    /// Number of seconds during which lockup deposits will be accepted
-    pub deposit_window: u64,
     /// Withdrawal Window Length :: Post the deposit window
     pub withdrawal_window: u64,
     /// Min. no. of weeks allowed for lockup
@@ -286,7 +285,7 @@ pub struct State {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PoolInfo {
-    pub pool: Addr,
+    pub lp_token: Addr,
     pub amount_in_lockups: Uint128,
     // pub migration_info: Option<MigrationInfo>,
     /// Share of total NTRN incentives allocated to this pool
