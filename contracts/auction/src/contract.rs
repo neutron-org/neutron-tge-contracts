@@ -340,7 +340,7 @@ pub fn execute_withdraw(
         )));
     }
 
-    if amount_usdc.gt(&Uint128::zero()) && amount_atom.gt(&Uint128::zero()) {
+    if amount_usdc.is_zero() && amount_atom.is_zero() {
         return Err(StdError::generic_err(
             "At least one token must be withdrawn",
         ));
