@@ -21,7 +21,7 @@
   ],
   "properties": {
     "atom_denom": {
-      "description": "Volatile denom",
+      "description": "ATOM denom",
       "type": "string"
     },
     "deposit_window": {
@@ -107,7 +107,7 @@
       ]
     },
     "usdc_denom": {
-      "description": "Stable denom",
+      "description": "USDC denom",
       "type": "string"
     },
     "vesting_atom_contract_address": {

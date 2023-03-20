@@ -43,6 +43,7 @@
       "type": "boolean"
     },
     "lp_atom_shares_minted": {
+      "description": "Total LP shares minted post liquidity addition to the NTRN-ATOM Pool",
       "anyOf": [
         {
           "$ref": "#/definitions/Uint128"
@@ -53,7 +54,7 @@
       ]
     },
     "lp_usdc_shares_minted": {
-      "description": "Total LP shares minted post liquidity addition to the cNTRN-Native Pool",
+      "description": "Total LP shares minted post liquidity addition to the NTRN-USDC Pool",
       "anyOf": [
         {
           "$ref": "#/definitions/Uint128"
@@ -64,7 +65,7 @@
       ]
     },
     "pool_init_timestamp": {
-      "description": "Timestamp at which liquidity was added to the NTRN-Stable and NTRN-Volatile LP Pool",
+      "description": "Timestamp at which liquidity was added to the NTRN-ATOM and NTRN-USDC LP Pool",
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0

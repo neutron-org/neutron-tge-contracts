@@ -129,9 +129,9 @@ pub struct Config {
     pub lp_tokens_lock_window: u64,
     /// Base denom
     pub ntrn_denom: String,
-    /// Stable denom
+    /// USDC denom
     pub usdc_denom: String,
-    /// Volatile denom
+    /// ATOM denom
     pub atom_denom: String,
     /// Min NTRN amount to be distributed as pool liquidity
     pub min_ntrn_amount: Uint128,
@@ -149,10 +149,11 @@ pub struct State {
     /// Total ATOM deposited to the contract
     pub total_atom_deposited: Uint128,
     pub is_rest_lp_vested: bool,
-    /// Total LP shares minted post liquidity addition to the cNTRN-Native Pool
+    /// Total LP shares minted post liquidity addition to the NTRN-USDC Pool
     pub lp_usdc_shares_minted: Option<Uint128>,
+    /// Total LP shares minted post liquidity addition to the NTRN-ATOM Pool
     pub lp_atom_shares_minted: Option<Uint128>,
-    /// Timestamp at which liquidity was added to the NTRN-Stable and NTRN-Volatile LP Pool
+    /// Timestamp at which liquidity was added to the NTRN-ATOM and NTRN-USDC LP Pool
     pub pool_init_timestamp: u64,
     /// USDC NTRN amount
     pub usdc_ntrn_size: Uint128,
@@ -172,9 +173,9 @@ pub struct State {
 #[serde(rename_all = "snake_case")]
 pub struct UserInfo {
     pub address: String,
-    /// Total Stable delegated by the user
+    /// Total USDC delegated by the user
     pub usdc_deposited: Uint128,
-    /// Total Volatile delegated by the user
+    /// Total ATOM delegated by the user
     pub atom_deposited: Uint128,
     /// Withdrawal counter to capture if the user already withdrew tokens during the "only withdrawals" window
     pub withdrawn: bool,

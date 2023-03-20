@@ -391,8 +391,8 @@ pub fn execute_withdraw(
     Ok(res.add_attributes(vec![
         attr("action", "Auction::ExecuteMsg::Withdraw"),
         attr("user", user_address.to_string()),
-        attr("stable_withdrawn", amount_usdc),
-        attr("volatile_withdrawn", amount_atom),
+        attr("usdc_withdrawn", amount_usdc),
+        attr("atom_withdrawn", amount_atom),
     ]))
 }
 

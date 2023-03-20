@@ -16,7 +16,7 @@
       "type": "string"
     },
     "atom_deposited": {
-      "description": "Total Volatile delegated by the user",
+      "description": "Total ATOM delegated by the user",
       "allOf": [
         {
           "$ref": "#/definitions/Uint128"
@@ -36,7 +36,7 @@
       "type": "boolean"
     },
     "usdc_deposited": {
-      "description": "Total Stable delegated by the user",
+      "description": "Total USDC delegated by the user",
       "allOf": [
         {
           "$ref": "#/definitions/Uint128"
