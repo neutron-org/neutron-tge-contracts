@@ -510,6 +510,10 @@ pub fn execute_set_pool_size(
         .querier
         .query_wasm_smart(config.price_feed_contract, &PriceFeedQueryMsg::GetRate {})?;
 
+    if exchange_data.len() != 2 {
+        return Err(StdError::generic_err("Invalid price feed data"));
+    }
+
     if exchange_data[0].resolve_time.u64() < env.block.time.seconds() - config.max_exchange_rate_age
     {
         return Err(StdError::generic_err("Price feed data is too old"));
