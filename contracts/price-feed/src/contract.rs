@@ -116,7 +116,8 @@ fn query_error(deps: Deps) -> StdResult<String> {
 
 fn query_rate(deps: Deps) -> StdResult<Vec<PriceFeedRate>> {
     let config = BAND_CONFIG.load(deps.storage)?;
-    let symbols = config.symbols;
+    let mut symbols = config.symbols;
+    symbols.sort();
     let mut out = vec![];
     for s in symbols {
         out.push(RATES.load(deps.storage, &s)?);
