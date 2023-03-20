@@ -5,6 +5,7 @@ use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Order, Response, StdError, StdResult, Uint128, WasmMsg,
 };
+use std::str::FromStr;
 
 use astroport_periphery::auction::{
     CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolBalance, PoolInfo, QueryMsg,
@@ -526,8 +527,9 @@ pub fn execute_set_pool_size(
         )));
     }
 
-    let usdc_to_atom_rate = Decimal::from_ratio(exchange_data[0].rate, exchange_data[1].rate);
-    let all_in_usdc = Uint128::checked_add(usdc_amount, atom_amount * usdc_to_atom_rate)?;
+    let usdc_to_atom_rate = Decimal::from_ratio(exchange_data[1].rate, exchange_data[0].rate);
+    let atom_in_usdc = Decimal::from_str(&atom_amount.to_string())? / usdc_to_atom_rate;
+    let all_in_usdc = Uint128::checked_add(usdc_amount, atom_in_usdc.to_uint_floor())?;
     let div_ratio = Decimal::from_ratio(usdc_amount, all_in_usdc);
     let usdc_ntrn_size = ntrn_amount * div_ratio;
     let atom_ntrn_size = ntrn_amount - usdc_ntrn_size;
@@ -544,6 +546,8 @@ pub fn execute_set_pool_size(
     Ok(Response::new().add_attributes(vec![
         attr("action", "Auction::ExecuteMsg::SetPoolSize"),
         attr("div_ratio", div_ratio.to_string()),
+        attr("atom", exchange_data[0].rate),
+        attr("usdc", exchange_data[1].rate),
         attr("all_in_usdc", all_in_usdc),
         attr("usdc_to_atom_rate", usdc_to_atom_rate.to_string()),
         attr("usdc_ntrn_size", usdc_ntrn_size),
@@ -552,6 +556,14 @@ pub fn execute_set_pool_size(
         attr("atom_lp_size", atom_ntrn_size),
     ]))
 }
+
+// #[test]
+// fn test_get_lp_size() {
+//     let x = Uint64::from(10000000u64);
+//     let y = Uint64::from(1000000u64);
+//     let z = Decimal::from_ratio(y, x);
+//     println!("{}", z);
+// }
 
 /// Facilitates Liquidity addtion to the Astroport NTRN-NATIVE Pool. Returns a default object of type [`Response`].
 /// ## Params
