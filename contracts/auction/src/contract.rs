@@ -544,6 +544,8 @@ pub fn execute_set_pool_size(
     Ok(Response::new().add_attributes(vec![
         attr("action", "Auction::ExecuteMsg::SetPoolSize"),
         attr("div_ratio", div_ratio.to_string()),
+        attr("all_in_usdc", all_in_usdc),
+        attr("usdc_to_atom_rate", usdc_to_atom_rate.to_string()),
         attr("usdc_ntrn_size", usdc_ntrn_size),
         attr("atom_ntrn_size", atom_ntrn_size),
         attr("usdc_lp_size", usdc_ntrn_size),
