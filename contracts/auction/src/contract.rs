@@ -202,7 +202,7 @@ pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Res
         attr("action", "Auction::ExecuteMsg::Deposit"),
         attr("user", info.sender.to_string()),
         attr("usdc_deposited", usdc_amount),
-        attr("_deposited", atom_amount),
+        attr("atom_deposited", atom_amount),
     ]))
 }
 
