@@ -54,8 +54,8 @@ pub enum ExecuteMsg {
     },
     Deposit {},
     Withdraw {
-        amount_stable: Uint128,
-        amount_volatile: Uint128,
+        amount_atom: Uint128,
+        amount_usdc: Uint128,
     },
     InitPool {},
     SetPoolSize {},

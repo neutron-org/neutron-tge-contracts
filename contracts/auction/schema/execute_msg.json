@@ -43,14 +43,14 @@
         "withdraw": {
           "type": "object",
           "required": [
-            "amount_stable",
-            "amount_volatile"
+            "amount_atom",
+            "amount_usdc"
           ],
           "properties": {
-            "amount_stable": {
+            "amount_atom": {
               "$ref": "#/definitions/Uint128"
             },
-            "amount_volatile": {
+            "amount_usdc": {
               "$ref": "#/definitions/Uint128"
             }
           }

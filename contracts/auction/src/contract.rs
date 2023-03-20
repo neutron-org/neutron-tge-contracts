@@ -119,9 +119,9 @@ pub fn execute(
         ExecuteMsg::UpdateConfig { new_config } => execute_update_config(deps, info, new_config),
         ExecuteMsg::Deposit {} => execute_deposit(deps, env, info),
         ExecuteMsg::Withdraw {
-            amount_stable,
-            amount_volatile,
-        } => execute_withdraw(deps, env, info, amount_stable, amount_volatile),
+            amount_usdc,
+            amount_atom,
+        } => execute_withdraw(deps, env, info, amount_usdc, amount_atom),
         ExecuteMsg::SetPoolSize {} => execute_set_pool_size(deps, env, info),
         ExecuteMsg::InitPool {} => execute_init_pool(deps, env, info),
         ExecuteMsg::LockLp {
