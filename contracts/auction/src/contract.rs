@@ -1043,6 +1043,7 @@ pub fn execute_withdraw_lp_tokens(
         contract_addr: lockdrop_address.to_string(),
         funds: vec![],
         msg: to_binary(&LockDropExecuteMsg::WithdrawFromLockup {
+            user_address: info.sender.to_string(),
             pool_type: asset,
             amount,
             duration,

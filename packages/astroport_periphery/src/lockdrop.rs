@@ -113,6 +113,7 @@ pub enum ExecuteMsg {
     },
     // Function to facilitate LP Token withdrawals from lockups
     WithdrawFromLockup {
+        user_address: String,
         pool_type: PoolType,
         duration: u64,
         amount: Uint128,

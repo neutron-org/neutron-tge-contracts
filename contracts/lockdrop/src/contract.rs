@@ -197,10 +197,13 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             duration,
         } => handle_increase_lockup(deps, env, info, user_address, pool_type, duration, amount),
         ExecuteMsg::WithdrawFromLockup {
+            user_address,
             pool_type,
             duration,
             amount,
-        } => handle_withdraw_from_lockup(deps, env, info, pool_type, duration, amount),
+        } => {
+            handle_withdraw_from_lockup(deps, env, info, user_address, pool_type, duration, amount)
+        }
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
         ExecuteMsg::SetPoolInfo {
             pool_type,
@@ -750,6 +753,7 @@ pub fn handle_withdraw_from_lockup(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
+    user_address: String,
     pool_type: PoolType,
     duration: u64,
     amount: Uint128,
@@ -767,8 +771,9 @@ pub fn handle_withdraw_from_lockup(
 
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
+    let user_address = deps.api.addr_validate(&user_address)?;
+
     // Retrieve Lockup position
-    let user_address = info.sender;
     let lockup_key = (pool_type, &user_address, duration);
     let mut lockup_info =
         LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key, &config.generator)?;
