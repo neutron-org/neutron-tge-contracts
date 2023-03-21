@@ -31,6 +31,7 @@ pub struct UpdateConfigMsg {
     pub price_feed_contract: Option<String>,
     pub lockdrop_contract_address: Option<String>,
     pub vesting_migration_pack_size: Option<u16>,
+    pub pool_info: Option<PoolInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

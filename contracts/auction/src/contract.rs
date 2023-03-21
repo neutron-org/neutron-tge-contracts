@@ -272,7 +272,6 @@ pub fn execute_update_config(
             Some(deps.api.addr_validate(&lockdrop_contract_address)?);
         attributes.push(attr("lockdrop_contract_address", lockdrop_contract_address));
     }
-
     if let Some(price_feed_contract) = new_config.price_feed_contract {
         config.price_feed_contract = deps.api.addr_validate(&price_feed_contract)?;
         attributes.push(attr(
@@ -286,6 +285,10 @@ pub fn execute_update_config(
             "vesting_migration_pack_size",
             config.vesting_migration_pack_size.to_string(),
         ));
+    }
+    if let Some(pool_info) = new_config.pool_info {
+        config.pool_info = Some(pool_info);
+        attributes.push(attr("pool_info", format!("{:?}", config.pool_info)));
     }
 
     CONFIG.save(deps.storage, &config)?;
