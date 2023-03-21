@@ -8,8 +8,6 @@
     "init_timestamp",
     "lp_tokens_lock_window",
     "max_exchange_rate_age",
-    "max_lock_period",
-    "min_lock_period",
     "min_ntrn_amount",
     "price_feed_contract",
     "reserve_contract_address",
@@ -47,16 +45,6 @@
     "max_exchange_rate_age": {
       "type": "integer",
       "format": "uint64",
-      "minimum": 0.0
-    },
-    "max_lock_period": {
-      "type": "integer",
-      "format": "uint16",
-      "minimum": 0.0
-    },
-    "min_lock_period": {
-      "type": "integer",
-      "format": "uint16",
       "minimum": 0.0
     },
     "min_ntrn_amount": {

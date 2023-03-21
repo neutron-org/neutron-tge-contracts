@@ -93,7 +93,7 @@
           "required": [
             "amount",
             "asset",
-            "period"
+            "duration"
           ],
           "properties": {
             "amount": {
@@ -102,7 +102,7 @@
             "asset": {
               "$ref": "#/definitions/PoolType"
             },
-            "period": {
+            "duration": {
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0
@@ -123,7 +123,7 @@
           "required": [
             "amount",
             "asset",
-            "period"
+            "duration"
           ],
           "properties": {
             "amount": {
@@ -132,7 +132,7 @@
             "asset": {
               "$ref": "#/definitions/PoolType"
             },
-            "period": {
+            "duration": {
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0

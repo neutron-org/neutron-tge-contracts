@@ -18,8 +18,6 @@ pub struct InstantiateMsg {
     pub withdrawal_window: u64,
     pub usdc_denom: String,
     pub atom_denom: String,
-    pub max_lock_period: u16,
-    pub min_lock_period: u16,
     pub max_exchange_rate_age: u64,
     pub min_ntrn_amount: Uint128,
     pub vesting_migration_pack_size: u16,
@@ -63,12 +61,12 @@ pub enum ExecuteMsg {
     LockLp {
         asset: PoolType,
         amount: Uint128,
-        period: u64,
+        duration: u64,
     },
     WithdrawLp {
         asset: PoolType,
         amount: Uint128,
-        period: u64,
+        duration: u64,
     },
     MigrateToVesting {},
     Callback(CallbackMsg),

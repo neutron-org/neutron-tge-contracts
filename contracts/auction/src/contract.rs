@@ -128,13 +128,13 @@ pub fn execute(
         ExecuteMsg::LockLp {
             asset,
             amount,
-            period,
-        } => execute_lock_lp_tokens(deps, env, info, asset, amount, period),
+            duration,
+        } => execute_lock_lp_tokens(deps, env, info, asset, amount, duration),
         ExecuteMsg::WithdrawLp {
             asset,
             amount,
-            period,
-        } => execute_withdraw_lp_tokens(deps, env, info, asset, amount, period),
+            duration,
+        } => execute_withdraw_lp_tokens(deps, env, info, asset, amount, duration),
         ExecuteMsg::MigrateToVesting {} => execute_migrate_to_vesting(deps, env, info),
         ExecuteMsg::Callback(msg) => execute_callback(deps, env, info, msg),
     }
@@ -992,7 +992,7 @@ pub fn execute_lock_lp_tokens(
         attr("action", "lock_lp_tokens"),
         attr("asset", asset),
         attr("amount", amount),
-        attr("period", duration.to_string()),
+        attr("duration", duration.to_string()),
     ]))
 }
 
@@ -1056,7 +1056,7 @@ pub fn execute_withdraw_lp_tokens(
         attr("action", "withdraw_lp_tokens"),
         attr("asset", asset),
         attr("amount", amount),
-        attr("period", duration.to_string()),
+        attr("duration", duration.to_string()),
     ]))
 }
 
@@ -1096,8 +1096,8 @@ fn query_user_info(deps: Deps, _env: Env, user_address: String) -> StdResult<Use
     let user_lp_info = get_user_lp_info(
         user_info.usdc_deposited,
         user_info.atom_deposited,
-        state.usdc_ntrn_size,
-        state.atom_ntrn_size,
+        state.total_usdc_deposited,
+        state.total_atom_deposited,
         state.usdc_lp_size,
         state.atom_lp_size,
     );
