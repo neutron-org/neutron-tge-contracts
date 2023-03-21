@@ -1,5 +1,5 @@
 [package]
-name = "astroport-lockdrop"
+name = "neutron-lockdrop"
 version = "1.2.0"
 authors = ["_astromartian"]
 edition = "2021"
@@ -25,6 +25,7 @@ library = []
 
 [dependencies]
 astroport = { git = "https://github.com/astroport-fi/astroport-core.git", branch = "main" }
+credits = {path = "../credits"}
 astroport-periphery = { path = "../../packages/astroport_periphery" }
 terraswap = "2.6"
 cosmwasm-std = { version = "1.0" }
@@ -35,6 +36,6 @@ schemars = "0.8.3"
 serde = { version = "1.0.127", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
-cw20-base = { version = "0.13", features = ["library"] }
+cw20-base = { version = "1.0.1", features = ["library"] }
 cosmwasm-schema = { version = "1.0" }
 cw-multi-test = "0.13"
