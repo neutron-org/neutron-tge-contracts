@@ -199,6 +199,8 @@ pub struct UserInfoResponse {
     pub withdrawn: bool,
     pub atom_lp_amount: Uint128,
     pub usdc_lp_amount: Uint128,
+    pub atom_lp_locked: Uint128,
+    pub usdc_lp_locked: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

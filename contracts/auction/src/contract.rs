@@ -1109,5 +1109,7 @@ fn query_user_info(deps: Deps, _env: Env, user_address: String) -> StdResult<Use
         withdrawn: user_info.withdrawn,
         usdc_lp_amount: user_lp_info.usdc_lp_amount,
         atom_lp_amount: user_lp_info.atom_lp_amount,
+        atom_lp_locked: user_info.atom_lp_locked,
+        usdc_lp_locked: user_info.usdc_lp_locked,
     })
 }
