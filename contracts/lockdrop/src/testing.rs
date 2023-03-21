@@ -5,9 +5,6 @@ use astroport_periphery::lockdrop::{
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
 use cosmwasm_std::{coin, from_binary, Addr, Decimal256, StdError, Uint128};
 
-const ATOM_LP_TOKEN_ADDR: &str = "atom_lp";
-const USDC_LP_TOKEN_ADDR: &str = "usdc_lp";
-
 #[test]
 fn update_owner() {
     let mut deps = mock_dependencies();
@@ -26,8 +23,6 @@ fn update_owner() {
         max_lock_duration: 52u64,
         max_positions_per_user: 14,
         credits_contract: "credit_contract".to_string(),
-        atom_token: ATOM_LP_TOKEN_ADDR.to_string(),
-        usdc_token: USDC_LP_TOKEN_ADDR.to_string(),
         lockup_rewards_info: vec![LockupRewardsInfo {
             duration: 1,
             coefficient: Decimal256::zero(),
@@ -115,8 +110,6 @@ fn increase_ntrn_incentives() {
         max_positions_per_user: 14,
         credits_contract: "credit_contract".to_string(),
         auction_contract: "auction_contract".to_string(),
-        atom_token: ATOM_LP_TOKEN_ADDR.to_string(),
-        usdc_token: USDC_LP_TOKEN_ADDR.to_string(),
         lockup_rewards_info: vec![LockupRewardsInfo {
             duration: 1,
             coefficient: Decimal256::zero(),
