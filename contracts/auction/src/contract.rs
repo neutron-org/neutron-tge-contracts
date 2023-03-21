@@ -1,37 +1,32 @@
+use astroport::asset::{Asset, AssetInfo, MINIMUM_LIQUIDITY_AMOUNT};
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, SubMsg, Uint128, WasmMsg,
+    attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
+    MessageInfo, Order, Response, StdError, StdResult, Uint128, WasmMsg,
 };
+use std::str::FromStr;
 
-use astroport_periphery::airdrop::ExecuteMsg::EnableClaims as AirdropEnableClaims;
 use astroport_periphery::auction::{
-    CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolInfo, QueryMsg,
-    State, UpdateConfigMsg, UserInfo, UserInfoResponse,
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolBalance, PoolInfo, QueryMsg,
+    State, UpdateConfigMsg, UserInfoResponse, UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
 };
-use astroport_periphery::helpers::{build_approve_cw20_msg, cw20_get_balance};
+use astroport_periphery::lockdrop::{ExecuteMsg as LockDropExecuteMsg, PoolType};
 
-use crate::state::{CONFIG, STATE, USERS};
-use astroport::asset::{Asset, AssetInfo, PairInfo};
-use astroport::generator::{
-    ExecuteMsg as GenExecuteMsg, PendingTokenResponse, QueryMsg as GenQueryMsg, RewardInfoResponse,
-};
-use astroport::pair::QueryMsg as AstroportPairQueryMsg;
+use crate::state::{get_users_store, CONFIG, STATE};
 use astroport::querier::query_token_balance;
+use astroport_periphery::pricefeed::{PriceFeedRate, QueryMsg as PriceFeedQueryMsg};
 use cw2::set_contract_version;
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
-
-/// TerraUSD denom.
-const UUSD_DENOM: &str = "uusd";
+use cw20::Cw20ExecuteMsg;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "astroport_auction";
+const CONTRACT_NAME: &str = "auction";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const UNTRN_DENOM: &str = "untrn";
 
 /// ## Description
-/// Creates a new contract with the specified parameters in the [`InstantiateMsg`].
+/// Creates a new contract with the specified parameters
 /// Returns the [`Response`] with the specified attributes if the operation was successful, or a [`StdError`] if
 /// the contract was not created.
 /// ## Params
@@ -58,22 +53,39 @@ pub fn instantiate(
         )));
     }
 
+    let lockdrop_contract_address =
+        if let Some(lockdrop_contract_address) = msg.lockdrop_contract_address {
+            Some(deps.api.addr_validate(&lockdrop_contract_address)?)
+        } else {
+            None
+        };
+
     let config = Config {
         owner: msg
             .owner
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
-        astro_token_address: deps.api.addr_validate(&msg.astro_token_address)?,
-        airdrop_contract_address: deps.api.addr_validate(&msg.airdrop_contract_address)?,
-        lockdrop_contract_address: deps.api.addr_validate(&msg.lockdrop_contract_address)?,
+        lockdrop_contract_address,
+        price_feed_contract: deps.api.addr_validate(msg.price_feed_contract.as_str())?,
+        reserve_contract_address: deps.api.addr_validate(&msg.reserve_contract_address)?,
+        vesting_usdc_contract_address: deps
+            .api
+            .addr_validate(&msg.vesting_usdc_contract_address)?,
+        vesting_atom_contract_address: deps
+            .api
+            .addr_validate(&msg.vesting_atom_contract_address)?,
         pool_info: None,
-        generator_contract: None,
-        astro_incentive_amount: None,
-        lp_tokens_vesting_duration: msg.lp_tokens_vesting_duration,
+        lp_tokens_lock_window: msg.lp_tokens_lock_window,
         init_timestamp: msg.init_timestamp,
         deposit_window: msg.deposit_window,
         withdrawal_window: msg.withdrawal_window,
+        usdc_denom: msg.usdc_denom,
+        atom_denom: msg.atom_denom,
+        ntrn_denom: UNTRN_DENOM.to_string(),
+        max_exchange_rate_age: msg.max_exchange_rate_age,
+        min_ntrn_amount: msg.min_ntrn_amount,
+        vesting_migration_pack_size: msg.vesting_migration_pack_size,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -95,19 +107,8 @@ pub fn instantiate(
 ///
 /// ## Execute messages
 ///
-/// * **ExecuteMsg::Receive(msg)** Parse incoming messages from the ASTRO token.
+/// * **ExecuteMsg::Receive(msg)** Parse incoming messages from the NTRN token.
 ///
-/// * **ExecuteMsg::UpdateConfig { new_config }** Admin function to update configuration parameters.
-///
-/// * **ExecuteMsg::DepositUst {}** Facilitates UST deposits by users.
-///
-/// * **ExecuteMsg::WithdrawUst { amount }** Facilitates UST withdrawals by users.
-///
-/// * **ExecuteMsg::InitPool { slippage }** Admin function which facilitates Liquidity addtion to the Astroport ASTRO-UST Pool.
-///
-/// * **ExecuteMsg::StakeLpTokens {}** Admin function to stake ASTRO-UST LP tokens with the generator contract.
-///
-/// * **ExecuteMsg::ClaimRewards { withdraw_lp_shares }** Facilitates ASTRO rewards claim.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -116,100 +117,94 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, StdError> {
     match msg {
-        ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
-        ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
-        ExecuteMsg::DepositUst {} => handle_deposit_ust(deps, env, info),
-        ExecuteMsg::WithdrawUst { amount } => handle_withdraw_ust(deps, env, info, amount),
-        ExecuteMsg::InitPool { slippage } => handle_init_pool(deps, env, info, slippage),
-        ExecuteMsg::StakeLpTokens {} => handle_stake_lp_tokens(deps, env, info),
-        ExecuteMsg::ClaimRewards { withdraw_lp_shares } => {
-            handle_claim_rewards_and_withdraw_lp_shares(deps, env, info, withdraw_lp_shares)
-        }
-        ExecuteMsg::Callback(msg) => handle_callback(deps, env, info, msg),
+        ExecuteMsg::UpdateConfig { new_config } => execute_update_config(deps, info, new_config),
+        ExecuteMsg::Deposit {} => execute_deposit(deps, env, info),
+        ExecuteMsg::Withdraw {
+            amount_usdc,
+            amount_atom,
+        } => execute_withdraw(deps, env, info, amount_usdc, amount_atom),
+        ExecuteMsg::SetPoolSize {} => execute_set_pool_size(deps, env, info),
+        ExecuteMsg::InitPool {} => execute_init_pool(deps, env, info),
+        ExecuteMsg::LockLp {
+            asset,
+            amount,
+            period,
+        } => execute_lock_lp_tokens(deps, env, info, asset, amount, period),
+        ExecuteMsg::WithdrawLp {
+            asset,
+            amount,
+            period,
+        } => execute_withdraw_lp_tokens(deps, env, info, asset, amount, period),
+        ExecuteMsg::MigrateToVesting {} => execute_migrate_to_vesting(deps, env, info),
+        ExecuteMsg::Callback(msg) => execute_callback(deps, env, info, msg),
     }
 }
 
-/// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template.
-/// If the template is not found in the received message, then an [`StdError`] is returned,
-/// otherwise it returns the [`Response`] with the specified attributes if the operation was successful.
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **cw20_msg** is an object of type [`Cw20ReceiveMsg`]. This is the CW20 message that has to be processed.
-pub fn receive_cw20(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    cw20_msg: Cw20ReceiveMsg,
-) -> Result<Response, StdError> {
-    let config = CONFIG.load(deps.storage)?;
-
-    if info.sender != config.astro_token_address {
-        return Err(StdError::generic_err("Only astro tokens are received!"));
-    }
-
-    // CHECK ::: Amount needs to be valid
-    if cw20_msg.amount.is_zero() {
-        return Err(StdError::generic_err("Amount must be greater than 0"));
-    }
-
-    match from_binary(&cw20_msg.msg)? {
-        Cw20HookMsg::DelegateAstroTokens { user_address } => {
-            // CHECK :: Delegation can happen only via airdrop / lockdrop contracts
-            if cw20_msg.sender == config.airdrop_contract_address
-                || cw20_msg.sender == config.lockdrop_contract_address
-            {
-                handle_delegate_astro_tokens(deps, env, user_address, cw20_msg.amount)
-            } else {
-                Err(StdError::generic_err("Unauthorized"))
-            }
-        }
-        Cw20HookMsg::IncreaseNTRNIncentives {} => {
-            handle_increasing_astro_incentives(deps, cw20_msg.amount)
-        }
-    }
-}
-
-/// ## Description
-/// Handles callback. Returns a [`ContractError`] on failure.
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **msg** is an object of type [`CallbackMsg`].
-fn handle_callback(
+fn execute_callback(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
     msg: CallbackMsg,
-) -> StdResult<Response> {
-    // Callback functions can only be called this contract itself
-    if info.sender != env.contract.address {
-        return Err(StdError::generic_err(
-            "callbacks cannot be invoked externally",
-        ));
-    }
+) -> Result<Response, StdError> {
     match msg {
-        CallbackMsg::UpdateStateOnLiquidityAdditionToPool { prev_lp_balance } => {
-            update_state_on_liquidity_addition_to_pool(deps, env, prev_lp_balance)
-        }
-        CallbackMsg::UpdateStateOnRewardClaim { prev_astro_balance } => {
-            update_state_on_reward_claim(deps, env, prev_astro_balance)
-        }
-        CallbackMsg::WithdrawUserRewardsCallback {
-            user_address,
-            withdraw_lp_shares,
-        } => {
-            callback_withdraw_user_rewards_and_optionally_lp(deps, user_address, withdraw_lp_shares)
+        CallbackMsg::FinalizePoolInitialization { prev_lp_balance } => {
+            execute_finalize_init_pool(deps, env, info, prev_lp_balance)
         }
     }
+}
+
+pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, StdError> {
+    let config = CONFIG.load(deps.storage)?;
+    let users_store = get_users_store();
+
+    // CHECK :: Auction deposit window open
+    if !is_deposit_open(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err("Deposit window closed"));
+    }
+
+    let mut usdc_amount = Uint128::zero();
+    let mut atom_amount = Uint128::zero();
+
+    for fund in info.funds.iter() {
+        if fund.denom == config.usdc_denom {
+            usdc_amount = fund.amount;
+        } else if fund.denom == config.atom_denom {
+            atom_amount = fund.amount;
+        } else {
+            return Err(StdError::generic_err(format!(
+                "Invalid denom. Expected {} or {}",
+                config.usdc_denom, config.atom_denom
+            )));
+        }
+    }
+    if usdc_amount.is_zero() && atom_amount.is_zero() {
+        return Err(StdError::generic_err(format!(
+            "You must send at least one of {} or {}",
+            config.usdc_denom, config.atom_denom
+        )));
+    }
+
+    let mut state = STATE.load(deps.storage)?;
+    let mut user_info = users_store
+        .may_load(deps.storage, &info.sender)?
+        .unwrap_or_default();
+
+    // UPDATE STATE
+    state.total_usdc_deposited += usdc_amount;
+    state.total_atom_deposited += atom_amount;
+    user_info.usdc_deposited += usdc_amount;
+    user_info.atom_deposited += atom_amount;
+
+    // SAVE UPDATED STATE
+    STATE.save(deps.storage, &state)?;
+    users_store.save(deps.storage, &info.sender, &user_info)?;
+
+    Ok(Response::new().add_attributes(vec![
+        attr("action", "Auction::ExecuteMsg::Deposit"),
+        attr("user", info.sender.to_string()),
+        attr("usdc_deposited", usdc_amount),
+        attr("atom_deposited", atom_amount),
+    ]))
 }
 
 /// Exposes all the queries available in the contract.
@@ -254,13 +249,12 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **new_config** is an object of type [`UpdateConfigMsg`].
-pub fn handle_update_config(
+pub fn execute_update_config(
     deps: DepsMut,
     info: MessageInfo,
     new_config: UpdateConfigMsg,
 ) -> StdResult<Response> {
     let mut config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
     let mut attributes = vec![attr("action", "update_config")];
 
     // CHECK :: ONLY OWNER CAN CALL THIS FUNCTION
@@ -273,163 +267,32 @@ pub fn handle_update_config(
         config.owner = deps.api.addr_validate(&owner)?;
         attributes.push(attr("owner", config.owner.to_string()));
     }
-
-    if let Some(astro_ust_pair_address) = new_config.astro_ust_pair_address {
-        if state.lp_shares_minted.is_some() {
-            return Err(StdError::generic_err(
-                "Assets had already been provided to previous pool!",
-            ));
-        }
-        let astro_ust_pair_addr = deps.api.addr_validate(&astro_ust_pair_address)?;
-
-        let pair_info: PairInfo = deps
-            .querier
-            .query_wasm_smart(astro_ust_pair_address, &AstroportPairQueryMsg::Pair {})?;
-
-        config.pool_info = Some(PoolInfo {
-            astro_ust_pool_address: astro_ust_pair_addr,
-            astro_ust_lp_token_address: pair_info.liquidity_token,
-        })
+    if let Some(lockdrop_contract_address) = new_config.lockdrop_contract_address {
+        config.lockdrop_contract_address =
+            Some(deps.api.addr_validate(&lockdrop_contract_address)?);
+        attributes.push(attr("lockdrop_contract_address", lockdrop_contract_address));
     }
-
-    if let Some(generator_contract) = new_config.generator_contract {
-        // check if the LP tokens are already staked or not
-        if state.is_lp_staked {
-            return Err(StdError::generic_err("ASTRO-UST LP tokens already staked"));
-        }
-
-        let generator_addr = deps.api.addr_validate(&generator_contract)?;
-        config.generator_contract = Some(generator_addr.clone());
-        attributes.push(attr("generator", generator_addr.to_string()));
+    if let Some(price_feed_contract) = new_config.price_feed_contract {
+        config.price_feed_contract = deps.api.addr_validate(&price_feed_contract)?;
+        attributes.push(attr(
+            "price_feed_contract",
+            config.price_feed_contract.to_string(),
+        ));
+    }
+    if let Some(vesting_migration_pack_size) = new_config.vesting_migration_pack_size {
+        config.vesting_migration_pack_size = vesting_migration_pack_size;
+        attributes.push(attr(
+            "vesting_migration_pack_size",
+            config.vesting_migration_pack_size.to_string(),
+        ));
+    }
+    if let Some(pool_info) = new_config.pool_info {
+        config.pool_info = Some(pool_info);
+        attributes.push(attr("pool_info", format!("{:?}", config.pool_info)));
     }
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attributes(attributes))
-}
-
-/// Increases ASTRO incentives. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **amount** is an object of type [`Uint128`].
-pub fn handle_increasing_astro_incentives(
-    deps: DepsMut,
-    amount: Uint128,
-) -> Result<Response, StdError> {
-    let state = STATE.load(deps.storage)?;
-    let mut config = CONFIG.load(deps.storage)?;
-
-    if state.lp_shares_minted.is_some() {
-        return Err(StdError::generic_err("ASTRO is already being distributed"));
-    };
-
-    // Anyone can increase astro incentives
-
-    config.astro_incentive_amount = config
-        .astro_incentive_amount
-        .map_or(Some(amount), |v| Some(v + amount));
-
-    CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new()
-        .add_attribute("action", "astro_incentives_increased")
-        .add_attribute("amount", amount))
-}
-
-/// Delegates ASTRO tokens. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **user_address** is an object of type [`String`].
-///
-/// * **amount** is an object of type [`Uint128`].
-pub fn handle_delegate_astro_tokens(
-    deps: DepsMut,
-    env: Env,
-    user_address: String,
-    amount: Uint128,
-) -> Result<Response, StdError> {
-    let config = CONFIG.load(deps.storage)?;
-
-    let user_address = deps.api.addr_validate(&user_address)?;
-
-    // CHECK :: Auction deposit window open
-    if !is_deposit_open(env.block.time.seconds(), &config) {
-        return Err(StdError::generic_err("Deposit window closed"));
-    }
-
-    let mut state = STATE.load(deps.storage)?;
-    let mut user_info = USERS
-        .may_load(deps.storage, &user_address)?
-        .unwrap_or_default();
-
-    // UPDATE STATE
-    state.total_astro_delegated += amount;
-    user_info.astro_delegated += amount;
-
-    // SAVE UPDATED STATE
-    STATE.save(deps.storage, &state)?;
-    USERS.save(deps.storage, &user_address, &user_info)?;
-
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "Auction::ExecuteMsg::DelegateAstroTokens"),
-        attr("user", user_address.to_string()),
-        attr("astro_delegated", amount),
-    ]))
-}
-
-/// Facilitates UST deposits by users. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-pub fn handle_deposit_ust(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-) -> Result<Response, StdError> {
-    let config = CONFIG.load(deps.storage)?;
-
-    // CHECK :: Auction deposit window open
-    if !is_deposit_open(env.block.time.seconds(), &config) {
-        return Err(StdError::generic_err("Deposit window closed"));
-    }
-
-    let mut state = STATE.load(deps.storage)?;
-    let mut user_info = USERS
-        .may_load(deps.storage, &info.sender)?
-        .unwrap_or_default();
-
-    // Retrieve UST sent by the user
-    if info.funds.len() != 1 || info.funds[0].denom != UUSD_DENOM {
-        return Err(StdError::generic_err(
-            "You may delegate UST native coin only",
-        ));
-    }
-
-    let fund = &info.funds[0];
-
-    // CHECK ::: Amount needs to be valid
-    if fund.amount.is_zero() {
-        return Err(StdError::generic_err("Amount must be greater than 0"));
-    }
-
-    // UPDATE STATE
-    state.total_ust_delegated += fund.amount;
-    user_info.ust_delegated += fund.amount;
-
-    // SAVE UPDATED STATE
-    STATE.save(deps.storage, &state)?;
-    USERS.save(deps.storage, &info.sender, &user_info)?;
-
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "Auction::ExecuteMsg::DelegateUst"),
-        attr("user", info.sender.to_string()),
-        attr("ust_delegated", fund.amount),
-    ]))
 }
 
 /// Returns a boolean value indicating if the deposit is open.
@@ -442,7 +305,7 @@ fn is_deposit_open(current_timestamp: u64, config: &Config) -> bool {
         && current_timestamp < config.init_timestamp + config.deposit_window
 }
 
-/// Facilitates UST withdrawals by users. Returns a default object of type [`Response`].
+/// Facilitates Opposite (native) token withdrawals by users. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -451,64 +314,90 @@ fn is_deposit_open(current_timestamp: u64, config: &Config) -> bool {
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **amount** is an object of type [`Uint128`].
-pub fn handle_withdraw_ust(
+pub fn execute_withdraw(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    amount: Uint128,
+    amount_usdc: Uint128,
+    amount_atom: Uint128,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
-
     let user_address = info.sender;
-
-    let mut user_info = USERS.load(deps.storage, &user_address)?;
+    let users_store = get_users_store();
+    let mut user_info = users_store.load(deps.storage, &user_address)?;
 
     // CHECK :: Has the user already withdrawn during the current window
-    if user_info.ust_withdrawn {
+    if user_info.withdrawn {
         return Err(StdError::generic_err("Max 1 withdrawal allowed"));
     }
 
     // Check :: Amount should be within the allowed withdrawal limit bounds
     let max_withdrawal_percent = allowed_withdrawal_percent(env.block.time.seconds(), &config);
-    let max_withdrawal_allowed = user_info.ust_delegated * max_withdrawal_percent;
+    let max_allowed_usdc = user_info.usdc_deposited * max_withdrawal_percent;
+    let max_allowed_atom = user_info.atom_deposited * max_withdrawal_percent;
 
-    if amount > max_withdrawal_allowed {
+    if amount_usdc > max_allowed_usdc || amount_atom > max_allowed_atom {
         return Err(StdError::generic_err(format!(
             "Amount exceeds maximum allowed withdrawal limit of {}",
             max_withdrawal_percent
         )));
     }
 
+    if amount_usdc.is_zero() && amount_atom.is_zero() {
+        return Err(StdError::generic_err(
+            "At least one token must be withdrawn",
+        ));
+    }
+
     // After deposit window is closed, we allow to withdraw only once
     if env.block.time.seconds() >= config.init_timestamp + config.deposit_window {
-        user_info.ust_withdrawn = true;
+        user_info.withdrawn = true;
+    }
+
+    let mut res = Response::new();
+
+    if amount_usdc.gt(&Uint128::zero()) {
+        // Transfer Native tokens to the user
+        let transfer_msg = CosmosMsg::Bank(BankMsg::Send {
+            to_address: user_address.to_string(),
+            amount: vec![Coin {
+                denom: config.usdc_denom,
+                amount: amount_usdc,
+            }],
+        });
+        res = res.add_message(transfer_msg);
+    }
+
+    if amount_atom.gt(&Uint128::zero()) {
+        // Transfer Native tokens to the user
+        let transfer_msg = CosmosMsg::Bank(BankMsg::Send {
+            to_address: user_address.to_string(),
+            amount: vec![Coin {
+                denom: config.atom_denom,
+                amount: amount_atom,
+            }],
+        });
+        res = res.add_message(transfer_msg);
     }
 
     // UPDATE STATE
-    state.total_ust_delegated -= amount;
-    user_info.ust_delegated -= amount;
+    state.total_usdc_deposited -= amount_usdc;
+    state.total_atom_deposited -= amount_atom;
+
+    user_info.usdc_deposited -= amount_usdc;
+    user_info.atom_deposited -= amount_atom;
 
     // SAVE UPDATED STATE
     STATE.save(deps.storage, &state)?;
-    USERS.save(deps.storage, &user_address, &user_info)?;
+    users_store.save(deps.storage, &user_address, &user_info)?;
 
-    // Transfer UST to the user
-    let transfer_ust = Asset {
-        amount,
-        info: AssetInfo::NativeToken {
-            denom: String::from(UUSD_DENOM),
-        },
-    };
-
-    Ok(Response::new()
-        .add_attributes(vec![
-            attr("action", "Auction::ExecuteMsg::WithdrawUst"),
-            attr("user", user_address.to_string()),
-            attr("ust_withdrawn", amount),
-            attr("ust_commission", transfer_ust.compute_tax(&deps.querier)?),
-        ])
-        .add_message(transfer_ust.into_msg(&deps.querier, user_address)?))
+    Ok(res.add_attributes(vec![
+        attr("action", "Auction::ExecuteMsg::Withdraw"),
+        attr("user", user_address.to_string()),
+        attr("usdc_withdrawn", amount_usdc),
+        attr("atom_withdrawn", amount_atom),
+    ]))
 }
 
 /// Allow withdrawal percent. Returns a default object of type [`Response`].
@@ -546,31 +435,59 @@ fn allowed_withdrawal_percent(current_timestamp: u64, config: &Config) -> Decima
     }
 }
 
-/// Facilitates Liquidity addtion to the Astroport ASTRO-UST Pool. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **slippage** is an optional object of type [`Decimal`].
-pub fn handle_init_pool(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    slippage: Option<Decimal>,
-) -> Result<Response, StdError> {
-    let config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
+pub fn get_lp_size(token1: Uint128, token2: Uint128) -> Uint128 {
+    Decimal::sqrt(&Decimal::from_ratio(token1 * token2, Uint128::one())).to_uint_floor()
+        - MINIMUM_LIQUIDITY_AMOUNT
+}
 
-    // CHECK :: Only admin can call this function
-    if info.sender != config.owner {
-        return Err(StdError::generic_err("Unauthorized"));
+pub fn get_contract_balances(
+    deps: Deps,
+    address: &Addr,
+    usdc_denom: &String,
+    atom_denom: &String,
+    ntrn_denom: &String,
+) -> Result<(Uint128, Uint128, Uint128), StdError> {
+    let balances = deps.querier.query_all_balances(address)?;
+
+    let mut usdc_amount = Uint128::zero();
+    let mut atom_amount = Uint128::zero();
+    let mut ntrn_amount = Uint128::zero();
+
+    for balance in balances {
+        if balance.denom == *usdc_denom {
+            usdc_amount = balance.amount;
+        } else if balance.denom == *atom_denom {
+            atom_amount = balance.amount;
+        } else if balance.denom == *ntrn_denom {
+            ntrn_amount = balance.amount;
+        }
     }
 
+    Ok((usdc_amount, atom_amount, ntrn_amount))
+}
+
+pub fn get_lp_balances(
+    deps: Deps,
+    owner_address: &Addr,
+    ntrn_usdc_lp_token_address: &Addr,
+    ntrn_atom_lp_token_address: &Addr,
+) -> Result<(Uint128, Uint128), StdError> {
+    let usdc_lp_amount =
+        query_token_balance(&deps.querier, ntrn_usdc_lp_token_address, owner_address)?;
+    let atom_lp_amount =
+        query_token_balance(&deps.querier, ntrn_atom_lp_token_address, owner_address)?;
+    Ok((usdc_lp_amount, atom_lp_amount))
+}
+
+pub fn execute_set_pool_size(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+) -> Result<Response, StdError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut state = STATE.load(deps.storage)?;
     // CHECK :: Can be executed once
-    if state.lp_shares_minted.is_some() {
+    if state.lp_usdc_shares_minted.is_some() || state.lp_atom_shares_minted.is_some() {
         return Err(StdError::generic_err("Liquidity already added"));
     }
 
@@ -581,629 +498,566 @@ pub fn handle_init_pool(
         ));
     }
 
-    let mut msgs = vec![];
-
-    if let Some(PoolInfo {
-        astro_ust_pool_address,
-        astro_ust_lp_token_address,
-    }) = config.pool_info
-    {
-        let ust_coin = deps
-            .querier
-            .query_balance(&env.contract.address, UUSD_DENOM)?;
-
-        // QUERY CURRENT LP TOKEN BALANCE (FOR SAFETY - IN ANY CASE)
-        let cur_lp_balance = query_token_balance(
-            &deps.querier,
-            astro_ust_lp_token_address,
-            env.contract.address.clone(),
-        )?;
-
-        // COSMOS MSGS
-        // :: 1.  APPROVE ASTRO WITH LP POOL ADDRESS AS BENEFICIARY
-        // :: 2.  ADD LIQUIDITY
-        // :: 3. CallbackMsg :: Update state on liquidity addition to LP Pool
-        msgs.push(build_approve_cw20_msg(
-            config.astro_token_address.to_string(),
-            astro_ust_pool_address.to_string(),
-            state.total_astro_delegated,
-            env.block.height + 1u64,
-        )?);
-
-        msgs.push(build_provide_liquidity_to_lp_pool_msg(
-            deps.as_ref(),
-            config.astro_token_address,
-            astro_ust_pool_address,
-            ust_coin.amount,
-            state.total_astro_delegated,
-            slippage,
-        )?);
-
-        msgs.push(
-            CallbackMsg::UpdateStateOnLiquidityAdditionToPool {
-                prev_lp_balance: cur_lp_balance,
-            }
-            .to_cosmos_msg(&env)?,
-        );
-        Ok(Response::new().add_messages(msgs).add_attributes(vec![
-            attr("action", "Auction::ExecuteMsg::AddLiquidityToAstroportPool"),
-            attr("astro_provided", state.total_astro_delegated),
-            attr("ust_provided", ust_coin.amount),
-        ]))
-    } else {
-        Err(StdError::generic_err("Pool info isn't set yet!"))
+    if !state.usdc_ntrn_size.is_zero() || !state.atom_ntrn_size.is_zero() {
+        return Err(StdError::generic_err("Pool size has already been set"));
     }
+
+    let (usdc_amount, atom_amount, ntrn_amount) = get_contract_balances(
+        deps.as_ref(),
+        &env.contract.address,
+        &config.usdc_denom,
+        &config.atom_denom,
+        &config.ntrn_denom,
+    )?;
+
+    let exchange_data: Vec<PriceFeedRate> = deps
+        .querier
+        .query_wasm_smart(config.price_feed_contract, &PriceFeedQueryMsg::GetRate {})?;
+
+    if exchange_data.len() != 2 {
+        return Err(StdError::generic_err("Invalid price feed data"));
+    }
+
+    if exchange_data[0].resolve_time.u64() < env.block.time.seconds() - config.max_exchange_rate_age
+    {
+        return Err(StdError::generic_err("Price feed data is too old"));
+    }
+
+    if ntrn_amount < config.min_ntrn_amount {
+        return Err(StdError::generic_err(format!(
+            "Not enough NTRN in the contract. Min NTRN amount: {}",
+            config.min_ntrn_amount
+        )));
+    }
+
+    let usdc_to_atom_rate = Decimal::from_ratio(exchange_data[1].rate, exchange_data[0].rate);
+    let atom_in_usdc = Decimal::from_str(&atom_amount.to_string())? / usdc_to_atom_rate;
+    let all_in_usdc = Uint128::checked_add(usdc_amount, atom_in_usdc.to_uint_floor())?;
+    let div_ratio = Decimal::from_ratio(usdc_amount, all_in_usdc);
+    let usdc_ntrn_size = ntrn_amount * div_ratio;
+    let atom_ntrn_size = ntrn_amount - usdc_ntrn_size;
+    let atom_lp_size = get_lp_size(atom_ntrn_size, atom_amount);
+    let usdc_lp_size = get_lp_size(usdc_ntrn_size, atom_amount);
+
+    // UPDATE STATE
+    state.usdc_ntrn_size = usdc_ntrn_size;
+    state.atom_ntrn_size = atom_ntrn_size;
+    state.atom_lp_size = atom_lp_size;
+    state.usdc_lp_size = usdc_lp_size;
+    STATE.save(deps.storage, &state)?;
+
+    Ok(Response::new().add_attributes(vec![
+        attr("action", "Auction::ExecuteMsg::SetPoolSize"),
+        attr("div_ratio", div_ratio.to_string()),
+        attr("atom", exchange_data[0].rate),
+        attr("usdc", exchange_data[1].rate),
+        attr("all_in_usdc", all_in_usdc),
+        attr("usdc_to_atom_rate", usdc_to_atom_rate.to_string()),
+        attr("usdc_ntrn_size", usdc_ntrn_size),
+        attr("atom_ntrn_size", atom_ntrn_size),
+        attr("usdc_lp_size", usdc_ntrn_size),
+        attr("atom_lp_size", atom_ntrn_size),
+    ]))
 }
 
-/// Builds provide liquidity to pool message.
-/// ## Params
-/// * **deps** is an object of type [`Deps`].
-///
-/// * **astro_token_address** is an object of type [`Addr`].
-///
-/// * **astro_ust_pool_address** is an object of type [`Addr`].
-///
-/// * **ust_amount** is an object of type [`Uint128`].
-///
-/// * **astro_amount** is an object of type [`Uint128`].
-///
-/// * **slippage_tolerance** is an optional object of type [`Decimal`].
-fn build_provide_liquidity_to_lp_pool_msg(
-    deps: Deps,
-    astro_token_address: Addr,
-    astro_ust_pool_address: Addr,
-    ust_amount: Uint128,
-    astro_amount: Uint128,
-    slippage_tolerance: Option<Decimal>,
-) -> StdResult<CosmosMsg> {
-    let astro = Asset {
-        amount: astro_amount,
-        info: AssetInfo::Token {
-            contract_addr: astro_token_address,
-        },
-    };
+// #[test]
+// fn test_get_lp_size() {
+//     let x = Uint64::from(10000000u64);
+//     let y = Uint64::from(1000000u64);
+//     let z = Decimal::from_ratio(y, x);
+//     println!("{}", z);
+// }
 
-    let mut ust = Asset {
-        amount: ust_amount,
-        info: AssetInfo::NativeToken {
-            denom: String::from(UUSD_DENOM),
-        },
-    };
-
-    // Deduct tax
-    ust.amount = ust.amount.checked_sub(ust.compute_tax(&deps.querier)?)?;
-
-    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: astro_ust_pool_address.to_string(),
-        funds: vec![Coin {
-            denom: String::from(UUSD_DENOM),
-            amount: ust.amount,
-        }],
-        msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
-            assets: [ust, astro].to_vec(),
-            slippage_tolerance,
-            auto_stake: None,
-            receiver: None,
-        })?,
-    }))
-}
-
-/// Stakes ASTRO-UST LP tokens with the generator contract.
+/// Facilitates Liquidity addtion to the Astroport NTRN-NATIVE Pool. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
 /// * **env** is an object of type [`Env`].
 ///
 /// * **info** is an object of type [`MessageInfo`].
-pub fn handle_stake_lp_tokens(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-) -> Result<Response, StdError> {
+pub fn execute_init_pool(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
 
     // CHECK :: Only admin can call this function
     if info.sender != config.owner {
         return Err(StdError::generic_err("Unauthorized"));
     }
 
-    let generator = config
-        .generator_contract
-        .ok_or_else(|| StdError::generic_err("Generator should be set!"))?;
-
-    // CHECK :: Can be staked only once
-    if state.is_lp_staked {
-        return Err(StdError::generic_err("Already staked"));
+    // CHECK :: Can be executed once
+    if state.lp_usdc_shares_minted.is_some() || state.lp_atom_shares_minted.is_some() {
+        return Err(StdError::generic_err("Liquidity already added"));
     }
 
-    let lp_shares_minted = state
-        .lp_shares_minted
-        .ok_or_else(|| StdError::generic_err("Should be provided to the ASTRO/UST pool!"))?;
+    // CHECK :: Deposit / withdrawal windows need to be over
+    if !are_windows_closed(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err(
+            "Deposit/withdrawal windows are still open",
+        ));
+    }
 
+    if state.usdc_lp_size.is_zero() || state.atom_lp_size.is_zero() {
+        return Err(StdError::generic_err("Pool size has not been set"));
+    }
+
+    if !is_lock_window_closed(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err("Lock window is still open!"));
+    }
+
+    let mut msgs = vec![];
     if let Some(PoolInfo {
-        astro_ust_lp_token_address,
-        astro_ust_pool_address: _,
+        ntrn_usdc_pool_address,
+        ntrn_atom_pool_address,
+        ntrn_usdc_lp_token_address,
+        ntrn_atom_lp_token_address,
     }) = config.pool_info
     {
-        // QUERY CURRENT LP TOKEN BALANCE (FOR SAFETY - IN ANY CASE)
-        let cur_lp_balance = query_token_balance(
-            &deps.querier,
-            astro_ust_lp_token_address.clone(),
-            env.contract.address.clone(),
+        let (usdc_amount, atom_amount, ntrn_amount) = get_contract_balances(
+            deps.as_ref(),
+            &env.contract.address,
+            &config.usdc_denom,
+            &config.atom_denom,
+            &config.ntrn_denom,
         )?;
 
-        // Init response
-        let mut response = Response::new()
-            .add_attribute("action", "Auction::ExecuteMsg::StakeLPTokens")
-            .add_attribute("staked_amount", lp_shares_minted);
+        // QUERY CURRENT LP TOKEN BALANCE (FOR SAFETY - IN ANY CASE)
+        let (cur_usdc_lp_balance, cur_atom_lp_balance) = get_lp_balances(
+            deps.as_ref(),
+            &env.contract.address,
+            &ntrn_usdc_lp_token_address,
+            &ntrn_atom_lp_token_address,
+        )?;
 
-        // COSMOS MSGs
-        // :: Add increase allowance msg so generator contract can transfer tokens to itself
-        // :: To stake LP Tokens to the Astroport generator contract
-        response.messages.push(SubMsg::new(build_approve_cw20_msg(
-            astro_ust_lp_token_address.to_string(),
-            generator.to_string(),
-            cur_lp_balance,
-            env.block.height + 1u64,
-        )?));
-        response.messages.push(SubMsg::new(WasmMsg::Execute {
-            contract_addr: astro_ust_lp_token_address.to_string(),
-            funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Send {
-                contract: generator.to_string(),
-                msg: to_binary(&astroport::generator::Cw20HookMsg::Deposit {})?,
-                amount: cur_lp_balance,
-            })?,
-        }));
+        msgs.push(build_provide_liquidity_to_lp_pool_msg(
+            ntrn_usdc_pool_address,
+            ntrn_amount,
+            config.ntrn_denom.clone(),
+            usdc_amount,
+            config.usdc_denom,
+        )?);
+        msgs.push(build_provide_liquidity_to_lp_pool_msg(
+            ntrn_atom_pool_address,
+            ntrn_amount,
+            config.ntrn_denom,
+            atom_amount,
+            config.atom_denom,
+        )?);
+        msgs.push(
+            CallbackMsg::FinalizePoolInitialization {
+                prev_lp_balance: PoolBalance {
+                    atom: cur_atom_lp_balance,
+                    usdc: cur_usdc_lp_balance,
+                },
+            }
+            .to_cosmos_msg(&env)?,
+        );
 
-        state.is_lp_staked = true;
-        STATE.save(deps.storage, &state)?;
-
-        Ok(response)
+        Ok(Response::new()
+            .add_messages(msgs)
+            .add_attributes(vec![attr("action", "Auction::ExecuteMsg::InitPool")]))
     } else {
         Err(StdError::generic_err("Pool info isn't set yet!"))
     }
 }
 
-/// Facilitates ASTRO Reward claim for users.
+pub fn execute_finalize_init_pool(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+    prev_lp_balance: PoolBalance,
+) -> Result<Response, StdError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut state = STATE.load(deps.storage)?;
+    let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
+        StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
+    })?;
+    if let Some(PoolInfo {
+        ntrn_usdc_pool_address: _,
+        ntrn_atom_pool_address: _,
+        ntrn_usdc_lp_token_address,
+        ntrn_atom_lp_token_address,
+    }) = config.pool_info
+    {
+        let (cur_usdc_lp_balance, cur_atom_lp_balance) = get_lp_balances(
+            deps.as_ref(),
+            &env.contract.address,
+            &ntrn_usdc_lp_token_address,
+            &ntrn_atom_lp_token_address,
+        )?;
+
+        // send 50% of lp tokens to the reserve
+        let usdc_lp_to_reserve =
+            (cur_usdc_lp_balance - prev_lp_balance.usdc) / Uint128::from(2u128);
+        let atom_lp_to_reserve =
+            (cur_atom_lp_balance - prev_lp_balance.atom) / Uint128::from(2u128);
+
+        state.lp_atom_shares_minted = Some(cur_atom_lp_balance - prev_lp_balance.atom);
+        state.lp_usdc_shares_minted = Some(cur_usdc_lp_balance - prev_lp_balance.usdc);
+        state.pool_init_timestamp = env.block.time.seconds();
+        STATE.save(deps.storage, &state)?;
+
+        let mut msgs = vec![
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: ntrn_usdc_lp_token_address.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: config.reserve_contract_address.to_string(),
+                    amount: usdc_lp_to_reserve,
+                })?,
+            }),
+            CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: ntrn_atom_lp_token_address.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: config.reserve_contract_address.to_string(),
+                    amount: atom_lp_to_reserve,
+                })?,
+            }),
+        ];
+
+        // Send locked tokens to the lockdrop contract
+        if !state.atom_lp_locked.is_zero() {
+            msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: ntrn_atom_lp_token_address.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: lockdrop_address.to_string(),
+                    amount: state.atom_lp_locked,
+                })?,
+            }))
+        }
+        if !state.usdc_lp_locked.is_zero() {
+            msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: ntrn_usdc_lp_token_address.to_string(),
+                funds: vec![],
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: lockdrop_address.to_string(),
+                    amount: state.usdc_lp_locked,
+                })?,
+            }))
+        }
+
+        Ok(Response::new().add_messages(msgs).add_attributes(vec![
+            attr("action", "Auction::ExecuteMsg::FinalizePoolInitialization"),
+            attr("usdc_lp_to_reserve", usdc_lp_to_reserve),
+            attr("atom_lp_to_reserve", atom_lp_to_reserve),
+        ]))
+    } else {
+        Err(StdError::generic_err("Pool info isn't set yet!"))
+    }
+}
+
+fn execute_migrate_to_vesting(
+    deps: DepsMut,
+    _env: Env,
+    _info: MessageInfo,
+) -> Result<Response, StdError> {
+    let config = CONFIG.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
+    let users_store = get_users_store();
+    let users = users_store
+        .idx
+        .vested
+        .range(deps.storage, None, None, Order::Ascending)
+        .take(config.vesting_migration_pack_size.into())
+        .collect::<StdResult<Vec<_>>>()?;
+
+    if state.pool_init_timestamp == 0 {
+        return Err(StdError::generic_err("Pool isn't initialized yet!"));
+    }
+    if users.is_empty() {
+        return Err(StdError::generic_err("No users to migrate!"));
+    }
+    let mut atom_users: Vec<VestingMigrationUser> = vec![];
+    let mut usdc_users: Vec<VestingMigrationUser> = vec![];
+    let mut atom_lp_amount = Uint128::zero();
+    let mut usdc_lp_amount = Uint128::zero();
+
+    for (user_addr, mut user) in users {
+        let user_lp_balance = get_user_lp_info(
+            user.usdc_deposited,
+            user.atom_deposited,
+            state.total_usdc_deposited,
+            state.total_atom_deposited,
+            state.usdc_lp_size,
+            state.atom_lp_size,
+        );
+
+        let vest_atom_lp_amount = user_lp_balance.atom_lp_amount - user.atom_lp_locked;
+        let vest_usdc_lp_amount = user_lp_balance.usdc_lp_amount - user.usdc_lp_locked;
+
+        if !vest_atom_lp_amount.is_zero() {
+            atom_users.push(VestingMigrationUser {
+                address: user_addr.to_string(),
+                amount: vest_atom_lp_amount,
+            });
+            atom_lp_amount += vest_atom_lp_amount;
+        }
+        if !vest_usdc_lp_amount.is_zero() {
+            usdc_users.push(VestingMigrationUser {
+                address: user_addr.to_string(),
+                amount: vest_usdc_lp_amount,
+            });
+            usdc_lp_amount += vest_usdc_lp_amount;
+        }
+        user.is_vested = true;
+        users_store.save(deps.storage, &user_addr, &user)?;
+    }
+    let mut msgs = vec![];
+    if !atom_lp_amount.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: config.vesting_atom_contract_address.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Send {
+                contract: config.vesting_usdc_contract_address.to_string(),
+                amount: atom_lp_amount,
+                msg: to_binary(&VestingExecuteMsg::MigrateVestingUsers { users: atom_users })?,
+            })?,
+        }));
+    }
+    if !usdc_lp_amount.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: config.vesting_usdc_contract_address.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Send {
+                contract: config.vesting_usdc_contract_address.to_string(),
+                amount: usdc_lp_amount,
+                msg: to_binary(&VestingExecuteMsg::MigrateVestingUsers { users: usdc_users })?,
+            })?,
+        }));
+    }
+
+    Ok(Response::new().add_messages(msgs))
+}
+
+/// Builds provide liquidity to pool message.
+/// ## Params
+/// * **deps** is an object of type [`Deps`].
+///
+/// * **pool_address** is an object of type [`Addr`].
+///
+/// * **base_amount** is an object of type [`Uint128`].
+///
+/// * **base_denom** is an object of type [`String`].
+///
+/// * **other_amount** is an object of type [`Uint128`].
+///
+/// * **other_denom** is an object of type [`String`].
+
+fn build_provide_liquidity_to_lp_pool_msg(
+    pool_address: Addr,
+    base_amount: Uint128,
+    base_denom: String,
+    other_amount: Uint128,
+    other_denom: String,
+) -> StdResult<CosmosMsg> {
+    let base = Asset {
+        amount: base_amount,
+        info: AssetInfo::NativeToken {
+            denom: base_denom.clone(),
+        },
+    };
+    let other = Asset {
+        amount: other_amount,
+        info: AssetInfo::NativeToken {
+            denom: other_denom.clone(),
+        },
+    };
+
+    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: pool_address.to_string(),
+        funds: vec![
+            Coin {
+                denom: base_denom,
+                amount: base_amount,
+            },
+            Coin {
+                denom: other_denom,
+                amount: other_amount,
+            },
+        ],
+        msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
+            assets: vec![base, other],
+            slippage_tolerance: None,
+            auto_stake: None,
+            receiver: None,
+        })?,
+    }))
+}
+
+pub fn get_user_lp_info(
+    user_usdc_deposited: Uint128,
+    user_atom_deposited: Uint128,
+    total_usdc_deposited: Uint128,
+    total_atom_deposited: Uint128,
+    total_usdc_lp_tokens: Uint128,
+    total_atom_lp_tokens: Uint128,
+) -> UserLpInfo {
+    let atom_lp_amount = if total_atom_deposited.is_zero() {
+        Uint128::zero()
+    } else {
+        Decimal::from_ratio(user_atom_deposited, total_atom_deposited) * total_atom_lp_tokens
+    };
+    let usdc_lp_amount = if total_usdc_deposited.is_zero() {
+        Uint128::zero()
+    } else {
+        Decimal::from_ratio(user_usdc_deposited, total_usdc_deposited) * total_usdc_lp_tokens
+    };
+
+    UserLpInfo {
+        atom_lp_amount: atom_lp_amount / Uint128::from(2_u128),
+        usdc_lp_amount: usdc_lp_amount / Uint128::from(2_u128),
+    }
+}
+
+/// Lock LP tokens with the LockDrop contract.
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
 /// * **env** is an object of type [`Env`].
 ///
 /// * **info** is an object of type [`MessageInfo`].
-///
-/// * **withdraw_lp_shares** is an optional object of type [`Uint128`].
-pub fn handle_claim_rewards_and_withdraw_lp_shares(
+pub fn execute_lock_lp_tokens(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    withdraw_lp_shares: Option<Uint128>,
+    asset: PoolType,
+    amount: Uint128,
+    duration: u64,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
-    let user_address = info.sender;
-    let mut user_info = USERS.load(deps.storage, &user_address)?;
+    let mut state = STATE.load(deps.storage)?;
+    let users_store = get_users_store();
+    let mut user_info = users_store.load(deps.storage, &info.sender)?;
 
-    // CHECK :: User has valid delegation / deposit balances
-    if user_info.astro_delegated.is_zero() && user_info.ust_delegated.is_zero() {
-        return Err(StdError::generic_err("No delegated assets"));
+    if state.atom_ntrn_size.is_zero() || state.usdc_ntrn_size.is_zero() {
+        return Err(StdError::generic_err("Pool size isn't set yet!"));
     }
 
-    let mut cosmos_msgs = vec![];
+    if is_lock_window_closed(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err("Lock window is closed!"));
+    }
 
-    if let Some(lp_balance) = state.lp_shares_minted {
-        // Calculate user's LP shares & ASTRO incentives (if possible)
-        if user_info.lp_shares.is_none() {
-            update_user_lp_shares(&state, lp_balance, &mut user_info)?;
-            update_user_astro_incentives(
-                config.astro_incentive_amount,
-                user_info.lp_shares,
-                lp_balance,
-                &mut user_info,
-            )?;
-            USERS.save(deps.storage, &user_address, &user_info)?;
-        }
-        // If user's ASTRO incentives are not set, but the total ASTRO incentives have been set
-        if config.astro_incentive_amount.is_some() && user_info.auction_incentive_amount.is_none() {
-            update_user_astro_incentives(
-                config.astro_incentive_amount,
-                user_info.lp_shares,
-                lp_balance,
-                &mut user_info,
-            )?;
-            USERS.save(deps.storage, &user_address, &user_info)?;
-        }
+    let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
+        StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
+    })?;
 
-        // If user wants to withdraw LP tokens, then we calculate the max amount he can withdraw for check
-        if let Some(withdraw_lp_shares) = withdraw_lp_shares {
-            let max_withdrawable = calculate_withdrawable_lp_shares(
-                env.block.time.seconds(),
-                &config,
-                &state,
-                &user_info,
-            )?;
-            if max_withdrawable.is_none() || withdraw_lp_shares > max_withdrawable.unwrap() {
-                return Err(StdError::generic_err(
-                    "No available LP shares to withdraw / Invalid amount",
-                ));
-            }
-        }
-
-        if state.is_lp_staked {
-            let generator = config
-                .generator_contract
-                .ok_or_else(|| StdError::generic_err("Generator should be set!"))?;
-
-            if let Some(PoolInfo {
-                astro_ust_pool_address: _,
-                astro_ust_lp_token_address,
-            }) = config.pool_info
-            {
-                // QUERY :: Check if there are any pending staking rewards
-                let pending_rewards: PendingTokenResponse = deps.querier.query_wasm_smart(
-                    &generator,
-                    &GenQueryMsg::PendingToken {
-                        lp_token: astro_ust_lp_token_address.to_string(),
-                        user: env.contract.address.to_string(),
-                    },
-                )?;
-
-                if !pending_rewards.pending.is_zero()
-                    || (pending_rewards.pending_on_proxy.is_some()
-                        && !pending_rewards.pending_on_proxy.unwrap().is_empty())
-                {
-                    let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
-                        &generator,
-                        &GenQueryMsg::RewardInfo {
-                            lp_token: astro_ust_lp_token_address.to_string(),
-                        },
-                    )?;
-
-                    let astro_balance = {
-                        let res: BalanceResponse = deps.querier.query_wasm_smart(
-                            rwi.base_reward_token.to_string(),
-                            &Cw20QueryMsg::Balance {
-                                address: env.contract.address.to_string(),
-                            },
-                        )?;
-                        res.balance
-                    };
-
-                    cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                        contract_addr: generator.to_string(),
-                        funds: vec![],
-                        msg: to_binary(&GenExecuteMsg::Withdraw {
-                            lp_token: astro_ust_lp_token_address.to_string(),
-                            amount: Uint128::zero(),
-                        })?,
-                    }));
-
-                    cosmos_msgs.push(
-                        CallbackMsg::UpdateStateOnRewardClaim {
-                            prev_astro_balance: astro_balance,
-                        }
-                        .to_cosmos_msg(&env)?,
-                    );
-                }
-            } else {
-                return Err(StdError::generic_err("Pool info isn't set yet!"));
-            }
-        }
-        // If no rewards to claim and no LP tokens to be withdrawn.
-        else if user_info.astro_incentive_transferred && withdraw_lp_shares.is_none() {
-            return Err(StdError::generic_err(
-                "Rewards already claimed. Provide number of LP tokens to claim!",
-            ));
-        }
-    } else {
-        return Err(StdError::generic_err(
-            "Astro/USD should be provided to the pool!",
-        ));
-    };
-
-    cosmos_msgs.push(
-        CallbackMsg::WithdrawUserRewardsCallback {
-            user_address,
-            withdraw_lp_shares,
-        }
-        .to_cosmos_msg(&env)?,
+    let user_lp_info = get_user_lp_info(
+        user_info.usdc_deposited,
+        user_info.atom_deposited,
+        state.total_usdc_deposited,
+        state.total_atom_deposited,
+        state.usdc_lp_size,
+        state.atom_lp_size,
     );
 
-    Ok(Response::new().add_messages(cosmos_msgs))
-}
-
-/// Calculates user's ASTRO - UST LP shares based on amount delegated.
-/// User LP shares (ASTRO delegation share) = (1/2) *  (ASTRO delegated / total ASTRO delegated)
-/// User LP shares (UST deposit share) = (1/2) *  (UST deposited / total UST deposited)
-/// User's total LP shares  = User's ASTRO delegation LP share + User's UST deposit LP share
-/// ## Params
-/// * **state** is an object of type [`State`].
-///
-/// * **lp_balance** is an object of type [`Uint128`].
-///
-/// * **user_info** is an object of type [`UserInfo`].
-fn update_user_lp_shares(
-    state: &State,
-    lp_balance: Uint128,
-    mut user_info: &mut UserInfo,
-) -> StdResult<()> {
-    let user_lp_share = (Decimal::from_ratio(
-        user_info.astro_delegated,
-        state.total_astro_delegated * Uint128::new(2),
-    ) + Decimal::from_ratio(
-        user_info.ust_delegated,
-        state.total_ust_delegated * Uint128::new(2),
-    )) * lp_balance;
-    user_info.lp_shares = Some(user_lp_share);
-
-    Ok(())
-}
-
-/// Calculates user's ASTRO incentives for auction participation
-/// Formula, == User's auction incentives (ASTRO) = (User's total LP shares / Total LP shares minted) * Total ASTRO auction incentives
-/// ## Params
-/// * **total_astro_incentives** is an optional object of type [`Uint128`].
-///
-/// * **user_lp_share** is an optional object of type [`Uint128`].
-///
-/// * **lp_balance** is an object of type [`Uint128`].
-///
-/// * **user_info** is an object of type [`UserInfo`].
-fn update_user_astro_incentives(
-    total_astro_incentives: Option<Uint128>,
-    user_lp_share: Option<Uint128>,
-    lp_balance: Uint128,
-    mut user_info: &mut UserInfo,
-) -> StdResult<()> {
-    if let Some(total_astro_incentives) = total_astro_incentives {
-        if let Some(user_lp_share) = user_lp_share {
-            user_info.auction_incentive_amount =
-                Some(Decimal::from_ratio(user_lp_share, lp_balance) * total_astro_incentives);
+    match asset {
+        PoolType::USDC => {
+            if user_info.usdc_deposited.is_zero() {
+                return Err(StdError::generic_err("No USDC deposited!"));
+            }
+            if amount > user_lp_info.usdc_lp_amount - user_info.usdc_lp_locked {
+                return Err(StdError::generic_err("Not enough USDC LP!"));
+            }
+            user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_add(amount)?;
+            state.usdc_lp_locked = state.usdc_lp_locked.checked_add(amount)?;
+        }
+        PoolType::ATOM => {
+            if user_info.atom_deposited.is_zero() {
+                return Err(StdError::generic_err("No ATOM deposited!"));
+            }
+            if amount > user_lp_info.atom_lp_amount - user_info.atom_lp_locked {
+                return Err(StdError::generic_err("Not enough ATOM LP!"));
+            }
+            user_info.atom_lp_locked += user_info.atom_lp_locked.checked_add(amount)?;
+            state.atom_lp_locked = state.atom_lp_locked.checked_add(amount)?;
         }
     }
-    Ok(())
+
+    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: lockdrop_address.to_string(),
+        funds: vec![],
+        msg: to_binary(&LockDropExecuteMsg::IncreaseLockupFor {
+            user_address: info.sender.to_string(),
+            pool_type: asset,
+            amount,
+            duration,
+        })?,
+    });
+
+    users_store.save(deps.storage, &info.sender, &user_info)?;
+    STATE.save(deps.storage, &state)?;
+
+    Ok(Response::new().add_message(msg).add_attributes(vec![
+        attr("action", "lock_lp_tokens"),
+        attr("asset", asset),
+        attr("amount", amount),
+        attr("period", duration.to_string()),
+    ]))
 }
 
-/// Withdraws user rewards and LP Tokens if available
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **user_address** is an object of type [`Addr`].
-///
-/// * **withdraw_lp_shares** is an optional object of type [`Uint128`].
-pub fn callback_withdraw_user_rewards_and_optionally_lp(
-    deps: DepsMut,
-    user_address: Addr,
-    withdraw_lp_shares: Option<Uint128>,
-) -> StdResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-    let state = STATE.load(deps.storage)?;
-    let mut user_info = USERS.load(deps.storage, &user_address)?;
-
-    let mut cosmos_msgs = vec![];
-    let mut attributes = vec![
-        attr("action", "Withdraw rewards and lp tokens"),
-        attr("user_address", &user_address),
-    ];
-
-    if let Some(PoolInfo {
-        astro_ust_pool_address: _,
-        astro_ust_lp_token_address,
-    }) = config.pool_info
-    {
-        let user_lp_shares = user_info
-            .lp_shares
-            .ok_or_else(|| StdError::generic_err("Lp share should be calculated"))?;
-
-        let astroport_lp_amount = user_lp_shares - user_info.claimed_lp_shares;
-
-        if state.is_lp_staked {
-            let generator = config
-                .generator_contract
-                .ok_or_else(|| StdError::generic_err("Generator should be set!"))?;
-
-            let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
-                &generator,
-                &GenQueryMsg::RewardInfo {
-                    lp_token: astro_ust_lp_token_address.to_string(),
-                },
-            )?;
-
-            // Calculate ASTRO staking reward receivable by the user
-            let pending_astro_rewards = (state.generator_astro_per_share * astroport_lp_amount)
-                - (user_info.user_gen_astro_per_share * astroport_lp_amount);
-            user_info.user_gen_astro_per_share = state.generator_astro_per_share;
-            user_info.generator_astro_debt += pending_astro_rewards;
-
-            // If no rewards / LP tokens to be claimed
-            if pending_astro_rewards == Uint128::zero()
-                && user_info.astro_incentive_transferred
-                && withdraw_lp_shares.is_none()
-            {
-                return Err(StdError::generic_err("Nothing to claim!"));
-            }
-
-            // COSMOS MSG ::: CLAIM Pending Generator ASTRO Rewards
-            cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: rwi.base_reward_token.to_string(),
-                funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: user_address.to_string(),
-                    amount: pending_astro_rewards,
-                })?,
-            }));
-            attributes.push(attr("generator_astro_reward", pending_astro_rewards));
-
-            //  COSMOS MSG :: If LP Tokens are staked, we unstake the amount which needs to be returned to the user
-            if let Some(withdrawn_lp_shares) = withdraw_lp_shares {
-                cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                    contract_addr: generator.to_string(),
-                    funds: vec![],
-                    msg: to_binary(&GenExecuteMsg::Withdraw {
-                        lp_token: astro_ust_lp_token_address.to_string(),
-                        amount: withdrawn_lp_shares,
-                    })?,
-                }));
-            }
-        }
-
-        // Transfer ASTRO incentives when they have been calculated
-        if user_info.auction_incentive_amount.is_some() && !user_info.astro_incentive_transferred {
-            cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: config.astro_token_address.to_string(),
-                funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: user_address.to_string(),
-                    amount: user_info.auction_incentive_amount.unwrap(),
-                })?,
-            }));
-            user_info.astro_incentive_transferred = true;
-            attributes.push(attr(
-                "auction_astro_reward",
-                user_info.auction_incentive_amount.unwrap(),
-            ));
-        }
-
-        if let Some(withdrawn_lp_shares) = withdraw_lp_shares {
-            cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: astro_ust_lp_token_address.to_string(),
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: user_address.to_string(),
-                    amount: withdrawn_lp_shares,
-                })?,
-                funds: vec![],
-            }));
-            attributes.push(attr("lp_withdrawn", withdrawn_lp_shares));
-            user_info.claimed_lp_shares += withdrawn_lp_shares;
-        }
-        USERS.save(deps.storage, &user_address, &user_info)?;
-    } else {
-        return Err(StdError::generic_err("Pool info isn't set yet!"));
-    }
-
-    Ok(Response::new()
-        .add_messages(cosmos_msgs)
-        .add_attributes(attributes))
-}
-
-/// Updates state after liquidity is added to the ASTRO-UST Pool
+/// Lock LP tokens with the LockDrop contract back to auction contract
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
 /// * **env** is an object of type [`Env`].
 ///
-/// * **prev_lp_balance** is an object of type [`Uint128`].
-pub fn update_state_on_liquidity_addition_to_pool(
+/// * **info** is an object of type [`MessageInfo`].
+pub fn execute_withdraw_lp_tokens(
     deps: DepsMut,
     env: Env,
-    prev_lp_balance: Uint128,
-) -> StdResult<Response> {
+    info: MessageInfo,
+    asset: PoolType,
+    amount: Uint128,
+    duration: u64,
+) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
+    let users_store = get_users_store();
+    let mut user_info = users_store.load(deps.storage, &info.sender)?;
 
-    if let Some(PoolInfo {
-        astro_ust_pool_address: _,
-        astro_ust_lp_token_address,
-    }) = config.pool_info
-    {
-        // QUERY CURRENT LP TOKEN BALANCE :: NEWLY MINTED LP TOKENS
-        let cur_lp_balance = cw20_get_balance(
-            &deps.querier,
-            astro_ust_lp_token_address,
-            env.contract.address,
-        )?;
-        // STATE :: UPDATE --> SAVE
-        state.lp_shares_minted = Some(cur_lp_balance - prev_lp_balance);
-        state.pool_init_timestamp = env.block.time.seconds();
-        STATE.save(deps.storage, &state)?;
-
-        // Activate lockdrop and airdrop claims
-        let cosmos_msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: config.airdrop_contract_address.to_string(),
-            msg: to_binary(&AirdropEnableClaims {})?,
-            funds: vec![],
-        })];
-
-        Ok(Response::new()
-            .add_messages(cosmos_msgs)
-            .add_attributes(vec![
-                ("action", "update_state_on_liquidity_addition_to_pool"),
-                ("lp_shares_minted", &cur_lp_balance.to_string()),
-                (
-                    "pool_init_timestamp",
-                    &state.pool_init_timestamp.to_string(),
-                ),
-            ]))
-    } else {
-        Err(StdError::generic_err("Pool info isn't set yet!"))
+    if state.atom_ntrn_size.is_zero() || state.usdc_ntrn_size.is_zero() {
+        return Err(StdError::generic_err("Pool size isn't set yet!"));
     }
-}
 
-/// Updates state after ASTRO rewards are claimed from the astroport generator
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **prev_astro_balance** is an object of type [`Uint128`]. Number of ASTRO tokens available with the contract before the claim
-pub fn update_state_on_reward_claim(
-    deps: DepsMut,
-    env: Env,
-    prev_astro_balance: Uint128,
-) -> StdResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
-
-    let generator = config
-        .generator_contract
-        .ok_or_else(|| StdError::generic_err("Generator should be set!"))?;
-
-    if let Some(PoolInfo {
-        astro_ust_pool_address: _,
-        astro_ust_lp_token_address,
-    }) = config.pool_info
-    {
-        let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
-            &generator,
-            &GenQueryMsg::RewardInfo {
-                lp_token: astro_ust_lp_token_address.to_string(),
-            },
-        )?;
-
-        let lp_balance: Uint128 = deps.querier.query_wasm_smart(
-            &generator,
-            &GenQueryMsg::Deposit {
-                lp_token: astro_ust_lp_token_address.to_string(),
-                user: env.contract.address.to_string(),
-            },
-        )?;
-
-        let base_reward_received;
-        state.generator_astro_per_share += {
-            let res: BalanceResponse = deps.querier.query_wasm_smart(
-                rwi.base_reward_token.to_string(),
-                &Cw20QueryMsg::Balance {
-                    address: env.contract.address.to_string(),
-                },
-            )?;
-            base_reward_received = res.balance - prev_astro_balance;
-            Decimal::from_ratio(base_reward_received, lp_balance)
-        };
-
-        // SAVE UPDATED STATE OF THE POOL
-        STATE.save(deps.storage, &state)?;
-
-        Ok(Response::new()
-            .add_attribute("astro_reward_received", base_reward_received)
-            .add_attribute(
-                "generator_astro_per_share",
-                state.generator_astro_per_share.to_string(),
-            ))
-    } else {
-        Err(StdError::generic_err("Pool info isn't set yet!"))
+    if is_lock_window_closed(env.block.time.seconds(), &config) {
+        return Err(StdError::generic_err("Lock window is closed!"));
     }
+
+    let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
+        StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
+    })?;
+
+    match asset {
+        PoolType::USDC => {
+            user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_sub(amount)?;
+            state.usdc_lp_locked = state.usdc_lp_locked.checked_sub(amount)?;
+        }
+        PoolType::ATOM => {
+            user_info.atom_lp_locked += user_info.atom_lp_locked.checked_sub(amount)?;
+            state.atom_lp_locked = state.atom_lp_locked.checked_sub(amount)?;
+        }
+    }
+
+    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: lockdrop_address.to_string(),
+        funds: vec![],
+        msg: to_binary(&LockDropExecuteMsg::WithdrawFromLockup {
+            pool_type: asset,
+            amount,
+            duration,
+        })?,
+    });
+
+    users_store.save(deps.storage, &info.sender, &user_info)?;
+    STATE.save(deps.storage, &state)?;
+
+    Ok(Response::new().add_message(msg).add_attributes(vec![
+        attr("action", "withdraw_lp_tokens"),
+        attr("asset", asset),
+        attr("amount", amount),
+        attr("period", duration.to_string()),
+    ]))
 }
 
 /// Returns true if the deposit & withdrawal windows are closed, else returns false
@@ -1216,33 +1070,12 @@ fn are_windows_closed(current_timestamp: u64, config: &Config) -> bool {
     current_timestamp >= window_end
 }
 
-/// Returns LP Balance  that a user can withdraw based on a vesting schedule
-/// ## Params
-/// * **cur_timestamp** is an object of type [`u64`].
-///
-/// * **config** is an object of type [`Config`].
-///
-/// * **state** is an object of type [`State`].
-///
-/// * **user_info** is an object of type [`UserInfo`].
-pub fn calculate_withdrawable_lp_shares(
-    cur_timestamp: u64,
-    config: &Config,
-    state: &State,
-    user_info: &UserInfo,
-) -> StdResult<Option<Uint128>> {
-    if let Some(user_lp_shares) = user_info.lp_shares {
-        let time_elapsed = cur_timestamp - state.pool_init_timestamp;
-        if time_elapsed >= config.lp_tokens_vesting_duration {
-            return Ok(Some(user_lp_shares - user_info.claimed_lp_shares));
-        }
-
-        let withdrawable_lp_balance =
-            user_lp_shares * Decimal::from_ratio(time_elapsed, config.lp_tokens_vesting_duration);
-        Ok(Some(withdrawable_lp_balance - user_info.claimed_lp_shares))
-    } else {
-        Ok(None)
-    }
+fn is_lock_window_closed(current_timestamp: u64, config: &Config) -> bool {
+    let lock_window_end = config.init_timestamp
+        + config.deposit_window
+        + config.withdrawal_window
+        + config.lp_tokens_lock_window;
+    current_timestamp >= lock_window_end
 }
 
 /// Returns User's Info
@@ -1252,141 +1085,31 @@ pub fn calculate_withdrawable_lp_shares(
 /// * **env** is an object of type [`Env`].
 ///
 /// * **user_info** is an object of type [`UserInfo`].
-fn query_user_info(deps: Deps, env: Env, user_address: String) -> StdResult<UserInfoResponse> {
-    let config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
+fn query_user_info(deps: Deps, _env: Env, user_address: String) -> StdResult<UserInfoResponse> {
+    let state = STATE.load(deps.storage)?;
+    let users_store = get_users_store();
     let user_address = deps.api.addr_validate(&user_address)?;
-    let mut user_info = USERS
+    let user_info = users_store
         .may_load(deps.storage, &user_address)?
         .unwrap_or_default();
 
+    let user_lp_info = get_user_lp_info(
+        user_info.usdc_deposited,
+        user_info.atom_deposited,
+        state.usdc_ntrn_size,
+        state.atom_ntrn_size,
+        state.usdc_lp_size,
+        state.atom_lp_size,
+    );
+
     // User Info Response
-    let mut user_info_response = UserInfoResponse {
-        astro_delegated: user_info.astro_delegated,
-        ust_delegated: user_info.ust_delegated,
-        ust_withdrawn: user_info.ust_withdrawn,
-        lp_shares: user_info.lp_shares,
-        claimed_lp_shares: user_info.claimed_lp_shares,
-        withdrawable_lp_shares: None,
-        auction_incentive_amount: user_info.auction_incentive_amount,
-        astro_incentive_transferred: user_info.astro_incentive_transferred,
-        generator_astro_debt: user_info.generator_astro_debt,
-        claimable_generator_astro: Uint128::zero(),
-        user_gen_astro_per_share: user_info.user_gen_astro_per_share,
-    };
-
-    // If ASTRO - UST Pool info is present
-    if let Some(PoolInfo {
-        astro_ust_pool_address: _,
-        astro_ust_lp_token_address,
-    }) = &config.pool_info
-    {
-        // If ASTRO - UST LP Tokens have been minted
-        if let Some(lp_balance) = state.lp_shares_minted {
-            // Calculate user's LP shares & ASTRO incentives (if possible)
-            if user_info.lp_shares.is_none() {
-                update_user_lp_shares(&state, lp_balance, &mut user_info)?;
-                user_info_response.lp_shares = user_info.lp_shares;
-            }
-            // If user's ASTRO incentives are not set, but the total ASTRO incentives have been set
-            if config.astro_incentive_amount.is_some()
-                && user_info.auction_incentive_amount.is_none()
-            {
-                update_user_astro_incentives(
-                    config.astro_incentive_amount,
-                    user_info.lp_shares,
-                    lp_balance,
-                    &mut user_info,
-                )?;
-                user_info_response.auction_incentive_amount = user_info.auction_incentive_amount;
-            }
-            let astroport_lp_amount = user_info.lp_shares.unwrap() - user_info.claimed_lp_shares;
-            // If LP tokens are staked and user has a > 0 LP share balance, we calculate user's claimable ASTRO staking rewards
-            if state.is_lp_staked && !astroport_lp_amount.is_zero() {
-                let generator = config
-                    .generator_contract
-                    .clone()
-                    .ok_or_else(|| StdError::generic_err("Generator should be set!"))?;
-                // Auction contract's staked LP balance
-                let lp_balance: Uint128 = deps.querier.query_wasm_smart(
-                    &generator,
-                    &GenQueryMsg::Deposit {
-                        lp_token: astro_ust_lp_token_address.to_string(),
-                        user: env.contract.address.to_string(),
-                    },
-                )?;
-
-                // QUERY :: Check if there are any pending staking rewards
-                let pending_rewards: PendingTokenResponse = deps.querier.query_wasm_smart(
-                    &generator,
-                    &GenQueryMsg::PendingToken {
-                        lp_token: astro_ust_lp_token_address.to_string(),
-                        user: env.contract.address.to_string(),
-                    },
-                )?;
-
-                state.generator_astro_per_share +=
-                    Decimal::from_ratio(pending_rewards.pending, lp_balance);
-
-                // Calculated claimable ASTRO staking rewards
-                user_info_response.claimable_generator_astro = (state.generator_astro_per_share
-                    * astroport_lp_amount)
-                    - (user_info.user_gen_astro_per_share * astroport_lp_amount);
-            }
-
-            // Updated withdrawable LP shares balance
-            user_info_response.withdrawable_lp_shares = calculate_withdrawable_lp_shares(
-                env.block.time.seconds(),
-                &config,
-                &state,
-                &user_info,
-            )?;
-        }
-    }
-
-    if user_info_response.auction_incentive_amount.is_none() {
-        user_info_response.auction_incentive_amount =
-            calculate_auction_reward_for_user(&state, &user_info, config.astro_incentive_amount);
-    }
-
-    Ok(user_info_response)
-}
-/// Calculates ASTRO tokens receivable by a user for participating (providing UST & ASTRO) in the bootstraping phase of the ASTRO-UST Pool
-/// ## Params
-/// * **state** is an object of type [`State`].
-///
-/// * **user_info** is an object of type [`UserInfo`].
-///
-/// * **total_astro_rewards** is an optional object of type [`Uint128`].
-fn calculate_auction_reward_for_user(
-    state: &State,
-    user_info: &UserInfo,
-    total_astro_rewards: Option<Uint128>,
-) -> Option<Uint128> {
-    if !user_info.astro_delegated.is_zero() || !user_info.ust_delegated.is_zero() {
-        if let Some(total_astro_rewards) = total_astro_rewards {
-            let mut user_astro_incentives = Uint128::zero();
-
-            // ASTRO incentives from ASTRO delegated
-            if state.total_astro_delegated > Uint128::zero() {
-                let astro_incentives_from_astro = Decimal::from_ratio(
-                    user_info.astro_delegated,
-                    state.total_astro_delegated * Uint128::new(2),
-                ) * total_astro_rewards;
-                user_astro_incentives += astro_incentives_from_astro;
-            }
-
-            // ASTRO incentives from UST delegated
-            if state.total_ust_delegated > Uint128::zero() {
-                let astro_incentives_from_ust = Decimal::from_ratio(
-                    user_info.ust_delegated,
-                    state.total_ust_delegated * Uint128::new(2),
-                ) * total_astro_rewards;
-                user_astro_incentives += astro_incentives_from_ust;
-            }
-            return Some(user_astro_incentives);
-        }
-    }
-
-    None
+    Ok(UserInfoResponse {
+        usdc_deposited: user_info.usdc_deposited,
+        atom_deposited: user_info.atom_deposited,
+        withdrawn: user_info.withdrawn,
+        usdc_lp_amount: user_lp_info.usdc_lp_amount,
+        atom_lp_amount: user_lp_info.atom_lp_amount,
+        atom_lp_locked: user_info.atom_lp_locked,
+        usdc_lp_locked: user_info.usdc_lp_locked,
+    })
 }
