@@ -202,7 +202,10 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             amount,
         } => handle_withdraw_from_lockup(deps, env, info, pool_type, duration, amount),
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
-        ExecuteMsg::SetPoolInfo {pool_type, pool_info} => handle_set_pool(deps, env, info, pool_type, pool_info)
+        ExecuteMsg::SetPoolInfo {
+            pool_type,
+            pool_info,
+        } => handle_set_pool(deps, env, info, pool_type, pool_info),
     }
 }
 

@@ -155,7 +155,7 @@ pub enum ExecuteMsg {
     SetPoolInfo {
         pool_type: PoolType,
         pool_info: PoolInfo,
-    }
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
