@@ -1,7 +1,7 @@
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_std::{
-    from_slice, to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdResult, Uint128, Uint256,
+    to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
     WasmMsg,
 };
 use cw20::Cw20ReceiveMsg;
@@ -38,9 +38,12 @@ impl PoolType {
 impl KeyDeserialize for PoolType {
     type Output = PoolType;
 
-    #[inline(always)]
     fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
-        from_slice(&value)
+        match value.as_slice() {
+            b"usdc" => Ok(PoolType::USDC),
+            b"atom" => Ok(PoolType::ATOM),
+            _ => Err(StdError::generic_err("Invalid PoolType")),
+        }
     }
 }
 
