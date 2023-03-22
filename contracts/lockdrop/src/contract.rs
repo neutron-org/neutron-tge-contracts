@@ -234,7 +234,7 @@ pub fn handle_set_pool(
     let attributes = vec![attr("action", "set_pool"), attr("pool_type", pool_type)];
 
     // CHECK :: Only owner can call this function
-    if info.sender != config.owner {
+    if info.sender != config.owner && info.sender != config.auction_contract {
         return Err(StdError::generic_err("Unauthorized"));
     }
 
