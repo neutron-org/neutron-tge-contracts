@@ -449,9 +449,11 @@
         },
         "incentives_share": {
           "description": "Share of total NTRN incentives allocated to this pool",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
         },
         "is_staked": {
           "description": "Boolean value indicating if the LP Tokens are staked with the Generator contract or not",

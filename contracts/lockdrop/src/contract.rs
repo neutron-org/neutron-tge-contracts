@@ -532,7 +532,7 @@ pub fn handle_initialize_pool(
     info: MessageInfo,
     pool_type: PoolType,
     cw20_sender_addr: Addr,
-    incentives_share: u64,
+    incentives_share: Uint128,
     amount: Uint128,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
@@ -1692,11 +1692,11 @@ pub fn query_lockup_info(
 pub fn calculate_astro_incentives_for_lockup(
     lockup_weighted_balance: Uint256,
     total_weighted_amount: Uint256,
-    pool_incentives_share: u64,
-    total_incentives_share: u64,
+    pool_incentives_share: Uint128,
+    total_incentives_share: Uint128,
     total_lockdrop_incentives: Uint128,
 ) -> StdResult<Uint128> {
-    if total_incentives_share == 0u64 || total_weighted_amount == Uint256::zero() {
+    if total_incentives_share.is_zero() || total_weighted_amount.is_zero() {
         Ok(Uint128::zero())
     } else {
         Ok(Decimal256::from_ratio(

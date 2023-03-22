@@ -12,7 +12,8 @@ use astroport_periphery::auction::{
     State, UpdateConfigMsg, UserInfoResponse, UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
 };
 use astroport_periphery::lockdrop::{
-    ExecuteMsg as LockDropExecuteMsg, PoolInfo as LockDropPoolInfo, PoolType as LockDropPoolType,
+    Cw20HookMsg as LockDropCw20HookMsg, ExecuteMsg as LockDropExecuteMsg,
+    PoolInfo as LockDropPoolInfo, PoolType as LockDropPoolType,
 };
 
 use crate::state::{get_users_store, CONFIG, STATE};
@@ -565,7 +566,7 @@ pub fn execute_set_pool_size(
                 pool_info: LockDropPoolInfo {
                     lp_token: pool_info.ntrn_atom_lp_token_address,
                     amount_in_lockups: Uint128::zero(),
-                    incentives_share: 0,
+                    incentives_share: Uint128::zero(),
                     weighted_amount: Uint256::zero(),
                     generator_ntrn_per_share: Decimal::one(),
                     generator_proxy_per_share: vec![].into(),
@@ -581,7 +582,7 @@ pub fn execute_set_pool_size(
                 pool_info: LockDropPoolInfo {
                     lp_token: pool_info.ntrn_usdc_lp_token_address,
                     amount_in_lockups: Uint128::zero(),
-                    incentives_share: 0,
+                    incentives_share: Uint128::zero(),
                     weighted_amount: Uint256::zero(),
                     generator_ntrn_per_share: Decimal::one(),
                     generator_proxy_per_share: vec![].into(),
@@ -766,9 +767,13 @@ pub fn execute_finalize_init_pool(
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_atom_lp_token_address.to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: lockdrop_address.to_string(),
+                msg: to_binary(&Cw20ExecuteMsg::Send {
+                    contract: lockdrop_address.to_string(),
                     amount: state.atom_lp_locked,
+                    msg: to_binary(&LockDropCw20HookMsg::InitializePool {
+                        pool_type: LockDropPoolType::USDC,
+                        incentives_share: state.usdc_ntrn_size / Uint128::from(2_u128),
+                    })?,
                 })?,
             }))
         }
@@ -776,9 +781,13 @@ pub fn execute_finalize_init_pool(
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_usdc_lp_token_address.to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                msg: to_binary(&Cw20ExecuteMsg::Send {
+                    contract: lockdrop_address.to_string(),
+                    msg: to_binary(&LockDropCw20HookMsg::InitializePool {
+                        pool_type: LockDropPoolType::USDC,
+                        incentives_share: state.usdc_ntrn_size / Uint128::from(2_u128),
+                    })?,
                     //SEND + msg (initialize from lockdrop)
-                    recipient: lockdrop_address.to_string(),
                     amount: state.usdc_lp_locked,
                 })?,
             }))

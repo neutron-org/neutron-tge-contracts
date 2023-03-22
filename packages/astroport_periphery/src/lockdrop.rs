@@ -168,7 +168,7 @@ pub enum Cw20HookMsg {
     // ADMIN Function ::: Add new Pool (Only Terraswap Pools)
     InitializePool {
         pool_type: PoolType,
-        incentives_share: u64,
+        incentives_share: Uint128,
     },
 }
 
@@ -282,7 +282,7 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 pub struct State {
     /// Total NTRN incentives share
-    pub total_incentives_share: u64,
+    pub total_incentives_share: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -291,7 +291,7 @@ pub struct PoolInfo {
     pub amount_in_lockups: Uint128,
     // pub migration_info: Option<MigrationInfo>,
     /// Share of total NTRN incentives allocated to this pool
-    pub incentives_share: u64,
+    pub incentives_share: Uint128,
     /// Weighted LP Token balance used to calculate NTRN rewards a particular user can claim
     pub weighted_amount: Uint256,
     /// Ratio of Generator NTRN rewards accured to astroport pool share
@@ -349,7 +349,7 @@ pub struct LockupInfoV2 {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct StateResponse {
     /// Total NTRN incentives share
-    pub total_incentives_share: u64,
+    pub total_incentives_share: Uint128,
     /// Vector containing LP addresses for all the supported LP Pools
     pub supported_pairs_list: Vec<PoolType>,
 }
