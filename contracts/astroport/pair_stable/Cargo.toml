@@ -42,3 +42,9 @@ astroport-token = {path = "../token"}
 cw-multi-test = "0.15"
 astroport-factory = {path = "../factory"}
 derivative = "2.2.0"
+
+[target.x86_64-apple-darwin]
+rustflags = [
+  "-C", "link-arg=-undefined",
+  "-C", "link-arg=dynamic_lookup",
+]

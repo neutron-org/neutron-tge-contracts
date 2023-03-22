@@ -117,7 +117,7 @@ impl BaseVesting {
     /// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template.
     ///
     /// * **cw20_msg** CW20 message to process.
-    fn receive_cw20(
+    pub fn receive_cw20(
         &self,
         deps: DepsMut,
         env: Env,
