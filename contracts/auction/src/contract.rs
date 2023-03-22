@@ -3,7 +3,7 @@ use astroport::asset::{Asset, AssetInfo, MINIMUM_LIQUIDITY_AMOUNT};
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
-    MessageInfo, Order, Response, StdError, StdResult, Uint128, WasmMsg,
+    MessageInfo, Order, Response, StdError, StdResult, Uint128, Uint256, WasmMsg,
 };
 use std::str::FromStr;
 
@@ -11,7 +11,9 @@ use astroport_periphery::auction::{
     CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolBalance, PoolInfo, QueryMsg,
     State, UpdateConfigMsg, UserInfoResponse, UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
 };
-use astroport_periphery::lockdrop::{ExecuteMsg as LockDropExecuteMsg, PoolType};
+use astroport_periphery::lockdrop::{
+    ExecuteMsg as LockDropExecuteMsg, PoolInfo as LockDropPoolInfo, PoolType as LockDropPoolType,
+};
 
 use crate::state::{get_users_store, CONFIG, STATE};
 use astroport::querier::query_token_balance;
@@ -502,6 +504,14 @@ pub fn execute_set_pool_size(
         return Err(StdError::generic_err("Pool size has already been set"));
     }
 
+    let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
+        StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
+    })?;
+
+    let pool_info = config
+        .pool_info
+        .ok_or_else(|| StdError::generic_err("PoolInfo is not set yet. Please set it first."))?;
+
     let (usdc_amount, atom_amount, ntrn_amount) = get_contract_balances(
         deps.as_ref(),
         &env.contract.address,
@@ -546,7 +556,43 @@ pub fn execute_set_pool_size(
     state.usdc_lp_size = usdc_lp_size;
     STATE.save(deps.storage, &state)?;
 
-    Ok(Response::new().add_attributes(vec![
+    //Set pool info for lockdrop contract
+    let msgs = vec![
+        WasmMsg::Execute {
+            contract_addr: lockdrop_address.to_string(),
+            msg: to_binary(&LockDropExecuteMsg::SetPoolInfo {
+                pool_type: LockDropPoolType::ATOM,
+                pool_info: LockDropPoolInfo {
+                    lp_token: pool_info.ntrn_atom_lp_token_address,
+                    amount_in_lockups: Uint128::zero(),
+                    incentives_share: 0,
+                    weighted_amount: Uint256::zero(),
+                    generator_ntrn_per_share: Decimal::one(),
+                    generator_proxy_per_share: vec![].into(),
+                    is_staked: false,
+                },
+            })?,
+            funds: vec![],
+        },
+        WasmMsg::Execute {
+            contract_addr: lockdrop_address.to_string(),
+            msg: to_binary(&LockDropExecuteMsg::SetPoolInfo {
+                pool_type: LockDropPoolType::USDC,
+                pool_info: LockDropPoolInfo {
+                    lp_token: pool_info.ntrn_usdc_lp_token_address,
+                    amount_in_lockups: Uint128::zero(),
+                    incentives_share: 0,
+                    weighted_amount: Uint256::zero(),
+                    generator_ntrn_per_share: Decimal::one(),
+                    generator_proxy_per_share: vec![].into(),
+                    is_staked: false,
+                },
+            })?,
+            funds: vec![],
+        },
+    ];
+
+    Ok(Response::new().add_messages(msgs).add_attributes(vec![
         attr("action", "Auction::ExecuteMsg::SetPoolSize"),
         attr("div_ratio", div_ratio.to_string()),
         attr("atom", exchange_data[0].rate),
@@ -731,6 +777,7 @@ pub fn execute_finalize_init_pool(
                 contract_addr: ntrn_usdc_lp_token_address.to_string(),
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    //SEND + msg (initialize from lockdrop)
                     recipient: lockdrop_address.to_string(),
                     amount: state.usdc_lp_locked,
                 })?,
@@ -921,7 +968,7 @@ pub fn execute_lock_lp_tokens(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    asset: PoolType,
+    asset: LockDropPoolType,
     amount: Uint128,
     duration: u64,
 ) -> Result<Response, StdError> {
@@ -952,7 +999,7 @@ pub fn execute_lock_lp_tokens(
     );
 
     match asset {
-        PoolType::USDC => {
+        LockDropPoolType::USDC => {
             if user_info.usdc_deposited.is_zero() {
                 return Err(StdError::generic_err("No USDC deposited!"));
             }
@@ -962,7 +1009,7 @@ pub fn execute_lock_lp_tokens(
             user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_add(amount)?;
             state.usdc_lp_locked = state.usdc_lp_locked.checked_add(amount)?;
         }
-        PoolType::ATOM => {
+        LockDropPoolType::ATOM => {
             if user_info.atom_deposited.is_zero() {
                 return Err(StdError::generic_err("No ATOM deposited!"));
             }
@@ -1007,7 +1054,7 @@ pub fn execute_withdraw_lp_tokens(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    asset: PoolType,
+    asset: LockDropPoolType,
     amount: Uint128,
     duration: u64,
 ) -> Result<Response, StdError> {
@@ -1029,11 +1076,11 @@ pub fn execute_withdraw_lp_tokens(
     })?;
 
     match asset {
-        PoolType::USDC => {
+        LockDropPoolType::USDC => {
             user_info.usdc_lp_locked = user_info.usdc_lp_locked.checked_sub(amount)?;
             state.usdc_lp_locked = state.usdc_lp_locked.checked_sub(amount)?;
         }
-        PoolType::ATOM => {
+        LockDropPoolType::ATOM => {
             user_info.atom_lp_locked += user_info.atom_lp_locked.checked_sub(amount)?;
             state.atom_lp_locked = state.atom_lp_locked.checked_sub(amount)?;
         }
