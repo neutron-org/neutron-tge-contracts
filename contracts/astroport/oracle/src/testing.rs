@@ -4,7 +4,7 @@ use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::oracle::{Config, ExecuteMsg, InstantiateMsg, QueryMsg};
 use cosmwasm_std::testing::{mock_env, mock_info};
 use cosmwasm_std::{from_binary, Addr, Decimal256, Uint128, Uint256};
-use std::ops::Mul;
+use std::ops::{Add, Mul};
 
 #[test]
 fn decimal_overflow() {
@@ -99,7 +99,7 @@ fn oracle_overflow() {
 }
 
 #[test]
-fn cfg_and_last_update_height() {
+fn cfg_and_last_update_ts() {
     let mut deps = mock_dependencies(&[]);
     let info = mock_info("addr0000", &[]);
 
@@ -149,6 +149,7 @@ fn cfg_and_last_update_height() {
             ),
         ],
     );
+    let inst_ts = env.block.time.seconds();
     let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
     assert_eq!(0, res.messages.len());
 
@@ -186,12 +187,11 @@ fn cfg_and_last_update_height() {
     );
 
     // make first update and check how last update height works
-    let last_update_height: Uint128 =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateHeight {}).unwrap())
+    let last_update_ts: u64 =
+        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
-    assert_eq!(last_update_height, Uint128::from(0u64));
+    assert_eq!(last_update_ts, inst_ts);
     env.block.time = env.block.time.plus_seconds(100);
-    env.block.height = 30;
     execute(
         deps.as_mut(),
         env.clone(),
@@ -199,10 +199,10 @@ fn cfg_and_last_update_height() {
         ExecuteMsg::Update {},
     )
     .unwrap();
-    let last_update_height: Uint128 =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateHeight {}).unwrap())
+    let last_update_ts: u64 =
+        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
-    assert_eq!(last_update_height, Uint128::from(30u64));
+    assert_eq!(last_update_ts, inst_ts.add(100));
 
     // increase update period
     execute(
@@ -217,12 +217,11 @@ fn cfg_and_last_update_height() {
     assert_eq!(cfg.period, 500u64);
 
     // make sure premature update doesn't work
-    let last_update_height: Uint128 =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateHeight {}).unwrap())
+    let last_update_ts: u64 =
+        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
-    assert_eq!(last_update_height, Uint128::from(30u64));
+    assert_eq!(last_update_ts, inst_ts.add(100));
     env.block.time = env.block.time.plus_seconds(100);
-    env.block.height = 60;
     execute(
         deps.as_mut(),
         env.clone(),
@@ -233,9 +232,8 @@ fn cfg_and_last_update_height() {
 
     // make sure update works at the right time
     env.block.time = env.block.time.plus_seconds(500);
-    env.block.height = 210;
     execute(deps.as_mut(), env.clone(), info, ExecuteMsg::Update {}).unwrap();
-    let last_update_height: Uint128 =
-        from_binary(&query(deps.as_ref(), env, QueryMsg::LastUpdateHeight {}).unwrap()).unwrap();
-    assert_eq!(last_update_height, Uint128::from(210u64));
+    let last_update_ts: u64 =
+        from_binary(&query(deps.as_ref(), env, QueryMsg::LastUpdateTimestamp {}).unwrap()).unwrap();
+    assert_eq!(last_update_ts, inst_ts.add(700));
 }

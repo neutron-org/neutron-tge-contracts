@@ -46,9 +46,9 @@ pub enum QueryMsg {
     /// Returns the contract's conriguration structure
     #[returns(Config)]
     Config {},
-    ///
-    #[returns(Uint64)]
-    LastUpdateHeight {},
+    /// Returns the timestamp of the block when the previous update happened
+    #[returns(u64)]
+    LastUpdateTimestamp {},
 }
 
 /// This structure describes a migration message.

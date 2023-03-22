@@ -148,7 +148,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             to_binary(&twap_at_height(deps, token, height)?)
         }
         QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::LastUpdateHeight {} => to_binary(&query_last_update_height(deps)?),
+        QueryMsg::LastUpdateTimestamp {} => to_binary(&query_last_update_ts(deps)?),
     }
 }
 
@@ -277,6 +277,6 @@ fn query_config(deps: Deps) -> Result<Config, StdError> {
 }
 
 /// Returns the height at which the contract's Update{} handler was called last time.
-fn query_last_update_height(deps: Deps) -> Result<Uint64, StdError> {
-    LAST_UPDATE_HEIGHT.load(deps.storage)
+fn query_last_update_ts(deps: Deps) -> Result<u64, StdError> {
+    Ok(PRICE_LAST.load(deps.storage)?.block_timestamp_last)
 }
