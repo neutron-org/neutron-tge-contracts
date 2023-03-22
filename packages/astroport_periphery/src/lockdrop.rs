@@ -69,6 +69,10 @@ impl<'a> Prefixer<'a> for PoolType {
 pub struct InstantiateMsg {
     /// Account which can update config
     pub owner: Option<String>,
+    /// Address of ATOM/NTRN token
+    pub atom_token: String,
+    /// Address of USDC/NTRN token
+    pub usdc_token: String,
     /// Credits contract address
     pub credits_contract: String,
     /// Auction contract address
@@ -155,11 +159,6 @@ pub enum ExecuteMsg {
     DropOwnershipProposal {},
     /// Used to claim contract ownership.
     ClaimOwnership {},
-    /// Sets pool info
-    SetPoolInfo {
-        pool_type: PoolType,
-        pool_info: PoolInfo,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

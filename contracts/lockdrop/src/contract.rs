@@ -90,6 +90,30 @@ pub fn instantiate(
         ));
     }
 
+    // POOL INFO :: Initialize new pool
+    let pool_info = PoolInfo {
+        lp_token: deps.api.addr_validate(&msg.atom_token)?,
+        amount_in_lockups: Default::default(),
+        incentives_share: Uint128::zero(),
+        weighted_amount: Default::default(),
+        generator_ntrn_per_share: Default::default(),
+        generator_proxy_per_share: RestrictedVector::default(),
+        is_staked: false,
+    };
+    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
+
+    // POOL INFO :: Initialize new pool
+    let pool_info = PoolInfo {
+        lp_token: deps.api.addr_validate(&msg.usdc_token)?,
+        amount_in_lockups: Default::default(),
+        incentives_share: Uint128::zero(),
+        weighted_amount: Default::default(),
+        generator_ntrn_per_share: Default::default(),
+        generator_proxy_per_share: RestrictedVector::default(),
+        is_staked: false,
+    };
+    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
+
     let config = Config {
         owner: msg
             .owner
@@ -205,43 +229,9 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             handle_withdraw_from_lockup(deps, env, info, user_address, pool_type, duration, amount)
         }
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
-        ExecuteMsg::SetPoolInfo {
-            pool_type,
-            pool_info,
-        } => handle_set_pool(deps, env, info, pool_type, pool_info),
     }
 }
 
-/// Admin function to set info about pools. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **pool_type** is an object of type [`PoolType`].
-///
-/// * **pool_info** is an object of type [`PoolInfo`].
-pub fn handle_set_pool(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    pool_type: PoolType,
-    pool_info: PoolInfo,
-) -> StdResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-    let attributes = vec![attr("action", "set_pool"), attr("pool_type", pool_type)];
-
-    // CHECK :: Only owner can call this function
-    if info.sender != config.owner && info.sender != config.auction_contract {
-        return Err(StdError::generic_err("Unauthorized"));
-    }
-
-    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
-
-    Ok(Response::new().add_attributes(attributes))
-}
 /// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template.
 /// If the template is not found in the received message, then an [`StdError`] is returned,
 /// otherwise it returns the [`Response`] with the specified attributes if the operation was successful.

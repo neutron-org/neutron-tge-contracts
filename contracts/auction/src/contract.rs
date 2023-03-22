@@ -3,7 +3,7 @@ use astroport::asset::{Asset, AssetInfo, MINIMUM_LIQUIDITY_AMOUNT};
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
-    MessageInfo, Order, Response, StdError, StdResult, Uint128, Uint256, WasmMsg,
+    MessageInfo, Order, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use std::str::FromStr;
 
@@ -13,7 +13,7 @@ use astroport_periphery::auction::{
 };
 use astroport_periphery::lockdrop::{
     Cw20HookMsg as LockDropCw20HookMsg, ExecuteMsg as LockDropExecuteMsg,
-    PoolInfo as LockDropPoolInfo, PoolType as LockDropPoolType,
+    PoolType as LockDropPoolType,
 };
 
 use crate::state::{get_users_store, CONFIG, STATE};
@@ -505,14 +505,6 @@ pub fn execute_set_pool_size(
         return Err(StdError::generic_err("Pool size has already been set"));
     }
 
-    let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
-        StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
-    })?;
-
-    let pool_info = config
-        .pool_info
-        .ok_or_else(|| StdError::generic_err("PoolInfo is not set yet. Please set it first."))?;
-
     let (usdc_amount, atom_amount, ntrn_amount) = get_contract_balances(
         deps.as_ref(),
         &env.contract.address,
@@ -557,43 +549,7 @@ pub fn execute_set_pool_size(
     state.usdc_lp_size = usdc_lp_size;
     STATE.save(deps.storage, &state)?;
 
-    //Set pool info for lockdrop contract
-    let msgs = vec![
-        WasmMsg::Execute {
-            contract_addr: lockdrop_address.to_string(),
-            msg: to_binary(&LockDropExecuteMsg::SetPoolInfo {
-                pool_type: LockDropPoolType::ATOM,
-                pool_info: LockDropPoolInfo {
-                    lp_token: pool_info.ntrn_atom_lp_token_address,
-                    amount_in_lockups: Uint128::zero(),
-                    incentives_share: Uint128::zero(),
-                    weighted_amount: Uint256::zero(),
-                    generator_ntrn_per_share: Decimal::one(),
-                    generator_proxy_per_share: vec![].into(),
-                    is_staked: false,
-                },
-            })?,
-            funds: vec![],
-        },
-        WasmMsg::Execute {
-            contract_addr: lockdrop_address.to_string(),
-            msg: to_binary(&LockDropExecuteMsg::SetPoolInfo {
-                pool_type: LockDropPoolType::USDC,
-                pool_info: LockDropPoolInfo {
-                    lp_token: pool_info.ntrn_usdc_lp_token_address,
-                    amount_in_lockups: Uint128::zero(),
-                    incentives_share: Uint128::zero(),
-                    weighted_amount: Uint256::zero(),
-                    generator_ntrn_per_share: Decimal::one(),
-                    generator_proxy_per_share: vec![].into(),
-                    is_staked: false,
-                },
-            })?,
-            funds: vec![],
-        },
-    ];
-
-    Ok(Response::new().add_messages(msgs).add_attributes(vec![
+    Ok(Response::new().add_attributes(vec![
         attr("action", "Auction::ExecuteMsg::SetPoolSize"),
         attr("div_ratio", div_ratio.to_string()),
         attr("atom", exchange_data[0].rate),
