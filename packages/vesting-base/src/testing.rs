@@ -19,11 +19,17 @@ fn proper_initialization() {
 
     let env = mock_env();
     let info = mock_info("addr0000", &[]);
-    let _res = vest_app.instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+    let _res = vest_app
+        .instantiate(deps.as_mut(), env.clone(), info, msg)
+        .unwrap();
 
     assert_eq!(
-        from_binary::<ConfigResponse>(&vest_app.query(deps.as_ref(), env, QueryMsg::Config {}).unwrap())
-            .unwrap(),
+        from_binary::<ConfigResponse>(
+            &vest_app
+                .query(deps.as_ref(), env, QueryMsg::Config {})
+                .unwrap()
+        )
+        .unwrap(),
         ConfigResponse {
             owner: Addr::unchecked("owner"),
             vesting_token: token_asset_info(Addr::unchecked("astro_token")),

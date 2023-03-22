@@ -4,15 +4,3 @@ wasm-debug = "build --target wasm32-unknown-unknown"
 unit-test = "test --lib"
 integration-test = "test --test integration"
 schema = "run --example pair_stable_schema"
-
-[target.x86_64-apple-darwin]
-rustflags = [
-  "-C", "link-arg=-undefined",
-  "-C", "link-arg=dynamic_lookup",
-]
-
-[target.aarch64-apple-darwin]
-rustflags = [
-  "-C", "link-arg=-undefined",
-  "-C", "link-arg=dynamic_lookup",
-]
