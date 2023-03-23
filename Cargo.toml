@@ -5,7 +5,7 @@ members = [
     "contracts/credits",
     "contracts/vesting-lp",
     "contracts/vesting-managed",
-#    "contracts/astroport/*"
+    "contracts/astroport/*"
 ]
 
 [profile.release]
