@@ -98,7 +98,7 @@ pub fn claim_ownership(
     info: MessageInfo,
     env: Env,
     proposal: &Item<OwnershipProposal>,
-    cb: impl Fn(DepsMut, Addr) -> StdResult<()>
+    cb: impl Fn(DepsMut, Addr) -> StdResult<()>,
 ) -> StdResult<Response> {
     let p = proposal
         .load(deps.storage)
