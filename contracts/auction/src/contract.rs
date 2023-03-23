@@ -539,7 +539,7 @@ pub fn execute_set_pool_size(
     let usdc_ntrn_size = ntrn_amount * div_ratio;
     let atom_ntrn_size = ntrn_amount - usdc_ntrn_size;
     let atom_lp_size = get_lp_size(atom_ntrn_size, atom_amount);
-    let usdc_lp_size = get_lp_size(usdc_ntrn_size, atom_amount);
+    let usdc_lp_size = get_lp_size(usdc_ntrn_size, usdc_amount);
 
     // UPDATE STATE
     state.usdc_ntrn_size = usdc_ntrn_size;
@@ -701,6 +701,7 @@ pub fn execute_finalize_init_pool(
                 })?,
             }),
         ];
+        deps.api.debug(format!("WASMDEBUG: {:?}", msgs).as_str());
 
         // Send locked tokens to the lockdrop contract
         if !state.atom_lp_locked.is_zero() {
