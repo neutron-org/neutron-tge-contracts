@@ -11,6 +11,10 @@ pub struct BaseVesting {
     pub vesting_state: SnapshotItem<'static, VestingState>,
     /// The first key is the address of an account that's vesting, the second key is an object of type [`VestingInfo`].
     pub vesting_info: SnapshotMap<'static, &'static Addr, VestingInfo>,
+    /// Stores the contract config at the given key.
+    pub config: Item<'static, Config>,
+    /// Contains a proposal to change contract ownership.
+    pub ownership_proposal: Item<'static, OwnershipProposal>
 }
 
 impl BaseVesting {
@@ -28,6 +32,8 @@ impl BaseVesting {
                 "vesting_info__changelog",
                 snapshot_strategy,
             ),
+            config: Item::new("config"),
+            ownership_proposal: Item::new("ownership_proposal"),
         }
     }
 }
@@ -40,12 +46,6 @@ pub struct Config {
     /// [`AssetInfo`] of the ASTRO token
     pub vesting_token: AssetInfo,
 }
-
-/// Stores the contract config at the given key.
-pub const CONFIG: Item<Config> = Item::new("config");
-
-/// Contains a proposal to change contract ownership.
-pub const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
 
 const MAX_LIMIT: u32 = 30;
 const DEFAULT_LIMIT: u32 = 10;
