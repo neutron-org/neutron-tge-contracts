@@ -591,7 +591,7 @@ pub fn execute_init_pool(deps: DepsMut, env: Env, info: MessageInfo) -> Result<R
         return Err(StdError::generic_err("Liquidity already added"));
     }
 
-    if state.usdc_lp_size.is_zero() || state.atom_lp_size.is_zero() {
+    if state.usdc_lp_size.is_zero() && state.atom_lp_size.is_zero() {
         return Err(StdError::generic_err("Pool size has not been set"));
     }
 
