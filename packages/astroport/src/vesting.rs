@@ -3,13 +3,15 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Order, Uint128};
 use cw20::Cw20ReceiveMsg;
 
+use crate::asset::AssetInfo;
+
 /// This structure describes the parameters used for creating a contract.
 #[cw_serde]
 pub struct InstantiateMsg {
     /// Address allowed to change contract parameters
     pub owner: String,
-    /// The address of the token that's being vested
-    pub token_addr: String,
+    /// [`AssetInfo`] of the token that's being vested
+    pub vesting_token: AssetInfo,
 }
 
 /// This structure describes the execute messages available in the contract.
@@ -24,6 +26,10 @@ pub enum ExecuteMsg {
     },
     /// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template
     Receive(Cw20ReceiveMsg),
+    /// RegisterVestingAccounts registers vesting targets/accounts
+    RegisterVestingAccounts {
+        vesting_accounts: Vec<VestingAccount>,
+    },
     /// Creates a request to change contract ownership
     /// ## Executor
     /// Only the current owner can execute this
@@ -41,6 +47,16 @@ pub enum ExecuteMsg {
     /// ## Executor
     /// Only the newly proposed owner can execute this
     ClaimOwnership {},
+}
+
+/// This structure stores the accumulated vesting information for all addresses.
+#[cw_serde]
+#[derive(Default)]
+pub struct VestingState {
+    /// The total amount of tokens granted to the users
+    pub total_granted: Uint128,
+    /// The total amount of tokens already claimed
+    pub total_released: Uint128,
 }
 
 /// This structure stores vesting information for a specific address that is getting tokens.
@@ -109,8 +125,8 @@ pub enum QueryMsg {
 pub struct ConfigResponse {
     /// Address allowed to set contract parameters
     pub owner: Addr,
-    /// The address of the token being vested
-    pub token_addr: Addr,
+    /// [`AssetInfo`] of the token that's being vested
+    pub vesting_token: AssetInfo,
 }
 
 /// This structure describes a custom struct used to return vesting data about a specific vesting target.

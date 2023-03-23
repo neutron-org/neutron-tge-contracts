@@ -1,5 +1,5 @@
 [workspace]
-members = ["contracts/auction", "contracts/lockdrop", "contracts/credits", "contracts/cw20-merkle-airdrop", "contracts/price-feed", "contracts/astroport/*"]
+members = ["contracts/auction", "contracts/lockdrop", "contracts/credits", "contracts/cw20-merkle-airdrop", "contracts/price-feed", "contracts/vesting-lp", "contracts/astroport/*"]
 
 [profile.release]
 rpath = false

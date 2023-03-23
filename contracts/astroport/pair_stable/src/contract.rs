@@ -242,7 +242,7 @@ pub fn execute(
                 owner,
                 expires_in,
                 config.owner.unwrap_or(factory_config.owner),
-                OWNERSHIP_PROPOSAL,
+                &OWNERSHIP_PROPOSAL,
             )
             .map_err(|e| e.into())
         }
@@ -254,12 +254,12 @@ pub fn execute(
                 deps,
                 info,
                 config.owner.unwrap_or(factory_config.owner),
-                OWNERSHIP_PROPOSAL,
+                &OWNERSHIP_PROPOSAL,
             )
             .map_err(|e| e.into())
         }
         ExecuteMsg::ClaimOwnership {} => {
-            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
+            claim_ownership(deps, info, env, &OWNERSHIP_PROPOSAL, |deps, new_owner| {
                 CONFIG.update::<_, StdError>(deps.storage, |mut config| {
                     config.owner = Some(new_owner);
                     Ok(config)
