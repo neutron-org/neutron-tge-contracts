@@ -879,7 +879,7 @@ fn remove_vesting_accounts() {
     //      400 tokens, check that the vesting contract has 400 tokens on its balance
     //  3. Remove vesting schedules
     //  4.  Check that the user has 0 vesting tokens, check that the owner has received
-    //      300 tokens back, check that the vesting contract has 0 tokens on its balance
+    //      400 tokens back, check that the vesting contract has 0 tokens on its balance
     //
     ////////////////////////////////////////////////////////////////////////////////
 
@@ -992,8 +992,8 @@ fn remove_vesting_accounts() {
     //
     // Scenario #2:
     //  1.  Create vesting schedules
-    //  2.  Check that the user has 300 vesting tokens, check that the owner has spent
-    //      300 tokens, check that the vesting contract has 400 tokens on its balance
+    //  2.  Check that the user has 400 vesting tokens, check that the owner has spent
+    //      400 tokens, check that the vesting contract has 400 tokens on its balance
     //  3.  Claim 400/2 tokens;
     //  4.  Check that vesting_state is { total_granted: 400, total_released: 200 }
     //  5.  Remove vesting schedules
