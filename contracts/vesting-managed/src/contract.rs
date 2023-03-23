@@ -1,5 +1,5 @@
 use cosmwasm_std::{
-    Addr, attr, Binary, Deps, DepsMut, entry_point, Env, MessageInfo, Response, StdError,
+    attr, entry_point, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError,
     StdResult, SubMsg, Uint128,
 };
 use cw_storage_plus::{SnapshotItem, SnapshotMap, Strategy};
@@ -9,8 +9,8 @@ use astroport::asset::AssetInfo;
 use astroport::asset::AssetInfoExt;
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::vesting::{InstantiateMsg, QueryMsg, VestingInfo, VestingState};
-use vesting_base::{error::ContractError, state::BaseVesting};
 use vesting_base::state::Config;
+use vesting_base::{error::ContractError, state::BaseVesting};
 
 use crate::msg::ExecuteMsg;
 
@@ -83,7 +83,7 @@ pub fn execute(
                 config.owner,
                 &vest_app.ownership_proposal,
             )
-                .map_err(Into::into)
+            .map_err(Into::into)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = vest_app.config.load(deps.storage)?;
@@ -91,17 +91,23 @@ pub fn execute(
             drop_ownership_proposal(deps, info, config.owner, &vest_app.ownership_proposal)
                 .map_err(Into::into)
         }
-        ExecuteMsg::ClaimOwnership {} => {
-            claim_ownership(deps, info, env, &vest_app.ownership_proposal, |deps, new_owner| {
-                vest_app.config.update::<_, StdError>(deps.storage, |mut v| {
-                    v.owner = new_owner;
-                    Ok(v)
-                })?;
+        ExecuteMsg::ClaimOwnership {} => claim_ownership(
+            deps,
+            info,
+            env,
+            &vest_app.ownership_proposal,
+            |deps, new_owner| {
+                vest_app
+                    .config
+                    .update::<_, StdError>(deps.storage, |mut v| {
+                        v.owner = new_owner;
+                        Ok(v)
+                    })?;
 
                 Ok(())
-            })
-                .map_err(Into::into)
-        }
+            },
+        )
+        .map_err(Into::into),
         ExecuteMsg::RemoveVestingAccounts {
             vesting_accounts,
             clawback_account,

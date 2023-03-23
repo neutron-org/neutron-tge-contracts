@@ -14,7 +14,7 @@ pub struct BaseVesting {
     /// Stores the contract config at the given key.
     pub config: Item<'static, Config>,
     /// Contains a proposal to change contract ownership.
-    pub ownership_proposal: Item<'static, OwnershipProposal>
+    pub ownership_proposal: Item<'static, OwnershipProposal>,
 }
 
 impl BaseVesting {
