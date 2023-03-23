@@ -118,6 +118,9 @@ pub enum QueryMsg {
     /// Timestamp returns the current timestamp
     #[returns(u64)]
     Timestamp {},
+    /// VestingState returns the current vesting state.
+    #[returns(VestingState)]
+    VestingState {},
 }
 
 /// This structure describes a custom struct used to return the contract configuration.

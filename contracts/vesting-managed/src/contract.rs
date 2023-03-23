@@ -140,18 +140,18 @@ fn remove_vesting_accounts(
     // vesting), transfer the required amount to the owner, remove the vesting information
     // from the storage, and decrease the total granted metric.
     for vesting_account in vesting_accounts {
-        let mut amount_to_claw_back = Uint128::zero();
+        let mut total_granted_for_user = Uint128::zero();
 
         let account_address = deps.api.addr_validate(&vesting_account)?;
         if let Some(account_info) = vesting_info.may_load(deps.storage, &account_address)? {
             for sch in account_info.schedules {
-                amount_to_claw_back = amount_to_claw_back.checked_add(sch.start_point.amount)?;
+                total_granted_for_user = total_granted_for_user.checked_add(sch.start_point.amount)?;
                 if let Some(end_point) = sch.end_point {
-                    amount_to_claw_back = amount_to_claw_back.checked_add(end_point.amount)?;
+                    total_granted_for_user = total_granted_for_user.checked_add(end_point.amount)?;
                 }
             }
 
-            amount_to_claw_back = amount_to_claw_back.checked_sub(account_info.released_amount)?;
+            let amount_to_claw_back = total_granted_for_user.checked_sub(account_info.released_amount)?;
 
             let transfer_msg = config
                 .vesting_token
@@ -159,12 +159,22 @@ fn remove_vesting_accounts(
                 .into_msg(&deps.querier, clawback_address.clone())?;
             response = response.add_submessage(SubMsg::new(transfer_msg));
 
-            vesting_info.remove(deps.storage, &account_address.clone(), env.block.height)?;
             vesting_state.update::<_, ContractError>(deps.storage, env.block.height, |s| {
+                // Here we choose the "forget about everything" strategy. E.g., if we granted a user
+                // 300 tokens, and they claimed 150 tokens, the vesting state is
+                // { total_granted: 300, total_released: 150 }.
+                // If after that we remove the user's vesting account, we set the vesting state to
+                // { total_granted: 0, total_released: 0 }.
+                //
+                // If we decided to set it to { total_granted: 150, total_released: 150 }., the
+                // .total_released value of the vesting state would not be equal to the sum of the
+                // .released_amount values of all registered accounts.
                 let mut state = s.ok_or(ContractError::AmountIsNotAvailable {})?;
-                state.total_granted = state.total_granted.checked_sub(amount_to_claw_back)?;
+                state.total_granted = state.total_granted.checked_sub(total_granted_for_user)?;
+                state.total_released = state.total_released.checked_sub(account_info.released_amount)?;
                 Ok(state)
             })?;
+            vesting_info.remove(deps.storage, &account_address.clone(), env.block.height)?;
         }
     }
 

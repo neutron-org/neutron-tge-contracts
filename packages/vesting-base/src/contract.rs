@@ -301,6 +301,7 @@ impl BaseVesting {
                 &self.query_vesting_available_amount(deps, env, address)?,
             )?),
             QueryMsg::Timestamp {} => Ok(to_binary(&self.query_timestamp(env)?)?),
+            QueryMsg::VestingState {} => Ok(to_binary(&self.vesting_state.load(deps.storage)?)?)
         }
     }
 
