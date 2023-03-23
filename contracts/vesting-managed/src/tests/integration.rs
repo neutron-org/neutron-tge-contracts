@@ -1,8 +1,11 @@
-use cosmwasm_std::{Addr, coin, coins, StdResult, Timestamp, to_binary, Uint128};
+use cosmwasm_std::{coin, coins, to_binary, Addr, StdResult, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use cw_utils::PaymentError;
 
+use astroport::asset::{native_asset_info, token_asset_info};
+use astroport::querier::query_balance;
+use astroport::vesting::{QueryMsg, VestingAccountResponse, VestingState};
 use astroport::{
     token::InstantiateMsg as TokenInstantiateMsg,
     vesting::{
@@ -10,9 +13,6 @@ use astroport::{
         VestingSchedulePoint,
     },
 };
-use astroport::asset::{native_asset_info, token_asset_info};
-use astroport::querier::query_balance;
-use astroport::vesting::{QueryMsg, VestingAccountResponse, VestingState};
 use vesting_base::error::ContractError;
 use vesting_base::state::Config;
 
@@ -77,7 +77,7 @@ fn claim() {
                 ],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(300u128),
     };
 
@@ -125,7 +125,7 @@ fn claim() {
                 ],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(300u128),
     };
 
@@ -244,7 +244,7 @@ fn claim_native() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(300u128),
     };
 
@@ -297,7 +297,7 @@ fn claim_native() {
         &msg,
         &coins(300, IBC_ASTRO),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -416,7 +416,7 @@ fn register_vesting_accounts() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(100u128),
     };
 
@@ -442,7 +442,7 @@ fn register_vesting_accounts() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(100u128),
     };
 
@@ -533,7 +533,7 @@ fn register_vesting_accounts() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(200u128),
     };
 
@@ -585,7 +585,7 @@ fn register_vesting_accounts() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(10u128),
     };
 
@@ -689,7 +689,7 @@ fn register_vesting_accounts_native() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(100u128),
     };
 
@@ -734,7 +734,7 @@ fn register_vesting_accounts_native() {
         &native_msg,
         &coins(100u128, IBC_ASTRO),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -779,7 +779,7 @@ fn register_vesting_accounts_native() {
         &msg,
         &coins(200, IBC_ASTRO),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user2.to_string(),
@@ -827,7 +827,7 @@ fn register_vesting_accounts_native() {
         &msg,
         &coins(10, IBC_ASTRO),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -901,8 +901,8 @@ fn remove_vesting_accounts() {
     //
     // Scenario #1:
     //  1.  Create vesting schedules
-    //  2.  Check that the user has 300 vesting tokens, check that the owner has spent
-    //      300 tokens, check that the vesting contract has 300 tokens on its balance
+    //  2.  Check that the user has 400 vesting tokens, check that the owner has spent
+    //      400 tokens, check that the vesting contract has 400 tokens on its balance
     //  3. Remove vesting schedules
     //  4.  Check that the user has 0 vesting tokens, check that the owner has received
     //      300 tokens back, check that the vesting contract has 0 tokens on its balance
@@ -916,11 +916,11 @@ fn remove_vesting_accounts() {
                 VestingSchedule {
                     start_point: VestingSchedulePoint {
                         time: Timestamp::from_seconds(100).seconds(),
-                        amount: Uint128::zero(),
+                        amount: Uint128::new(100),
                     },
                     end_point: Some(VestingSchedulePoint {
                         time: Timestamp::from_seconds(101).seconds(),
-                        amount: Uint128::new(100),
+                        amount: Uint128::new(200),
                     }),
                 },
                 VestingSchedule {
@@ -951,9 +951,9 @@ fn remove_vesting_accounts() {
         owner.clone(),
         vesting_instance.clone(),
         &register_vesting_accounts_msg,
-        &coins(300, IBC_ASTRO),
+        &coins(400, IBC_ASTRO),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -963,19 +963,19 @@ fn remove_vesting_accounts() {
         .wrap()
         .query_wasm_smart(vesting_instance.clone(), &msg)
         .unwrap();
-    assert_eq!(user1_vesting_amount.clone(), Uint128::new(300u128));
+    assert_eq!(user1_vesting_amount.clone(), Uint128::new(400u128));
 
     // Check owner balance
     let bal = query_balance(&app.wrap(), &owner, IBC_ASTRO)
         .unwrap()
         .u128();
-    assert_eq!(bal, TOKEN_INITIAL_AMOUNT - 300u128);
+    assert_eq!(bal, TOKEN_INITIAL_AMOUNT - 400u128);
 
     // Check vesting balance
     let bal = query_balance(&app.wrap(), &vesting_instance, IBC_ASTRO)
         .unwrap()
         .u128();
-    assert_eq!(bal, 300u128);
+    assert_eq!(bal, 400u128);
 
     let remove_vesting_accounts_msg = ManagedExecuteMsg::RemoveVestingAccounts {
         vesting_accounts: vec![user1.to_string()],
@@ -988,7 +988,7 @@ fn remove_vesting_accounts() {
         &remove_vesting_accounts_msg,
         &[],
     )
-        .unwrap();
+    .unwrap();
 
     // Check that the owner received their tokens back.
     let bal = query_balance(&app.wrap(), &owner, IBC_ASTRO)
@@ -1019,13 +1019,13 @@ fn remove_vesting_accounts() {
     // Scenario #2:
     //  1.  Create vesting schedules
     //  2.  Check that the user has 300 vesting tokens, check that the owner has spent
-    //      300 tokens, check that the vesting contract has 300 tokens on its balance
-    //  3.  Claim 300/2 tokens;
-    //  4.  Check that vesting_state is { total_granted: 300, total_released: 150 }
+    //      300 tokens, check that the vesting contract has 400 tokens on its balance
+    //  3.  Claim 400/2 tokens;
+    //  4.  Check that vesting_state is { total_granted: 400, total_released: 200 }
     //  5.  Remove vesting schedules
     //  6.  Check that the user has 0 vesting tokens, check that the owner has received
     //      300/2 tokens back, check that the vesting contract has 0 tokens on its balance,
-    //      and check that the user 300/2 tokens on their balance.
+    //      and check that the user 400/2 tokens on their balance.
     //  7.  Check that vesting_state is { total_granted: 0, total_released: 0 }
     //
     ////////////////////////////////////////////////////////////////////////////////
@@ -1037,11 +1037,11 @@ fn remove_vesting_accounts() {
                 VestingSchedule {
                     start_point: VestingSchedulePoint {
                         time: Timestamp::from_seconds(100).seconds(),
-                        amount: Uint128::zero(),
+                        amount: Uint128::new(100),
                     },
                     end_point: Some(VestingSchedulePoint {
                         time: Timestamp::from_seconds(101).seconds(),
-                        amount: Uint128::new(100),
+                        amount: Uint128::new(200),
                     }),
                 },
                 VestingSchedule {
@@ -1072,9 +1072,9 @@ fn remove_vesting_accounts() {
         owner.clone(),
         vesting_instance.clone(),
         &register_vesting_accounts_msg,
-        &coins(300, IBC_ASTRO),
+        &coins(400, IBC_ASTRO),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -1084,23 +1084,23 @@ fn remove_vesting_accounts() {
         .wrap()
         .query_wasm_smart(vesting_instance.clone(), &msg)
         .unwrap();
-    assert_eq!(user1_vesting_amount.clone(), Uint128::new(300u128));
+    assert_eq!(user1_vesting_amount.clone(), Uint128::new(400u128));
 
     // Check owner balance
     let bal = query_balance(&app.wrap(), &owner, IBC_ASTRO)
         .unwrap()
         .u128();
-    assert_eq!(bal, TOKEN_INITIAL_AMOUNT - 300u128);
+    assert_eq!(bal, TOKEN_INITIAL_AMOUNT - 400u128);
 
     // Check vesting balance
     let bal = query_balance(&app.wrap(), &vesting_instance, IBC_ASTRO)
         .unwrap()
         .u128();
-    assert_eq!(bal, 300u128);
+    assert_eq!(bal, 400u128);
 
     let msg = ExecuteMsg::Claim {
         recipient: None,
-        amount: Some(Uint128::from(150u128)),
+        amount: Some(Uint128::from(200u128)),
     };
     app.execute_contract(user1.clone(), vesting_instance.clone(), &msg, &[])
         .unwrap();
@@ -1109,8 +1109,8 @@ fn remove_vesting_accounts() {
         .wrap()
         .query_wasm_smart(vesting_instance.clone(), &QueryMsg::VestingState {})
         .unwrap();
-    assert_eq!(vesting_state.total_granted.clone(), Uint128::new(300u128));
-    assert_eq!(vesting_state.total_released.clone(), Uint128::new(150u128));
+    assert_eq!(vesting_state.total_granted.clone(), Uint128::new(400u128));
+    assert_eq!(vesting_state.total_released.clone(), Uint128::new(200u128));
 
     let remove_vesting_accounts_msg = ManagedExecuteMsg::RemoveVestingAccounts {
         vesting_accounts: vec![user1.to_string()],
@@ -1122,19 +1122,19 @@ fn remove_vesting_accounts() {
         &remove_vesting_accounts_msg,
         &[],
     )
-        .unwrap();
+    .unwrap();
 
     // Check that the owner received their tokens back.
     let bal = query_balance(&app.wrap(), &owner, IBC_ASTRO)
         .unwrap()
         .u128();
-    assert_eq!(bal, TOKEN_INITIAL_AMOUNT - 150u128);
+    assert_eq!(bal, TOKEN_INITIAL_AMOUNT - 200u128);
 
     // Check that the user has the tokens that they claimed.
     let bal = query_balance(&app.wrap(), &user1, IBC_ASTRO)
         .unwrap()
         .u128();
-    assert_eq!(bal, 150u128);
+    assert_eq!(bal, 200u128);
 
     // Check that the user has no funds available anymore (will result in a VestingInfo not found
     // error).
@@ -1210,7 +1210,7 @@ fn instantiate_token(app: &mut App, token_code_id: u64, name: &str, cap: Option<
         name,
         None,
     )
-        .unwrap()
+    .unwrap()
 }
 
 fn instantiate_vesting(mut app: &mut App, astro_token_instance: &Addr) -> Addr {
@@ -1286,7 +1286,7 @@ fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
         "Vesting",
         None,
     )
-        .unwrap()
+    .unwrap()
 }
 
 fn mint_tokens(app: &mut App, token: &Addr, recipient: &Addr, amount: u128) {

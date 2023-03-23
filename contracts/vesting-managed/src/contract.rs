@@ -145,13 +145,14 @@ fn remove_vesting_accounts(
         let account_address = deps.api.addr_validate(&vesting_account)?;
         if let Some(account_info) = vesting_info.may_load(deps.storage, &account_address)? {
             for sch in account_info.schedules {
-                total_granted_for_user = total_granted_for_user.checked_add(sch.start_point.amount)?;
                 if let Some(end_point) = sch.end_point {
-                    total_granted_for_user = total_granted_for_user.checked_add(end_point.amount)?;
+                    total_granted_for_user =
+                        total_granted_for_user.checked_add(end_point.amount)?;
                 }
             }
 
-            let amount_to_claw_back = total_granted_for_user.checked_sub(account_info.released_amount)?;
+            let amount_to_claw_back =
+                total_granted_for_user.checked_sub(account_info.released_amount)?;
 
             let transfer_msg = config
                 .vesting_token
@@ -171,7 +172,9 @@ fn remove_vesting_accounts(
                 // .released_amount values of all registered accounts.
                 let mut state = s.ok_or(ContractError::AmountIsNotAvailable {})?;
                 state.total_granted = state.total_granted.checked_sub(total_granted_for_user)?;
-                state.total_released = state.total_released.checked_sub(account_info.released_amount)?;
+                state.total_released = state
+                    .total_released
+                    .checked_sub(account_info.released_amount)?;
                 Ok(state)
             })?;
             vesting_info.remove(deps.storage, &account_address.clone(), env.block.height)?;
