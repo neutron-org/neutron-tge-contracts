@@ -1,5 +1,5 @@
 use cosmwasm_std::{
-    attr, entry_point, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    Addr, attr, Binary, Deps, DepsMut, entry_point, Env, MessageInfo, Response, StdError,
     StdResult, SubMsg, Uint128,
 };
 use cw_storage_plus::{SnapshotItem, SnapshotMap, Strategy};
@@ -9,8 +9,8 @@ use astroport::asset::AssetInfo;
 use astroport::asset::AssetInfoExt;
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::vesting::{InstantiateMsg, QueryMsg, VestingInfo, VestingState};
-use vesting_base::state::{Config, CONFIG, OWNERSHIP_PROPOSAL};
 use vesting_base::{error::ContractError, state::BaseVesting};
+use vesting_base::state::Config;
 
 use crate::msg::ExecuteMsg;
 
@@ -56,7 +56,7 @@ pub fn execute(
         }
         ExecuteMsg::Receive(msg) => vest_app.receive_cw20(deps, env, info, msg),
         ExecuteMsg::RegisterVestingAccounts { vesting_accounts } => {
-            let config = CONFIG.load(deps.storage)?;
+            let config = vest_app.config.load(deps.storage)?;
 
             match &config.vesting_token {
                 AssetInfo::NativeToken { denom } if info.sender == config.owner => {
@@ -72,7 +72,7 @@ pub fn execute(
             }
         }
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
-            let config: Config = CONFIG.load(deps.storage)?;
+            let config: Config = vest_app.config.load(deps.storage)?;
 
             propose_new_owner(
                 deps,
@@ -81,53 +81,57 @@ pub fn execute(
                 owner,
                 expires_in,
                 config.owner,
-                OWNERSHIP_PROPOSAL,
+                &vest_app.ownership_proposal,
             )
-            .map_err(Into::into)
+                .map_err(Into::into)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
-            let config: Config = CONFIG.load(deps.storage)?;
+            let config: Config = vest_app.config.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
+            drop_ownership_proposal(deps, info, config.owner, &vest_app.ownership_proposal)
                 .map_err(Into::into)
         }
         ExecuteMsg::ClaimOwnership {} => {
-            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
-                CONFIG.update::<_, StdError>(deps.storage, |mut v| {
+            claim_ownership(deps, info, env, &vest_app.ownership_proposal, |deps, new_owner| {
+                vest_app.config.update::<_, StdError>(deps.storage, |mut v| {
                     v.owner = new_owner;
                     Ok(v)
                 })?;
 
                 Ok(())
             })
-            .map_err(Into::into)
+                .map_err(Into::into)
         }
         ExecuteMsg::RemoveVestingAccounts {
             vesting_accounts,
             clawback_account,
-        } => remove_vesting_accounts(
-            deps,
-            info,
-            env,
-            vesting_accounts,
-            vest_app.vesting_state,
-            vest_app.vesting_info,
-            clawback_account,
-        ),
+        } => {
+            let config = vest_app.config.load(deps.storage)?;
+            remove_vesting_accounts(
+                deps,
+                info,
+                env,
+                config,
+                vesting_accounts,
+                vest_app.vesting_state,
+                vest_app.vesting_info,
+                clawback_account,
+            )
+        }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn remove_vesting_accounts(
     deps: DepsMut,
     info: MessageInfo,
     env: Env,
+    config: Config,
     vesting_accounts: Vec<String>,
     vesting_state: SnapshotItem<'static, VestingState>,
     vesting_info: SnapshotMap<'static, &'static Addr, VestingInfo>,
     clawback_account: String,
 ) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
-
     if info.sender != config.owner {
         return Err(ContractError::Unauthorized {});
     }

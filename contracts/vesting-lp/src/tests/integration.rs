@@ -18,7 +18,7 @@ use vesting_base::state::Config;
 const OWNER1: &str = "owner1";
 const USER1: &str = "user1";
 const USER2: &str = "user2";
-const TOKEN_INITIAL_AMOUNT: u128 = 1_000_000_000_000000;
+const TOKEN_INITIAL_AMOUNT: u128 = 1_000_000_000_000_000;
 const IBC_ASTRO: &str = "ibc/ASTRO_TOKEN";
 
 #[test]
@@ -31,7 +31,7 @@ fn claim() {
     let token_code_id = store_token_code(&mut app);
 
     let astro_token_instance =
-        instantiate_token(&mut app, token_code_id, "ASTRO", Some(1_000_000_000_000000));
+        instantiate_token(&mut app, token_code_id, "ASTRO", Some(1_000_000_000_000_000));
 
     let vesting_instance = instantiate_vesting(&mut app, &astro_token_instance);
 
@@ -143,7 +143,7 @@ fn claim() {
     check_token_balance(
         &mut app,
         &astro_token_instance,
-        &owner.clone(),
+        &owner,
         TOKEN_INITIAL_AMOUNT - 300u128,
     );
 
@@ -151,7 +151,7 @@ fn claim() {
     check_token_balance(
         &mut app,
         &astro_token_instance,
-        &vesting_instance.clone(),
+        &vesting_instance,
         300u128,
     );
 
@@ -177,12 +177,12 @@ fn claim() {
     check_token_balance(
         &mut app,
         &astro_token_instance,
-        &vesting_instance.clone(),
+        &vesting_instance,
         0u128,
     );
 
     // Check user balance
-    check_token_balance(&mut app, &astro_token_instance, &user1.clone(), 300u128);
+    check_token_balance(&mut app, &astro_token_instance, &user1, 300u128);
 
     // Owner balance mustn't change after claim
     check_token_balance(
@@ -218,9 +218,9 @@ fn claim_native() {
     let token_code_id = store_token_code(&mut app);
 
     let random_token_instance =
-        instantiate_token(&mut app, token_code_id, "RND", Some(1_000_000000));
+        instantiate_token(&mut app, token_code_id, "RND", Some(1_000_000_000));
 
-    mint_tokens(&mut app, &random_token_instance, &owner, 1_000_000000);
+    mint_tokens(&mut app, &random_token_instance, &owner, 1_000_000_000);
 
     let vesting_instance = instantiate_vesting_remote_chain(&mut app);
 
@@ -361,7 +361,7 @@ fn claim_native() {
     // Check user balance after claim
     let user1_vesting_amount: Uint128 = app
         .wrap()
-        .query_wasm_smart(vesting_instance.clone(), &msg)
+        .query_wasm_smart(vesting_instance, &msg)
         .unwrap();
 
     assert_eq!(user1_vesting_amount.clone(), Uint128::new(0u128));
@@ -378,13 +378,13 @@ fn register_vesting_accounts() {
     let token_code_id = store_token_code(&mut app);
 
     let astro_token_instance =
-        instantiate_token(&mut app, token_code_id, "ASTRO", Some(1_000_000_000_000000));
+        instantiate_token(&mut app, token_code_id, "ASTRO", Some(1_000_000_000_000_000));
 
     let noname_token_instance = instantiate_token(
         &mut app,
         token_code_id,
         "NONAME",
-        Some(1_000_000_000_000000),
+        Some(1_000_000_000_000_000),
     );
 
     mint_tokens(
@@ -508,7 +508,7 @@ fn register_vesting_accounts() {
     check_token_balance(
         &mut app,
         &astro_token_instance,
-        &vesting_instance.clone(),
+        &vesting_instance,
         100u128,
     );
 
@@ -556,7 +556,7 @@ fn register_vesting_accounts() {
     check_token_balance(
         &mut app,
         &astro_token_instance,
-        &vesting_instance.clone(),
+        &vesting_instance,
         300u128,
     );
     // A new schedule has been added successfully and an old one hasn't changed.
@@ -609,7 +609,7 @@ fn register_vesting_accounts() {
     check_token_balance(
         &mut app,
         &astro_token_instance,
-        &vesting_instance.clone(),
+        &vesting_instance,
         310u128,
     );
 
@@ -633,10 +633,10 @@ fn register_vesting_accounts() {
     check_token_balance(
         &mut app,
         &astro_token_instance,
-        &vesting_instance.clone(),
+        &vesting_instance,
         200u128,
     );
-    check_token_balance(&mut app, &astro_token_instance, &user1.clone(), 110u128);
+    check_token_balance(&mut app, &astro_token_instance, &user1, 110u128);
 
     // Owner balance mustn't change after claim
     check_token_balance(
@@ -658,7 +658,7 @@ fn register_vesting_accounts_native() {
     let token_code_id = store_token_code(&mut app);
 
     let random_token_instance =
-        instantiate_token(&mut app, token_code_id, "RND", Some(1_000_000_000_000000));
+        instantiate_token(&mut app, token_code_id, "RND", Some(1_000_000_000_000_000));
 
     mint_tokens(
         &mut app,
@@ -886,7 +886,7 @@ fn mock_app(owner: &Addr) -> App {
                 owner,
                 vec![
                     coin(TOKEN_INITIAL_AMOUNT, IBC_ASTRO),
-                    coin(1_000_0000000u128, "random_coin"),
+                    coin(10_000_000_000u128, "random_coin"),
                 ],
             )
             .unwrap()
@@ -913,7 +913,7 @@ fn instantiate_token(app: &mut App, token_code_id: u64, name: &str, cap: Option<
         initial_balances: vec![],
         mint: Some(MinterResponse {
             minter: String::from(OWNER1),
-            cap: cap.map(|v| Uint128::from(v)),
+            cap: cap.map(Uint128::from),
         }),
         marketing: None,
     };
@@ -929,7 +929,7 @@ fn instantiate_token(app: &mut App, token_code_id: u64, name: &str, cap: Option<
     .unwrap()
 }
 
-fn instantiate_vesting(mut app: &mut App, astro_token_instance: &Addr) -> Addr {
+fn instantiate_vesting(app: &mut App, astro_token_instance: &Addr) -> Addr {
     let vesting_contract = Box::new(ContractWrapper::new_with_empty(
         crate::contract::execute,
         crate::contract::instantiate,
@@ -964,15 +964,15 @@ fn instantiate_vesting(mut app: &mut App, astro_token_instance: &Addr) -> Addr {
     );
 
     mint_tokens(
-        &mut app,
-        &astro_token_instance,
+        app,
+        astro_token_instance,
         &owner,
         TOKEN_INITIAL_AMOUNT,
     );
 
     check_token_balance(
-        &mut app,
-        &astro_token_instance,
+        app,
+        astro_token_instance,
         &owner,
         TOKEN_INITIAL_AMOUNT,
     );
@@ -996,7 +996,7 @@ fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
 
     app.instantiate_contract(
         vesting_code_id,
-        owner.clone(),
+        owner,
         &init_msg,
         &[],
         "Vesting",
