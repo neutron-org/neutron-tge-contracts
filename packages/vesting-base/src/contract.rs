@@ -100,17 +100,21 @@ impl BaseVesting {
                 drop_ownership_proposal(deps, info, config.owner, &self.ownership_proposal)
                     .map_err(Into::into)
             }
-            ExecuteMsg::ClaimOwnership {} => {
-                claim_ownership(deps, info, env, &self.ownership_proposal, |deps, new_owner| {
+            ExecuteMsg::ClaimOwnership {} => claim_ownership(
+                deps,
+                info,
+                env,
+                &self.ownership_proposal,
+                |deps, new_owner| {
                     self.config.update::<_, StdError>(deps.storage, |mut v| {
                         v.owner = new_owner;
                         Ok(v)
                     })?;
 
                     Ok(())
-                })
-                .map_err(Into::into)
-            }
+                },
+            )
+            .map_err(Into::into),
         }
     }
 

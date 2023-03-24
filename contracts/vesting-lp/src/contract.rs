@@ -107,7 +107,7 @@ pub fn query_unclaimed_amount_at_height(
         .vesting_info
         .may_load_at_height(deps.storage, &address, height)?;
     match &maybe_info {
-        Some(info) => compute_unclaimed_amount(&info),
+        Some(info) => compute_unclaimed_amount(info),
         None => Ok(Uint128::zero()),
     }
 }
