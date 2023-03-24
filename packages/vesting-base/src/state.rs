@@ -14,7 +14,7 @@ pub struct BaseVesting {
     /// Stores the contract config at the given key.
     pub config: Item<'static, Config>,
     /// Contains a proposal to change contract ownership.
-    pub ownership_proposal: Item<'static, OwnershipProposal>
+    pub ownership_proposal: Item<'static, OwnershipProposal>,
 }
 
 impl BaseVesting {
@@ -43,7 +43,7 @@ impl BaseVesting {
 pub struct Config {
     /// Address that's allowed to change contract parameters
     pub owner: Addr,
-    /// [`AssetInfo`] of the ASTRO token
+    /// [`AssetInfo`] of the vested token
     pub vesting_token: AssetInfo,
 }
 
@@ -75,7 +75,8 @@ impl BaseVesting {
             _ => (None, start_after),
         };
 
-        let info: Vec<(Addr, VestingInfo)> = self.vesting_info
+        let info: Vec<(Addr, VestingInfo)> = self
+            .vesting_info
             .range(
                 deps.storage,
                 start,
@@ -115,13 +116,14 @@ mod testing {
                 .unwrap();
         }
 
-        let res = vest_app.read_vesting_infos(
-            deps.as_ref(),
-            Some(Addr::unchecked("address2")),
-            None,
-            Some(OrderBy::Asc),
-        )
-        .unwrap();
+        let res = vest_app
+            .read_vesting_infos(
+                deps.as_ref(),
+                Some(Addr::unchecked("address2")),
+                None,
+                Some(OrderBy::Asc),
+            )
+            .unwrap();
         assert_eq!(
             res,
             vec![
@@ -130,22 +132,24 @@ mod testing {
             ]
         );
 
-        let res = vest_app.read_vesting_infos(
-            deps.as_ref(),
-            Some(Addr::unchecked("address2")),
-            Some(1),
-            Some(OrderBy::Asc),
-        )
-        .unwrap();
+        let res = vest_app
+            .read_vesting_infos(
+                deps.as_ref(),
+                Some(Addr::unchecked("address2")),
+                Some(1),
+                Some(OrderBy::Asc),
+            )
+            .unwrap();
         assert_eq!(res, vec![(Addr::unchecked("address3"), vi_mock.clone())]);
 
-        let res = vest_app.read_vesting_infos(
-            deps.as_ref(),
-            Some(Addr::unchecked("address3")),
-            None,
-            Some(OrderBy::Desc),
-        )
-        .unwrap();
+        let res = vest_app
+            .read_vesting_infos(
+                deps.as_ref(),
+                Some(Addr::unchecked("address3")),
+                None,
+                Some(OrderBy::Desc),
+            )
+            .unwrap();
         assert_eq!(
             res,
             vec![
@@ -154,13 +158,14 @@ mod testing {
             ]
         );
 
-        let res = vest_app.read_vesting_infos(
-            deps.as_ref(),
-            Some(Addr::unchecked("address3")),
-            Some(1),
-            Some(OrderBy::Desc),
-        )
-        .unwrap();
+        let res = vest_app
+            .read_vesting_infos(
+                deps.as_ref(),
+                Some(Addr::unchecked("address3")),
+                Some(1),
+                Some(OrderBy::Desc),
+            )
+            .unwrap();
         assert_eq!(res, vec![(Addr::unchecked("address2"), vi_mock.clone())]);
     }
 }
