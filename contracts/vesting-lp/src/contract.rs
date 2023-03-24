@@ -60,6 +60,7 @@ pub fn execute(
 ///         }** Returns a list of vesting schedules together with their vesting recipients.
 ///
 /// * **QueryMsg::AvailableAmount { address }** Returns the available amount of tokens that can be claimed by a specific vesting recipient.
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     let vest_app = BaseVesting::new(Strategy::EveryBlock);
     match msg {
