@@ -43,7 +43,7 @@ impl BaseVesting {
 pub struct Config {
     /// Address that's allowed to change contract parameters
     pub owner: Addr,
-    /// [`AssetInfo`] of the ASTRO token
+    /// [`AssetInfo`] of the vested token
     pub vesting_token: AssetInfo,
 }
 
