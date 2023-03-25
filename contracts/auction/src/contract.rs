@@ -988,7 +988,7 @@ pub fn execute_lock_lp_tokens(
             if amount > user_lp_info.atom_lp_amount - user_info.atom_lp_locked {
                 return Err(StdError::generic_err("Not enough ATOM LP!"));
             }
-            user_info.atom_lp_locked += user_info.atom_lp_locked.checked_add(amount)?;
+            user_info.atom_lp_locked = user_info.atom_lp_locked.checked_add(amount)?;
             state.atom_lp_locked = state.atom_lp_locked.checked_add(amount)?;
         }
     }
@@ -1053,7 +1053,7 @@ pub fn execute_withdraw_lp_tokens(
             state.usdc_lp_locked = state.usdc_lp_locked.checked_sub(amount)?;
         }
         LockDropPoolType::ATOM => {
-            user_info.atom_lp_locked += user_info.atom_lp_locked.checked_sub(amount)?;
+            user_info.atom_lp_locked = user_info.atom_lp_locked.checked_sub(amount)?;
             state.atom_lp_locked = state.atom_lp_locked.checked_sub(amount)?;
         }
     }
