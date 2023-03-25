@@ -7,9 +7,12 @@ use cosmwasm_std::{
 };
 use std::str::FromStr;
 
+use astroport::vesting::{
+    ExecuteMsg as VestingExecuteMsg, VestingAccount, VestingSchedule, VestingSchedulePoint,
+};
 use astroport_periphery::auction::{
     CallbackMsg, Config, ExecuteMsg, InstantiateMsg, MigrateMsg, PoolBalance, PoolInfo, QueryMsg,
-    State, UpdateConfigMsg, UserInfoResponse, UserLpInfo, VestingExecuteMsg, VestingMigrationUser,
+    State, UpdateConfigMsg, UserInfoResponse, UserLpInfo,
 };
 use astroport_periphery::lockdrop::{
     ExecuteMsg as LockDropExecuteMsg, PoolType as LockDropPoolType,
@@ -88,6 +91,7 @@ pub fn instantiate(
         max_exchange_rate_age: msg.max_exchange_rate_age,
         min_ntrn_amount: msg.min_ntrn_amount,
         vesting_migration_pack_size: msg.vesting_migration_pack_size,
+        vesting_lp_duration: msg.vesting_lp_duration,
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -701,7 +705,6 @@ pub fn execute_finalize_init_pool(
                 })?,
             }),
         ];
-        deps.api.debug(format!("WASMDEBUG: {:?}", msgs).as_str());
 
         // Send locked tokens to the lockdrop contract
         if !state.atom_lp_locked.is_zero() {
@@ -737,7 +740,7 @@ pub fn execute_finalize_init_pool(
 
 fn execute_migrate_to_vesting(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     _info: MessageInfo,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
@@ -746,9 +749,13 @@ fn execute_migrate_to_vesting(
     let users = users_store
         .idx
         .vested
+        .prefix(0u8)
         .range(deps.storage, None, None, Order::Ascending)
         .take(config.vesting_migration_pack_size.into())
         .collect::<StdResult<Vec<_>>>()?;
+    let pool_info = config
+        .pool_info
+        .ok_or_else(|| StdError::generic_err("Pool info isn't set yet. Please set it first."))?;
 
     if state.pool_init_timestamp == 0 {
         return Err(StdError::generic_err("Pool isn't initialized yet!"));
@@ -756,8 +763,8 @@ fn execute_migrate_to_vesting(
     if users.is_empty() {
         return Err(StdError::generic_err("No users to migrate!"));
     }
-    let mut atom_users: Vec<VestingMigrationUser> = vec![];
-    let mut usdc_users: Vec<VestingMigrationUser> = vec![];
+    let mut atom_users: Vec<_> = vec![];
+    let mut usdc_users: Vec<_> = vec![];
     let mut atom_lp_amount = Uint128::zero();
     let mut usdc_lp_amount = Uint128::zero();
 
@@ -775,42 +782,65 @@ fn execute_migrate_to_vesting(
         let vest_usdc_lp_amount = user_lp_balance.usdc_lp_amount - user.usdc_lp_locked;
 
         if !vest_atom_lp_amount.is_zero() {
-            atom_users.push(VestingMigrationUser {
+            atom_users.push(VestingAccount {
                 address: user_addr.to_string(),
-                amount: vest_atom_lp_amount,
+                schedules: vec![VestingSchedule {
+                    start_point: VestingSchedulePoint {
+                        time: env.block.time.seconds(),
+                        amount: Uint128::zero(),
+                    },
+                    end_point: Some(VestingSchedulePoint {
+                        time: env.block.time.seconds() + config.vesting_lp_duration,
+                        amount: vest_atom_lp_amount,
+                    }),
+                }],
             });
             atom_lp_amount += vest_atom_lp_amount;
         }
         if !vest_usdc_lp_amount.is_zero() {
-            usdc_users.push(VestingMigrationUser {
+            usdc_users.push(VestingAccount {
                 address: user_addr.to_string(),
-                amount: vest_usdc_lp_amount,
+                schedules: vec![VestingSchedule {
+                    start_point: VestingSchedulePoint {
+                        time: env.block.time.seconds(),
+                        amount: Uint128::zero(),
+                    },
+                    end_point: Some(VestingSchedulePoint {
+                        time: env.block.time.seconds() + config.vesting_lp_duration,
+                        amount: vest_usdc_lp_amount,
+                    }),
+                }],
             });
             usdc_lp_amount += vest_usdc_lp_amount;
         }
         user.is_vested = true;
         users_store.save(deps.storage, &user_addr, &user)?;
     }
+
     let mut msgs = vec![];
     if !atom_lp_amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: config.vesting_atom_contract_address.to_string(),
+            contract_addr: pool_info.ntrn_atom_lp_token_address.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Send {
-                contract: config.vesting_usdc_contract_address.to_string(),
+                contract: config.vesting_atom_contract_address.to_string(),
                 amount: atom_lp_amount,
-                msg: to_binary(&VestingExecuteMsg::MigrateVestingUsers { users: atom_users })?,
+                msg: to_binary(&VestingExecuteMsg::RegisterVestingAccounts {
+                    vesting_accounts: atom_users,
+                })?,
             })?,
         }));
     }
     if !usdc_lp_amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: config.vesting_usdc_contract_address.to_string(),
+            contract_addr: pool_info.ntrn_usdc_lp_token_address.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: config.vesting_usdc_contract_address.to_string(),
                 amount: usdc_lp_amount,
-                msg: to_binary(&VestingExecuteMsg::MigrateVestingUsers { users: usdc_users })?,
+                msg: to_binary(&VestingExecuteMsg::RegisterVestingAccounts {
+                    vesting_accounts: usdc_users,
+                })?,
             })?,
         }));
     }

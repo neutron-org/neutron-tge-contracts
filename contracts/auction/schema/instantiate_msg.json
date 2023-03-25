@@ -13,6 +13,7 @@
     "reserve_contract_address",
     "usdc_denom",
     "vesting_atom_contract_address",
+    "vesting_lp_duration",
     "vesting_migration_pack_size",
     "vesting_usdc_contract_address",
     "withdrawal_window"
@@ -67,6 +68,11 @@
     },
     "vesting_atom_contract_address": {
       "type": "string"
+    },
+    "vesting_lp_duration": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     },
     "vesting_migration_pack_size": {
       "type": "integer",
