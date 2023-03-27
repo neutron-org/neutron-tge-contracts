@@ -35,6 +35,7 @@ pub fn instantiate(
 ///
 /// * **ExecuteMsg::Receive(msg)** Receives a message of type [`Cw20ReceiveMsg`] and processes it
 /// depending on the received template.
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
     env: Env,
@@ -136,7 +137,7 @@ fn compute_unclaimed_amount(vesting_info: &VestingInfo) -> StdResult<Uint128> {
     let mut available_amount: Uint128 = Uint128::zero();
     for sch in &vesting_info.schedules {
         if let Some(end_point) = &sch.end_point {
-            available_amount.checked_add(end_point.amount)?;
+            available_amount = available_amount.checked_add(end_point.amount)?;
         } else {
             available_amount = available_amount.checked_add(sch.start_point.amount)?;
         }

@@ -5,11 +5,57 @@
     {
       "type": "object",
       "required": [
+        "increase_lockup_for"
+      ],
+      "properties": {
+        "increase_lockup_for": {
+          "type": "object",
+          "required": [
+            "amount",
+            "duration",
+            "pool_type",
+            "user_address"
+          ],
+          "properties": {
+            "amount": {
+              "$ref": "#/definitions/Uint128"
+            },
+            "duration": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "pool_type": {
+              "$ref": "#/definitions/PoolType"
+            },
+            "user_address": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "receive"
       ],
       "properties": {
         "receive": {
           "$ref": "#/definitions/Cw20ReceiveMsg"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "increase_ntrn_incentives"
+      ],
+      "properties": {
+        "increase_ntrn_incentives": {
+          "type": "object"
         }
       },
       "additionalProperties": false
@@ -37,70 +83,6 @@
     {
       "type": "object",
       "required": [
-        "enable_claims"
-      ],
-      "properties": {
-        "enable_claims": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "initialize_pool"
-      ],
-      "properties": {
-        "initialize_pool": {
-          "type": "object",
-          "required": [
-            "incentives_share",
-            "terraswap_lp_token"
-          ],
-          "properties": {
-            "incentives_share": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "terraswap_lp_token": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "update_pool"
-      ],
-      "properties": {
-        "update_pool": {
-          "type": "object",
-          "required": [
-            "incentives_share",
-            "terraswap_lp_token"
-          ],
-          "properties": {
-            "incentives_share": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "terraswap_lp_token": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
         "withdraw_from_lockup"
       ],
       "properties": {
@@ -109,7 +91,7 @@
           "required": [
             "amount",
             "duration",
-            "terraswap_lp_token"
+            "pool_type"
           ],
           "properties": {
             "amount": {
@@ -120,82 +102,8 @@
               "format": "uint64",
               "minimum": 0.0
             },
-            "terraswap_lp_token": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "migrate_liquidity"
-      ],
-      "properties": {
-        "migrate_liquidity": {
-          "type": "object",
-          "required": [
-            "astroport_pool_addr",
-            "terraswap_lp_token"
-          ],
-          "properties": {
-            "astroport_pool_addr": {
-              "type": "string"
-            },
-            "slippage_tolerance": {
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Decimal"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "terraswap_lp_token": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "stake_lp_tokens"
-      ],
-      "properties": {
-        "stake_lp_tokens": {
-          "type": "object",
-          "required": [
-            "terraswap_lp_token"
-          ],
-          "properties": {
-            "terraswap_lp_token": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "delegate_astro_to_auction"
-      ],
-      "properties": {
-        "delegate_astro_to_auction": {
-          "type": "object",
-          "required": [
-            "amount"
-          ],
-          "properties": {
-            "amount": {
-              "$ref": "#/definitions/Uint128"
+            "pool_type": {
+              "$ref": "#/definitions/PoolType"
             }
           }
         }
@@ -212,7 +120,7 @@
           "type": "object",
           "required": [
             "duration",
-            "terraswap_lp_token",
+            "pool_type",
             "withdraw_lp_stake"
           ],
           "properties": {
@@ -221,67 +129,11 @@
               "format": "uint64",
               "minimum": 0.0
             },
-            "terraswap_lp_token": {
-              "type": "string"
+            "pool_type": {
+              "$ref": "#/definitions/PoolType"
             },
             "withdraw_lp_stake": {
               "type": "boolean"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "claim_asset_reward"
-      ],
-      "properties": {
-        "claim_asset_reward": {
-          "type": "object",
-          "required": [
-            "duration",
-            "terraswap_lp_token"
-          ],
-          "properties": {
-            "duration": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "recipient": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "terraswap_lp_token": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "toggle_pool_rewards"
-      ],
-      "properties": {
-        "toggle_pool_rewards": {
-          "type": "object",
-          "required": [
-            "enable",
-            "terraswap_lp_token"
-          ],
-          "properties": {
-            "enable": {
-              "type": "boolean"
-            },
-            "terraswap_lp_token": {
-              "type": "string"
             }
           }
         }
@@ -453,12 +305,15 @@
             "update_pool_on_dual_rewards_claim": {
               "type": "object",
               "required": [
-                "prev_astro_balance",
-                "prev_proxy_reward_balances",
-                "terraswap_lp_token"
+                "pool_type",
+                "prev_ntrn_balance",
+                "prev_proxy_reward_balances"
               ],
               "properties": {
-                "prev_astro_balance": {
+                "pool_type": {
+                  "$ref": "#/definitions/PoolType"
+                },
+                "prev_ntrn_balance": {
                   "$ref": "#/definitions/Uint128"
                 },
                 "prev_proxy_reward_balances": {
@@ -466,9 +321,6 @@
                   "items": {
                     "$ref": "#/definitions/Asset"
                   }
-                },
-                "terraswap_lp_token": {
-                  "$ref": "#/definitions/Addr"
                 }
               }
             }
@@ -485,7 +337,7 @@
               "type": "object",
               "required": [
                 "duration",
-                "terraswap_lp_token",
+                "pool_type",
                 "user_address",
                 "withdraw_lp_stake"
               ],
@@ -495,95 +347,14 @@
                   "format": "uint64",
                   "minimum": 0.0
                 },
-                "terraswap_lp_token": {
-                  "$ref": "#/definitions/Addr"
+                "pool_type": {
+                  "$ref": "#/definitions/PoolType"
                 },
                 "user_address": {
                   "$ref": "#/definitions/Addr"
                 },
                 "withdraw_lp_stake": {
                   "type": "boolean"
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "required": [
-            "withdraw_liquidity_from_terraswap_callback"
-          ],
-          "properties": {
-            "withdraw_liquidity_from_terraswap_callback": {
-              "type": "object",
-              "required": [
-                "astroport_pool",
-                "prev_assets",
-                "terraswap_lp_token"
-              ],
-              "properties": {
-                "astroport_pool": {
-                  "$ref": "#/definitions/Addr"
-                },
-                "prev_assets": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/definitions/Asset"
-                  },
-                  "maxItems": 2,
-                  "minItems": 2
-                },
-                "slippage_tolerance": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/definitions/Decimal"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "terraswap_lp_token": {
-                  "$ref": "#/definitions/Addr"
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "required": [
-            "distribute_asset_reward"
-          ],
-          "properties": {
-            "distribute_asset_reward": {
-              "type": "object",
-              "required": [
-                "lock_duration",
-                "previous_balance",
-                "recipient",
-                "terraswap_lp_token",
-                "user_address"
-              ],
-              "properties": {
-                "lock_duration": {
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
-                },
-                "previous_balance": {
-                  "$ref": "#/definitions/Uint128"
-                },
-                "recipient": {
-                  "$ref": "#/definitions/Addr"
-                },
-                "terraswap_lp_token": {
-                  "$ref": "#/definitions/Addr"
-                },
-                "user_address": {
-                  "$ref": "#/definitions/Addr"
                 }
               }
             }
@@ -612,9 +383,12 @@
         }
       }
     },
-    "Decimal": {
-      "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
-      "type": "string"
+    "PoolType": {
+      "type": "string",
+      "enum": [
+        "USDC",
+        "ATOM"
+      ]
     },
     "Uint128": {
       "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
@@ -623,13 +397,6 @@
     "UpdateConfigMsg": {
       "type": "object",
       "properties": {
-        "astro_token_address": {
-          "description": "Astroport token address",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "auction_contract_address": {
           "description": "Bootstrap Auction contract address",
           "type": [

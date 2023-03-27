@@ -1,5 +1,5 @@
 pub mod contract;
-mod msg;
+pub mod msg;
 
 #[cfg(test)]
 mod tests;

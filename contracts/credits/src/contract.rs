@@ -6,7 +6,8 @@ use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
+    to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    StdResult, Uint128,
 };
 use cw2::set_contract_version;
 use cw20::BalanceResponse;
@@ -504,9 +505,14 @@ fn query_withdrawable_amount(
         &allocation.schedule,
         env.block.time.seconds(),
     )?;
-    // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
-    // so we need to withdraw not more than the current balance
-    let actual_balance = BALANCES.load(deps.storage, &owner)?;
+    // // because we have lockdrop rewards that skip vesting, we can get withdrawable amount greater than the current balance
+    // // so we need to withdraw not more than the current balance
+    let actual_balance =
+        BALANCES
+            .may_load(deps.storage, &owner)?
+            .ok_or_else(|| StdError::GenericErr {
+                msg: "No balance".to_string(),
+            })?;
     let amount = max_withdrawable_amount.min(actual_balance);
 
     Ok(WithdrawableAmountResponse { amount })

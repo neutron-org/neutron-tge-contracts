@@ -3,35 +3,21 @@
   "title": "LockUpInfoResponse",
   "type": "object",
   "required": [
-    "astro_rewards",
+    "astroport_lp_token",
     "claimable_generator_astro_debt",
     "claimable_generator_proxy_debt",
     "duration",
-    "generator_astro_debt",
+    "generator_ntrn_debt",
     "generator_proxy_debt",
     "lp_units_locked",
-    "terraswap_lp_token",
+    "ntrn_rewards",
+    "pool_type",
     "unlock_timestamp",
     "withdrawal_flag"
   ],
   "properties": {
-    "astro_rewards": {
-      "description": "ASTRO tokens received as rewards for participation in the lockdrop",
-      "allOf": [
-        {
-          "$ref": "#/definitions/Uint128"
-        }
-      ]
-    },
     "astroport_lp_token": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/Addr"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "$ref": "#/definitions/Addr"
     },
     "astroport_lp_transferred": {
       "anyOf": [
@@ -75,8 +61,8 @@
       "format": "uint64",
       "minimum": 0.0
     },
-    "generator_astro_debt": {
-      "description": "Generator ASTRO tokens lockup received as generator rewards",
+    "generator_ntrn_debt": {
+      "description": "Generator NTRN tokens lockup received as generator rewards",
       "allOf": [
         {
           "$ref": "#/definitions/Uint128"
@@ -99,11 +85,19 @@
         }
       ]
     },
-    "terraswap_lp_token": {
+    "ntrn_rewards": {
+      "description": "NTRN tokens received as rewards for participation in the lockdrop",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Uint128"
+        }
+      ]
+    },
+    "pool_type": {
       "description": "Terraswap LP token",
       "allOf": [
         {
-          "$ref": "#/definitions/Addr"
+          "$ref": "#/definitions/PoolType"
         }
       ]
     },
@@ -170,6 +164,13 @@
           },
           "additionalProperties": false
         }
+      ]
+    },
+    "PoolType": {
+      "type": "string",
+      "enum": [
+        "USDC",
+        "ATOM"
       ]
     },
     "RestrictedVector_for_AssetInfo_and_Uint128": {
