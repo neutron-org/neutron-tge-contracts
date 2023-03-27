@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    attr, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdError, StdResult, SubMsg, Uint128,
+    attr, from_binary, to_binary, Addr, Attribute, Binary, Deps, DepsMut, Env, MessageInfo, Order,
+    Response, StdError, StdResult, SubMsg, Uint128,
 };
 
 use crate::state::{BaseVesting, Config};
@@ -42,6 +42,11 @@ impl BaseVesting {
             },
         )?;
 
+        for m in msg.vesting_managers {
+            let ma = deps.api.addr_validate(&m)?;
+            self.vesting_managers.save(deps.storage, &ma, &())?;
+        }
+
         Ok(Response::new())
     }
 
@@ -68,7 +73,9 @@ impl BaseVesting {
                 let config = self.config.load(deps.storage)?;
 
                 match &config.vesting_token {
-                    AssetInfo::NativeToken { denom } if info.sender == config.owner => {
+                    AssetInfo::NativeToken { denom }
+                        if self.is_sender_whitelisted(deps.as_ref(), &config, &info.sender) =>
+                    {
                         let amount = must_pay(&info, denom)?;
                         self.register_vesting_accounts(
                             deps,
@@ -115,7 +122,23 @@ impl BaseVesting {
                 },
             )
             .map_err(Into::into),
+            ExecuteMsg::AddVestingManages { managers } => {
+                self.add_vesting_managers(deps, env, info, managers)
+            }
+            ExecuteMsg::RemoveVestingManages { managers } => {
+                self.remove_vesting_managers(deps, env, info, managers)
+            }
         }
+    }
+
+    fn is_sender_whitelisted(&self, deps: Deps, config: &Config, sender: &Addr) -> bool {
+        if *sender == config.owner {
+            return true;
+        }
+        if self.vesting_managers.has(deps.storage, sender) {
+            return true;
+        }
+        false
     }
 
     /// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template.
@@ -131,7 +154,11 @@ impl BaseVesting {
         let config = self.config.load(deps.storage)?;
 
         // Permission check
-        if cw20_msg.sender != config.owner || token_asset_info(info.sender) != config.vesting_token
+        if !self.is_sender_whitelisted(
+            deps.as_ref(),
+            &config,
+            &deps.api.addr_validate(&cw20_msg.sender)?,
+        ) || token_asset_info(info.sender) != config.vesting_token
         {
             return Err(ContractError::Unauthorized {});
         }
@@ -145,6 +172,56 @@ impl BaseVesting {
                     env.block.height,
                 ),
         }
+    }
+
+    /// Adds new vesting managers, which have a permission to add/remove vesing schedule
+    ///
+    /// * **managers** list of accounts to be added to the whitelist.
+    pub fn add_vesting_managers(
+        &self,
+        deps: DepsMut,
+        _env: Env,
+        info: MessageInfo,
+        managers: Vec<String>,
+    ) -> Result<Response, ContractError> {
+        let config = self.config.load(deps.storage)?;
+        if info.sender != config.owner {
+            return Err(ContractError::Unauthorized {});
+        }
+        let mut attrs: Vec<Attribute> = vec![];
+        for m in managers {
+            let ma = deps.api.addr_validate(&m)?;
+            self.vesting_managers.save(deps.storage, &ma, &())?;
+            attrs.push(attr("vesting_manager", &m))
+        }
+        Ok(Response::new()
+            .add_attribute("action", "add_vesting_managers")
+            .add_attributes(attrs))
+    }
+
+    /// Removes new vesting managers from the whiltelist
+    ///
+    /// * **managers** list of accounts to be removed from the whitelist.
+    pub fn remove_vesting_managers(
+        &self,
+        deps: DepsMut,
+        _env: Env,
+        info: MessageInfo,
+        managers: Vec<String>,
+    ) -> Result<Response, ContractError> {
+        let config = self.config.load(deps.storage)?;
+        if info.sender != config.owner {
+            return Err(ContractError::Unauthorized {});
+        }
+        let mut attrs: Vec<Attribute> = vec![];
+        for m in managers {
+            let ma = deps.api.addr_validate(&m)?;
+            self.vesting_managers.remove(deps.storage, &ma);
+            attrs.push(attr("vesting_manager", &m))
+        }
+        Ok(Response::new()
+            .add_attribute("action", "remove_vesting_managers")
+            .add_attributes(attrs))
     }
 
     /// Create new vesting schedules.
@@ -306,6 +383,7 @@ impl BaseVesting {
             )?),
             QueryMsg::Timestamp {} => Ok(to_binary(&self.query_timestamp(env)?)?),
             QueryMsg::VestingState {} => Ok(to_binary(&self.vesting_state.load(deps.storage)?)?),
+            QueryMsg::VestingManagers {} => Ok(to_binary(&self.query_vesting_managers(deps)?)?),
         }
     }
 
@@ -323,6 +401,15 @@ impl BaseVesting {
     /// * **env** is an object of type [`Env`].
     pub fn query_timestamp(&self, env: Env) -> StdResult<u64> {
         Ok(env.block.time.seconds())
+    }
+
+    /// Returns a list of vesting schedules using a [`VestingAccountsResponse`] object.
+    pub fn query_vesting_managers(&self, deps: Deps) -> StdResult<Vec<Addr>> {
+        let managers = self
+            .vesting_managers
+            .keys(deps.storage, None, None, Order::Ascending)
+            .collect::<Result<Vec<Addr>, StdError>>()?;
+        Ok(managers)
     }
 
     /// Returns the vesting data for a specific vesting recipient using a [`VestingAccountResponse`] object.

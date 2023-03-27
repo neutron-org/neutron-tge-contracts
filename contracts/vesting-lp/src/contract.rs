@@ -1,5 +1,5 @@
-use crate::msg::QueryMsg;
-use astroport::vesting::{ExecuteMsg, InstantiateMsg, QueryMsg as QueryBase, VestingInfo};
+use crate::msg::{ExtraQueryMsg, QueryMsg};
+use astroport::vesting::{ExecuteMsg, InstantiateMsg, VestingInfo};
 use cosmwasm_std::{
     entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult,
     Uint128,
@@ -60,34 +60,15 @@ pub fn execute(
 ///         }** Returns a list of vesting schedules together with their vesting recipients.
 ///
 /// * **QueryMsg::AvailableAmount { address }** Returns the available amount of tokens that can be claimed by a specific vesting recipient.
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     let vest_app = BaseVesting::new(Strategy::EveryBlock);
     match msg {
-        QueryMsg::Config {} => vest_app.query(deps, env, QueryBase::Config {}),
-        QueryMsg::VestingAccount { address } => {
-            vest_app.query(deps, env, QueryBase::VestingAccount { address })
-        }
-        QueryMsg::VestingAccounts {
-            start_after,
-            limit,
-            order_by,
-        } => vest_app.query(
-            deps,
-            env,
-            QueryBase::VestingAccounts {
-                start_after,
-                limit,
-                order_by,
-            },
-        ),
-        QueryMsg::AvailableAmount { address } => {
-            vest_app.query(deps, env, QueryBase::AvailableAmount { address })
-        }
-        QueryMsg::Timestamp {} => vest_app.query(deps, env, QueryBase::Timestamp {}),
-        QueryMsg::UnclaimedAmountAtHeight { address, height } => Ok(to_binary(
+        QueryMsg::Base(base_query) => vest_app.query(deps, env, base_query),
+        QueryMsg::Ext(ExtraQueryMsg::UnclaimedAmountAtHeight { address, height }) => Ok(to_binary(
             &query_unclaimed_amount_at_height(&vest_app, deps, address, height)?,
         )?),
-        QueryMsg::UnclaimedTotalAmountAtHeight { height } => Ok(to_binary(
+        QueryMsg::Ext(ExtraQueryMsg::UnclaimedTotalAmountAtHeight { height }) => Ok(to_binary(
             &query_total_unclaimed_amount_at_height(&vest_app, deps, height)?,
         )?),
     }

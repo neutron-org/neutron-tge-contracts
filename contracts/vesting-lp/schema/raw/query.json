@@ -114,6 +114,20 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "description": "VestingManagers of currents list of vesting managers (the persons who able to add/remove vesting schedules)",
+      "type": "object",
+      "required": [
+        "vesting_managers"
+      ],
+      "properties": {
+        "vesting_managers": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   ],
   "definitions": {
