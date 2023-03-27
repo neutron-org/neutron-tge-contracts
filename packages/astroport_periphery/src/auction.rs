@@ -21,6 +21,7 @@ pub struct InstantiateMsg {
     pub max_exchange_rate_age: u64,
     pub min_ntrn_amount: Uint128,
     pub vesting_migration_pack_size: u16,
+    pub vesting_lp_duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -138,6 +139,8 @@ pub struct Config {
     pub max_exchange_rate_age: u64,
     /// vesting migration users pack size
     pub vesting_migration_pack_size: u16,
+    /// vesting for lp duration
+    pub vesting_lp_duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
@@ -226,17 +229,4 @@ pub struct UserLpInfo {
 pub struct PoolBalance {
     pub atom: Uint128,
     pub usdc: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct VestingMigrationUser {
-    pub address: String,
-    pub amount: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum VestingExecuteMsg {
-    MigrateVestingUsers { users: Vec<VestingMigrationUser> },
 }
