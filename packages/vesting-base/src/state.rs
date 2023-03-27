@@ -4,7 +4,7 @@ use astroport::asset::AssetInfo;
 use astroport::common::OwnershipProposal;
 use astroport::vesting::{OrderBy, VestingInfo, VestingState};
 use cosmwasm_std::{Addr, Deps, StdResult};
-use cw_storage_plus::{Bound, Item, SnapshotItem, SnapshotMap, Strategy};
+use cw_storage_plus::{Bound, Item, Map, SnapshotItem, SnapshotMap, Strategy};
 
 pub struct BaseVesting {
     /// Stores the total granted/claimed amount of tokens
@@ -15,6 +15,8 @@ pub struct BaseVesting {
     pub config: Item<'static, Config>,
     /// Contains a proposal to change contract ownership.
     pub ownership_proposal: Item<'static, OwnershipProposal>,
+    /// Contains the list of managers with a permission of adding/removing vesting schedules.
+    pub vesting_managers: Map<'static, &'static Addr, ()>,
 }
 
 impl BaseVesting {
@@ -34,6 +36,7 @@ impl BaseVesting {
             ),
             config: Item::new("config"),
             ownership_proposal: Item::new("ownership_proposal"),
+            vesting_managers: Map::new("vesting_managers"),
         }
     }
 }

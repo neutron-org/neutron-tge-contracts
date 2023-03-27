@@ -132,6 +132,56 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "description": "Adds vesting managers ## Executor Only the current owner can execute this",
+      "type": "object",
+      "required": [
+        "add_vesting_manages"
+      ],
+      "properties": {
+        "add_vesting_manages": {
+          "type": "object",
+          "required": [
+            "managers"
+          ],
+          "properties": {
+            "managers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Removes vesting managers ## Executor Only the current owner can execute this",
+      "type": "object",
+      "required": [
+        "remove_vesting_manages"
+      ],
+      "properties": {
+        "remove_vesting_manages": {
+          "type": "object",
+          "required": [
+            "managers"
+          ],
+          "properties": {
+            "managers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   ],
   "definitions": {

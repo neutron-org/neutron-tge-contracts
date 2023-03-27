@@ -3,7 +3,6 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
-    "atom_token",
     "auction_contract",
     "credits_contract",
     "init_timestamp",
@@ -12,14 +11,9 @@
     "max_lock_duration",
     "max_positions_per_user",
     "min_lock_duration",
-    "usdc_token",
     "withdrawal_window"
   ],
   "properties": {
-    "atom_token": {
-      "description": "Address of ATOM/NTRN token",
-      "type": "string"
-    },
     "auction_contract": {
       "description": "Auction contract address",
       "type": "string"
@@ -71,10 +65,6 @@
         "string",
         "null"
       ]
-    },
-    "usdc_token": {
-      "description": "Address of USDC/NTRN token",
-      "type": "string"
     },
     "withdrawal_window": {
       "description": "Withdrawal Window Length :: Post the deposit window",

@@ -1,4 +1,4 @@
-use crate::msg::QueryMsg::{UnclaimedAmountAtHeight, UnclaimedTotalAmountAtHeight};
+use crate::msg::ExtraQueryMsg::{UnclaimedAmountAtHeight, UnclaimedTotalAmountAtHeight};
 use astroport::asset::{native_asset_info, token_asset_info};
 use astroport::querier::query_balance;
 use astroport::vesting::{QueryMsg, VestingAccountResponse};
@@ -1013,6 +1013,110 @@ fn query_at_height() {
     }
 }
 
+#[test]
+fn vesting_managers() {
+    let user1 = Addr::unchecked(USER1);
+    let user2 = Addr::unchecked(USER2);
+    let owner = Addr::unchecked(OWNER1);
+
+    let mut app = mock_app(&owner);
+    let vesting_instance = instantiate_vesting_remote_chain(&mut app);
+
+    let query = QueryMsg::VestingManagers {};
+    let vesting_res: Vec<Addr> = app
+        .wrap()
+        .query_wasm_smart(vesting_instance.clone(), &query)
+        .unwrap();
+    assert_eq!(vesting_res.len(), 0,);
+
+    let native_msg = ExecuteMsg::RegisterVestingAccounts {
+        vesting_accounts: vec![VestingAccount {
+            address: user1.to_string(),
+            schedules: vec![VestingSchedule {
+                start_point: VestingSchedulePoint {
+                    time: app.block_info().time.seconds(),
+                    amount: Uint128::zero(),
+                },
+                end_point: Some(VestingSchedulePoint {
+                    time: app
+                        .block_info()
+                        .time
+                        .plus_seconds(100 * BLOCK_TIME)
+                        .seconds(),
+                    amount: Uint128::new(50),
+                }),
+            }],
+        }],
+    };
+    let err = app
+        .execute_contract(user1.clone(), vesting_instance.clone(), &native_msg, &[])
+        .unwrap_err();
+    assert_eq!(ContractError::Unauthorized {}, err.downcast().unwrap());
+
+    let add_manager_msg = ExecuteMsg::AddVestingManages {
+        managers: vec![user1.to_string()],
+    };
+
+    let err = app
+        .execute_contract(
+            user1.clone(),
+            vesting_instance.clone(),
+            &add_manager_msg,
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(ContractError::Unauthorized {}, err.downcast().unwrap());
+
+    let _res = app
+        .execute_contract(
+            owner.clone(),
+            vesting_instance.clone(),
+            &add_manager_msg,
+            &[],
+        )
+        .unwrap();
+
+    let vesting_res: Vec<Addr> = app
+        .wrap()
+        .query_wasm_smart(vesting_instance.clone(), &query)
+        .unwrap();
+    assert_eq!(vesting_res, vec![Addr::unchecked(user1.clone())]);
+
+    app.send_tokens(owner.clone(), user1.clone(), &coins(50, VESTING_TOKEN))
+        .unwrap();
+
+    let _res = app
+        .execute_contract(
+            user1.clone(),
+            vesting_instance.clone(),
+            &native_msg,
+            &coins(50, VESTING_TOKEN),
+        )
+        .unwrap();
+    let err = app
+        .execute_contract(user2, vesting_instance.clone(), &native_msg, &[])
+        .unwrap_err();
+    assert_eq!(ContractError::Unauthorized {}, err.downcast().unwrap());
+
+    let remove_manager_msg = ExecuteMsg::RemoveVestingManages {
+        managers: vec![user1.to_string()],
+    };
+    let err = app
+        .execute_contract(user1, vesting_instance.clone(), &remove_manager_msg, &[])
+        .unwrap_err();
+    assert_eq!(ContractError::Unauthorized {}, err.downcast().unwrap());
+
+    let _res = app
+        .execute_contract(owner, vesting_instance.clone(), &remove_manager_msg, &[])
+        .unwrap();
+
+    let vesting_res: Vec<Addr> = app
+        .wrap()
+        .query_wasm_smart(vesting_instance, &query)
+        .unwrap();
+    assert_eq!(vesting_res.len(), 0);
+}
+
 fn mock_app(owner: &Addr) -> App {
     App::new(|app, _, storage| {
         app.bank
@@ -1076,6 +1180,7 @@ fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
     let init_msg = InstantiateMsg {
         owner: OWNER1.to_string(),
         vesting_token: token_asset_info(cw20_token_instance.clone()),
+        vesting_managers: vec![],
     };
 
     let vesting_instance = app
@@ -1117,6 +1222,7 @@ fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
     let init_msg = InstantiateMsg {
         owner: OWNER1.to_string(),
         vesting_token: native_asset_info(VESTING_TOKEN.to_string()),
+        vesting_managers: vec![],
     };
 
     app.instantiate_contract(vesting_code_id, owner, &init_msg, &[], "Vesting", None)

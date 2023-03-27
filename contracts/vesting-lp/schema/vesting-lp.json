@@ -9,12 +9,20 @@
     "type": "object",
     "required": [
       "owner",
+      "vesting_managers",
       "vesting_token"
     ],
     "properties": {
       "owner": {
         "description": "Address allowed to change contract parameters",
         "type": "string"
+      },
+      "vesting_managers": {
+        "description": "Initial list of whitelisted vesting managers",
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
       },
       "vesting_token": {
         "description": "[`AssetInfo`] of the token that's being vested",
@@ -212,6 +220,56 @@
         "properties": {
           "claim_ownership": {
             "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Adds vesting managers ## Executor Only the current owner can execute this",
+        "type": "object",
+        "required": [
+          "add_vesting_manages"
+        ],
+        "properties": {
+          "add_vesting_manages": {
+            "type": "object",
+            "required": [
+              "managers"
+            ],
+            "properties": {
+              "managers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Removes vesting managers ## Executor Only the current owner can execute this",
+        "type": "object",
+        "required": [
+          "remove_vesting_manages"
+        ],
+        "properties": {
+          "remove_vesting_manages": {
+            "type": "object",
+            "required": [
+              "managers"
+            ],
+            "properties": {
+              "managers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
             "additionalProperties": false
           }
         },
@@ -437,6 +495,20 @@
         ],
         "properties": {
           "timestamp": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "VestingManagers of currents list of vesting managers (the persons who able to add/remove vesting schedules)",
+        "type": "object",
+        "required": [
+          "vesting_managers"
+        ],
+        "properties": {
+          "vesting_managers": {
             "type": "object",
             "additionalProperties": false
           }
@@ -814,6 +886,14 @@
           },
           "additionalProperties": false
         }
+      }
+    },
+    "vesting_managers": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Array_of_String",
+      "type": "array",
+      "items": {
+        "type": "string"
       }
     }
   }
