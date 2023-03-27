@@ -998,7 +998,7 @@ fn remove_vesting_accounts() {
     //  4.  Check that vesting_state is { total_granted: 400, total_released: 200 }
     //  5.  Remove vesting schedules
     //  6.  Check that the user has 0 vesting tokens, check that the owner has received
-    //      300/2 tokens back, check that the vesting contract has 0 tokens on its balance,
+    //      400/2 tokens back, check that the vesting contract has 0 tokens on its balance,
     //      and check that the user 400/2 tokens on their balance.
     //  7.  Check that vesting_state is { total_granted: 0, total_released: 0 }
     //
