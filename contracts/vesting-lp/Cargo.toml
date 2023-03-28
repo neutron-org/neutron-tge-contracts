@@ -1,8 +1,9 @@
 [package]
 name = "vesting-lp"
 version = "1.1.0"
-authors = ["Astroport"]
+authors = ["Neutron"]
 edition = "2021"
+description = "Vesting contract with a voting capabilities. Provides queries to get the amount of tokens are being held by user at certain height."
 
 [lib]
 crate-type = ["cdylib", "rlib"]

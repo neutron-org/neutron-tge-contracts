@@ -122,10 +122,10 @@ impl BaseVesting {
                 },
             )
             .map_err(Into::into),
-            ExecuteMsg::AddVestingManages { managers } => {
+            ExecuteMsg::AddVestingManagers { managers } => {
                 self.add_vesting_managers(deps, env, info, managers)
             }
-            ExecuteMsg::RemoveVestingManages { managers } => {
+            ExecuteMsg::RemoveVestingManagers { managers } => {
                 self.remove_vesting_managers(deps, env, info, managers)
             }
         }
@@ -174,7 +174,7 @@ impl BaseVesting {
         }
     }
 
-    /// Adds new vesting managers, which have a permission to add/remove vesing schedule
+    /// Adds new vesting managers, which have a permission to add/remove vesting schedule
     ///
     /// * **managers** list of accounts to be added to the whitelist.
     pub fn add_vesting_managers(
@@ -191,15 +191,17 @@ impl BaseVesting {
         let mut attrs: Vec<Attribute> = vec![];
         for m in managers {
             let ma = deps.api.addr_validate(&m)?;
-            self.vesting_managers.save(deps.storage, &ma, &())?;
-            attrs.push(attr("vesting_manager", &m))
+            if !self.vesting_managers.has(deps.storage, &ma) {
+                self.vesting_managers.save(deps.storage, &ma, &())?;
+                attrs.push(attr("vesting_manager", &m))
+            }
         }
         Ok(Response::new()
             .add_attribute("action", "add_vesting_managers")
             .add_attributes(attrs))
     }
 
-    /// Removes new vesting managers from the whiltelist
+    /// Removes new vesting managers from the whitelist
     ///
     /// * **managers** list of accounts to be removed from the whitelist.
     pub fn remove_vesting_managers(
@@ -216,8 +218,10 @@ impl BaseVesting {
         let mut attrs: Vec<Attribute> = vec![];
         for m in managers {
             let ma = deps.api.addr_validate(&m)?;
-            self.vesting_managers.remove(deps.storage, &ma);
-            attrs.push(attr("vesting_manager", &m))
+            if self.vesting_managers.has(deps.storage, &ma) {
+                self.vesting_managers.remove(deps.storage, &ma);
+                attrs.push(attr("vesting_manager", &m))
+            }
         }
         Ok(Response::new()
             .add_attribute("action", "remove_vesting_managers")

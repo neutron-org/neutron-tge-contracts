@@ -34,7 +34,7 @@ pub enum QueryMsg {
     /// Returns the total unclaimed amount of tokens for a specific address at certain height.
     #[returns(Uint128)]
     UnclaimedAmountAtHeight { address: String, height: u64 },
-    /// Returns the total unclaimed amount of tokens for a specific address at certain height.
+    /// Returns the total unclaimed amount of tokens for all the users at certain height.
     #[returns(Uint128)]
     UnclaimedTotalAmountAtHeight { height: u64 },
 }
