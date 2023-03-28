@@ -144,7 +144,7 @@ impl BaseVesting {
     /// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template.
     ///
     /// * **cw20_msg** CW20 message to process.
-    fn receive_cw20(
+    pub fn receive_cw20(
         &self,
         deps: DepsMut,
         env: Env,
@@ -386,6 +386,7 @@ impl BaseVesting {
                 &self.query_vesting_available_amount(deps, env, address)?,
             )?),
             QueryMsg::Timestamp {} => Ok(to_binary(&self.query_timestamp(env)?)?),
+            QueryMsg::VestingState {} => Ok(to_binary(&self.vesting_state.load(deps.storage)?)?),
             QueryMsg::VestingManagers {} => Ok(to_binary(&self.query_vesting_managers(deps)?)?),
         }
     }
