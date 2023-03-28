@@ -1,16 +1,32 @@
-# Astroport Generator Vesting
+# Astroport Vesting
 
-The Generator Vesting contract progressively unlocks ASTRO that can then be distributed to LP stakers via the Generator contract.
+The Vesting contract progressively unlocks VESTED that can then be distributed to LP stakers.
 
 ---
 
 ## InstantiateMsg
 
-Initializes the contract with the address of the ASTRO token.
+Initializes the contract with the description of the VESTED token(cw20/native).
 
 ```json
 {
-  "token_addr": "terra..."
+  "vesting_token":{
+    "token":{
+      "token_addr": "neutron..."
+    }
+  }
+}
+```
+
+or
+
+```json
+{
+  "vesting_token":{
+    "native_token":{
+      "denom": "NTRN"
+    }
+  }
 }
 ```
 
@@ -21,7 +37,7 @@ CW20 receive msg.
 ```json
 {
   "receive": {
-    "sender": "terra...",
+    "sender": "neutron...",
     "amount": "123",
     "msg": "<base64_encoded_json_string>"
   }
@@ -30,9 +46,9 @@ CW20 receive msg.
 
 #### `RegisterVestingAccounts`
 
-Creates vesting schedules for the ASTRO token. Each vesting token should have the Generator contract address as the `VestingContractAddress`. Also, each schedule will unlock tokens at a different rate according to its time duration.
+Creates vesting schedules for the VESTED token. Each vesting token should have the contract address as the `VestingContractAddress`. Also, each schedule will unlock tokens at a different rate according to its time duration.
 
-Execute this message by calling the ASTRO token contract address.
+Execute this message by calling the VESTED token contract address.
 
 ```json
 {
@@ -51,7 +67,7 @@ In `send.msg`, you may encode this JSON string into base64 encoding.
   "RegisterVestingAccounts": {
     "vesting_accounts": [
       {
-        "address": "terra...",
+        "address": "neutron...",
         "schedules": {
           "start_point": {
             "time": "1634125119000000000",
@@ -75,7 +91,7 @@ Transfer vested tokens from all vesting schedules that have the same `VestingCon
 ```json
 {
   "claim": {
-    "recipient": "terra...",
+    "recipient": "neutron...",
     "amount": "123"
   }
 }
@@ -87,7 +103,7 @@ All query messages are described below. A custom struct is defined for each quer
 
 ### `config`
 
-Returns the vesting token contract address (the ASTRO token address).
+Returns the vesting token contract address (the VESTED token address).
 
 ```json
 {
@@ -102,7 +118,7 @@ Returns all vesting schedules with their details for a specific vesting recipien
 ```json
 {
   "vesting_account": {
-    "address": "terra..."
+    "address": "neutron..."
   }
 }
 ```
@@ -114,7 +130,7 @@ Returns a paginated list of vesting schedules in chronological order. Given fiel
 ```json
 {
   "vesting_accounts": {
-    "start_after": "terra...",
+    "start_after": "neutron...",
     "limit": 10,
     "order_by": {
       "desc": {}
@@ -125,12 +141,22 @@ Returns a paginated list of vesting schedules in chronological order. Given fiel
 
 ### `available amount`
 
-Returns the claimable amount (vested but not yet claimed) of ASTRO tokens that a vesting target can claim.
+Returns the claimable amount (vested but not yet claimed) of VESTED tokens that a vesting target can claim.
 
 ```json
 {
   "available_amount": {
-    "address": "terra..."
+    "address": "neutron..."
   }
+}
+```
+
+### `vesting_managers`
+
+Returns list of vesting managers - the persons who are able to add/remove vesting schedules.
+
+```json
+{
+  "vesting_managers": {}
 }
 ```

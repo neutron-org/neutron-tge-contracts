@@ -1,4 +1,4 @@
-use crate::msg::ExtraQueryMsg::{UnclaimedAmountAtHeight, UnclaimedTotalAmountAtHeight};
+use crate::msg::QueryMsg::{UnclaimedAmountAtHeight, UnclaimedTotalAmountAtHeight};
 use astroport::asset::{native_asset_info, token_asset_info};
 use astroport::querier::query_balance;
 use astroport::vesting::{QueryMsg, VestingAccountResponse};
@@ -1053,7 +1053,7 @@ fn vesting_managers() {
         .unwrap_err();
     assert_eq!(ContractError::Unauthorized {}, err.downcast().unwrap());
 
-    let add_manager_msg = ExecuteMsg::AddVestingManages {
+    let add_manager_msg = ExecuteMsg::AddVestingManagers {
         managers: vec![user1.to_string()],
     };
 
@@ -1098,7 +1098,7 @@ fn vesting_managers() {
         .unwrap_err();
     assert_eq!(ContractError::Unauthorized {}, err.downcast().unwrap());
 
-    let remove_manager_msg = ExecuteMsg::RemoveVestingManages {
+    let remove_manager_msg = ExecuteMsg::RemoveVestingManagers {
         managers: vec![user1.to_string()],
     };
     let err = app

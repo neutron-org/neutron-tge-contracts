@@ -52,11 +52,11 @@ pub enum ExecuteMsg {
     /// Adds vesting managers
     /// ## Executor
     /// Only the current owner can execute this
-    AddVestingManages { managers: Vec<String> },
+    AddVestingManagers { managers: Vec<String> },
     /// Removes vesting managers
     /// ## Executor
     /// Only the current owner can execute this
-    RemoveVestingManages { managers: Vec<String> },
+    RemoveVestingManagers { managers: Vec<String> },
 }
 
 /// This structure stores the accumulated vesting information for all addresses.
@@ -131,9 +131,9 @@ pub enum QueryMsg {
     /// VestingState returns the current vesting state.
     #[returns(VestingState)]
     VestingState {},
-    /// VestingManagers of currents list of vesting managers
-    /// (the persons who able to add/remove vesting schedules)
-    #[returns(Vec<String>)]
+    /// Returns list of vesting managers
+    /// (the persons who are able to add/remove vesting schedules)
+    #[returns(Vec<Addr>)]
     VestingManagers {},
 }
 
