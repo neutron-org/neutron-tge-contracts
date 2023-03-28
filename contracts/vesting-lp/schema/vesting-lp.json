@@ -502,7 +502,7 @@
         "additionalProperties": false
       },
       {
-        "description": "VestingManagers of currents list of vesting managers (the persons who able to add/remove vesting schedules)",
+        "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",
         "type": "object",
         "required": [
           "vesting_managers"

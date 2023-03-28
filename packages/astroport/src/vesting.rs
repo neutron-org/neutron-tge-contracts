@@ -128,8 +128,8 @@ pub enum QueryMsg {
     /// Timestamp returns the current timestamp
     #[returns(u64)]
     Timestamp {},
-    /// VestingManagers of currents list of vesting managers
-    /// (the persons who able to add/remove vesting schedules)
+    /// Returns list of vesting managers
+    /// (the persons who are able to add/remove vesting schedules)
     #[returns(Vec<String>)]
     VestingManagers {},
 }
