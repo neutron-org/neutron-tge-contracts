@@ -900,12 +900,9 @@ fn remove_vesting_accounts() {
                 VestingSchedule {
                     start_point: VestingSchedulePoint {
                         time: Timestamp::from_seconds(100).seconds(),
-                        amount: Uint128::zero(),
-                    },
-                    end_point: Some(VestingSchedulePoint {
-                        time: Timestamp::from_seconds(110).seconds(),
                         amount: Uint128::new(100),
-                    }),
+                    },
+                    end_point: None,
                 },
                 VestingSchedule {
                     start_point: VestingSchedulePoint {
@@ -1021,12 +1018,9 @@ fn remove_vesting_accounts() {
                 VestingSchedule {
                     start_point: VestingSchedulePoint {
                         time: Timestamp::from_seconds(100).seconds(),
-                        amount: Uint128::zero(),
-                    },
-                    end_point: Some(VestingSchedulePoint {
-                        time: Timestamp::from_seconds(110).seconds(),
                         amount: Uint128::new(100),
-                    }),
+                    },
+                    end_point: None,
                 },
                 VestingSchedule {
                     start_point: VestingSchedulePoint {
@@ -1199,6 +1193,7 @@ fn instantiate_vesting(app: &mut App, astro_token_instance: &Addr) -> Addr {
     let init_msg = InstantiateMsg {
         owner: OWNER1.to_string(),
         vesting_token: token_asset_info(astro_token_instance.clone()),
+        vesting_managers: Vec::new(),
     };
 
     let vesting_instance = app
@@ -1240,6 +1235,7 @@ fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
     let init_msg = InstantiateMsg {
         owner: OWNER1.to_string(),
         vesting_token: native_asset_info(IBC_ASTRO.to_string()),
+        vesting_managers: Vec::new(),
     };
 
     app.instantiate_contract(vesting_code_id, owner, &init_msg, &[], "Vesting", None)

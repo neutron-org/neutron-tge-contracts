@@ -150,14 +150,17 @@ fn remove_vesting_accounts(
     // vesting), transfer the required amount to the owner, remove the vesting information
     // from the storage, and decrease the total granted metric.
     for vesting_account in vesting_accounts {
-        let mut total_granted_for_user = Uint128::zero();
-
         let account_address = deps.api.addr_validate(&vesting_account)?;
+
         if let Some(account_info) = vesting_info.may_load(deps.storage, &account_address)? {
+            let mut total_granted_for_user = Uint128::zero();
             for sch in account_info.schedules {
                 if let Some(end_point) = sch.end_point {
                     total_granted_for_user =
                         total_granted_for_user.checked_add(end_point.amount)?;
+                } else {
+                    total_granted_for_user =
+                        total_granted_for_user.checked_add(sch.start_point.amount)?;
                 }
             }
 
