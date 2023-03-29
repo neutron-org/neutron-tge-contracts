@@ -83,7 +83,7 @@ pub struct VestingAccount {
 pub struct VestingInfo {
     /// The vesting schedules
     pub schedules: Vec<VestingSchedule>,
-    /// The total amount of vested already claimed
+    /// The total amount of vested tokens already claimed
     pub released_amount: Uint128,
 }
 

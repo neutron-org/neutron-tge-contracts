@@ -1,6 +1,6 @@
 # Neutron Vesting
 
-The Vesting contract progressively unlocks vested that can then be claimed by stakers.
+The Vesting contract progressively unlocks vested tokens that can then be claimed by stakers.
 
 ---
 
