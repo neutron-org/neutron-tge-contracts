@@ -165,14 +165,14 @@ pub fn execute(
                 owner,
                 expires_in,
                 config.owner,
-                OWNERSHIP_PROPOSAL,
+                &OWNERSHIP_PROPOSAL,
             )
             .map_err(Into::into)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config = CONFIG.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
+            drop_ownership_proposal(deps, info, config.owner, &OWNERSHIP_PROPOSAL)
                 .map_err(Into::into)
         }
         ExecuteMsg::ClaimOwnership {} => {
@@ -183,7 +183,7 @@ pub fn execute(
 
             PAIRS_TO_MIGRATE.save(deps.storage, &pairs)?;
 
-            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
+            claim_ownership(deps, info, env, &OWNERSHIP_PROPOSAL, |deps, new_owner| {
                 CONFIG
                     .update::<_, StdError>(deps.storage, |mut v| {
                         v.owner = new_owner;

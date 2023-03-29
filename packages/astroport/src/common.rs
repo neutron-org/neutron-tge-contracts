@@ -31,7 +31,7 @@ pub fn propose_new_owner(
     new_owner: String,
     expires_in: u64,
     owner: Addr,
-    proposal: Item<OwnershipProposal>,
+    proposal: &Item<OwnershipProposal>,
 ) -> StdResult<Response> {
     // Permission check
     if info.sender != owner {
@@ -75,7 +75,7 @@ pub fn drop_ownership_proposal(
     deps: DepsMut,
     info: MessageInfo,
     owner: Addr,
-    proposal: Item<OwnershipProposal>,
+    proposal: &Item<OwnershipProposal>,
 ) -> StdResult<Response> {
     // Permission check
     if info.sender != owner {
@@ -97,8 +97,8 @@ pub fn claim_ownership(
     deps: DepsMut,
     info: MessageInfo,
     env: Env,
-    proposal: Item<OwnershipProposal>,
-    cb: fn(DepsMut, Addr) -> StdResult<()>,
+    proposal: &Item<OwnershipProposal>,
+    cb: impl Fn(DepsMut, Addr) -> StdResult<()>,
 ) -> StdResult<Response> {
     let p = proposal
         .load(deps.storage)
