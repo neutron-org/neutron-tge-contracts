@@ -116,6 +116,20 @@
       "additionalProperties": false
     },
     {
+      "description": "VestingState returns the current vesting state.",
+      "type": "object",
+      "required": [
+        "vesting_state"
+      ],
+      "properties": {
+        "vesting_state": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
       "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",
       "type": "object",
       "required": [

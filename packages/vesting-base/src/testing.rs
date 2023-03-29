@@ -14,7 +14,7 @@ fn proper_initialization() {
 
     let msg = InstantiateMsg {
         owner: "owner".to_string(),
-        vesting_token: token_asset_info(Addr::unchecked("astro_token")),
+        vesting_token: token_asset_info(Addr::unchecked("ntrn_token")),
         vesting_managers: vec!["manager1".to_string(), "manager2".to_string()],
     };
 
@@ -33,7 +33,7 @@ fn proper_initialization() {
         .unwrap(),
         ConfigResponse {
             owner: Addr::unchecked("owner"),
-            vesting_token: token_asset_info(Addr::unchecked("astro_token")),
+            vesting_token: token_asset_info(Addr::unchecked("ntrn_token")),
         }
     );
 

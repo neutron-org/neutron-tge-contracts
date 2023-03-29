@@ -17,7 +17,7 @@ use cw20::Cw20ReceiveMsg;
 use cw_utils::must_pay;
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "astroport-vesting";
+const CONTRACT_NAME: &str = "neutron-vesting";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 

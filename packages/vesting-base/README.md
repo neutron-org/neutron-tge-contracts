@@ -1,12 +1,12 @@
-# Astroport Vesting
+# Neutron Vesting
 
-The Vesting contract progressively unlocks VESTED that can then be distributed to LP stakers.
+The Vesting contract progressively unlocks vested that can then be claimed by stakers.
 
 ---
 
 ## InstantiateMsg
 
-Initializes the contract with the description of the VESTED token(cw20/native).
+Initializes the contract with the description of the vested token(cw20/native).
 
 ```json
 {
@@ -46,9 +46,9 @@ CW20 receive msg.
 
 #### `RegisterVestingAccounts`
 
-Creates vesting schedules for the VESTED token. Each vesting token should have the contract address as the `VestingContractAddress`. Also, each schedule will unlock tokens at a different rate according to its time duration.
+Creates vesting schedules for the vested token. Each vesting token should have the contract address as the `VestingContractAddress`. Also, each schedule will unlock tokens at a different rate according to its time duration.
 
-Execute this message by calling the VESTED token contract address.
+Execute this message by calling the vested token contract address.
 
 ```json
 {
@@ -103,7 +103,7 @@ All query messages are described below. A custom struct is defined for each quer
 
 ### `config`
 
-Returns the vesting token contract address (the VESTED token address).
+Returns the vesting token contract address (the vested token address).
 
 ```json
 {
@@ -141,7 +141,7 @@ Returns a paginated list of vesting schedules in chronological order. Given fiel
 
 ### `available amount`
 
-Returns the claimable amount (vested but not yet claimed) of VESTED tokens that a vesting target can claim.
+Returns the claimable amount (vested but not yet claimed) of vested tokens that a vesting target can claim.
 
 ```json
 {

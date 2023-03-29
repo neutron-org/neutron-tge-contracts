@@ -61,7 +61,7 @@
       ],
       "properties": {
         "released_amount": {
-          "description": "The total amount of ASTRO already claimed",
+          "description": "The total amount of vested already claimed",
           "allOf": [
             {
               "$ref": "#/definitions/Uint128"
