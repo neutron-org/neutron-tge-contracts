@@ -29,12 +29,6 @@ pub fn instantiate(
 }
 
 /// Exposes execute functions available in the contract.
-///
-/// ## Variants
-/// * **ExecuteMsg::Claim { recipient, amount }** Claims vested tokens and transfers them to the vesting recipient.
-///
-/// * **ExecuteMsg::Receive(msg)** Receives a message of type [`Cw20ReceiveMsg`] and processes it
-/// depending on the received template.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -47,19 +41,6 @@ pub fn execute(
 }
 
 /// Exposes all the queries available in the contract.
-///
-/// ## Queries
-/// * **QueryMsg::Config {}** Returns the contract configuration in an object of type [`Config`].
-///
-/// * **QueryMsg::VestingAccount { address }** Returns information about the vesting schedules that have a specific vesting recipient.
-///
-/// * **QueryMsg::VestingAccounts {
-///             start_after,
-///             limit,
-///             order_by,
-///         }** Returns a list of vesting schedules together with their vesting recipients.
-///
-/// * **QueryMsg::AvailableAmount { address }** Returns the available amount of tokens that can be claimed by a specific vesting recipient.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     let vest_app = BaseVesting::new(Strategy::EveryBlock);
@@ -85,6 +66,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             vest_app.query(deps, env, QueryBase::AvailableAmount { address })
         }
         QueryMsg::Timestamp {} => vest_app.query(deps, env, QueryBase::Timestamp {}),
+        QueryMsg::VestingManagers {} => vest_app.query(deps, env, QueryBase::VestingManagers {}),
         QueryMsg::UnclaimedAmountAtHeight { address, height } => Ok(to_binary(
             &query_unclaimed_amount_at_height(&vest_app, deps, address, height)?,
         )?),
@@ -97,6 +79,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// Returns the available amount of distributed and yet to be claimed tokens for a specific vesting recipient at certain height.
 ///
 /// * **address** vesting recipient for which to return the available amount of tokens to claim.
+///
+/// * **height** the height we querying unclaimed amount for
 pub fn query_unclaimed_amount_at_height(
     base_app: &BaseVesting,
     deps: Deps,
@@ -115,6 +99,8 @@ pub fn query_unclaimed_amount_at_height(
 }
 
 /// Returns the available amount of distributed and yet to be claimed tokens for all the recipients at certain height.
+///
+/// * **height** the height we querying unclaimed amount for
 pub fn query_total_unclaimed_amount_at_height(
     base_app: &BaseVesting,
     deps: Deps,

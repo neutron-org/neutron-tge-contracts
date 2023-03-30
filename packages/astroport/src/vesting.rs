@@ -12,6 +12,8 @@ pub struct InstantiateMsg {
     pub owner: String,
     /// [`AssetInfo`] of the token that's being vested
     pub vesting_token: AssetInfo,
+    /// Initial list of whitelisted vesting managers
+    pub vesting_managers: Vec<String>,
 }
 
 /// This structure describes the execute messages available in the contract.
@@ -47,6 +49,14 @@ pub enum ExecuteMsg {
     /// ## Executor
     /// Only the newly proposed owner can execute this
     ClaimOwnership {},
+    /// Adds vesting managers
+    /// ## Executor
+    /// Only the current owner can execute this
+    AddVestingManagers { managers: Vec<String> },
+    /// Removes vesting managers
+    /// ## Executor
+    /// Only the current owner can execute this
+    RemoveVestingManagers { managers: Vec<String> },
 }
 
 /// This structure stores the accumulated vesting information for all addresses.
@@ -73,7 +83,7 @@ pub struct VestingAccount {
 pub struct VestingInfo {
     /// The vesting schedules
     pub schedules: Vec<VestingSchedule>,
-    /// The total amount of ASTRO already claimed
+    /// The total amount of vested tokens already claimed
     pub released_amount: Uint128,
 }
 
@@ -118,6 +128,13 @@ pub enum QueryMsg {
     /// Timestamp returns the current timestamp
     #[returns(u64)]
     Timestamp {},
+    /// VestingState returns the current vesting state.
+    #[returns(VestingState)]
+    VestingState {},
+    /// Returns list of vesting managers
+    /// (the persons who are able to add/remove vesting schedules)
+    #[returns(Vec<Addr>)]
+    VestingManagers {},
 }
 
 /// This structure describes a custom struct used to return the contract configuration.
