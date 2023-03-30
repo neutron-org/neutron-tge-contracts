@@ -15,7 +15,8 @@ use astroport_periphery::auction::{
     State, UpdateConfigMsg, UserInfoResponse, UserLpInfo,
 };
 use astroport_periphery::lockdrop::{
-    ExecuteMsg as LockDropExecuteMsg, PoolType as LockDropPoolType,
+    Cw20HookMsg as LockDropCw20HookMsg, ExecuteMsg as LockDropExecuteMsg,
+    PoolType as LockDropPoolType,
 };
 
 use crate::state::{get_users_store, CONFIG, STATE};
@@ -581,7 +582,11 @@ pub fn execute_set_pool_size(
 /// * **env** is an object of type [`Env`].
 ///
 /// * **info** is an object of type [`MessageInfo`].
-pub fn execute_init_pool(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, StdError> {
+pub fn execute_init_pool(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
     let state = STATE.load(deps.storage)?;
 
@@ -706,9 +711,13 @@ pub fn execute_finalize_init_pool(
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_atom_lp_token_address.to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: lockdrop_address.to_string(),
+                msg: to_binary(&Cw20ExecuteMsg::Send {
+                    contract: lockdrop_address.to_string(),
                     amount: state.atom_lp_locked,
+                    msg: to_binary(&LockDropCw20HookMsg::InitializePool {
+                        pool_type: LockDropPoolType::ATOM,
+                        incentives_share: state.atom_ntrn_size,
+                    })?,
                 })?,
             }))
         }
@@ -716,9 +725,13 @@ pub fn execute_finalize_init_pool(
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_usdc_lp_token_address.to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: lockdrop_address.to_string(),
+                msg: to_binary(&Cw20ExecuteMsg::Send {
+                    contract: lockdrop_address.to_string(),
                     amount: state.usdc_lp_locked,
+                    msg: to_binary(&LockDropCw20HookMsg::InitializePool {
+                        pool_type: LockDropPoolType::USDC,
+                        incentives_share: state.usdc_ntrn_size,
+                    })?,
                 })?,
             }))
         }
