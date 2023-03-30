@@ -585,11 +585,6 @@ pub fn execute_init_pool(deps: DepsMut, env: Env, info: MessageInfo) -> Result<R
     let config = CONFIG.load(deps.storage)?;
     let state = STATE.load(deps.storage)?;
 
-    // CHECK :: Only admin can call this function
-    if info.sender != config.owner {
-        return Err(StdError::generic_err("Unauthorized"));
-    }
-
     // CHECK :: Can be executed once
     if state.lp_usdc_shares_minted.is_some() || state.lp_atom_shares_minted.is_some() {
         return Err(StdError::generic_err("Liquidity already added"));
