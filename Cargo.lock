@@ -2155,6 +2155,7 @@ dependencies = [
  "cw-utils 0.15.1",
  "cw2 0.15.1",
  "cw20 0.15.1",
+ "serde",
  "thiserror",
 ]
 
@@ -2169,6 +2170,7 @@ dependencies = [
  "cw-multi-test 0.15.1",
  "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
+ "cw2 0.15.1",
  "cw20 0.15.1",
  "vesting-base",
 ]
@@ -2184,6 +2186,7 @@ dependencies = [
  "cw-multi-test 0.15.1",
  "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
+ "cw2 0.15.1",
  "cw20 0.15.1",
  "vesting-base",
 ]

@@ -1,5 +1,5 @@
 {
-  "contract_name": "vesting-lp",
+  "contract_name": "vesting-managed",
   "contract_version": "1.1.0",
   "idl_version": "1.0.0",
   "instantiate": {
@@ -9,20 +9,12 @@
     "type": "object",
     "required": [
       "owner",
-      "vesting_managers",
       "vesting_token"
     ],
     "properties": {
       "owner": {
         "description": "Address allowed to change contract parameters",
         "type": "string"
-      },
-      "vesting_managers": {
-        "description": "Initial list of whitelisted vesting managers",
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
       },
       "vesting_token": {
         "description": "[`AssetInfo`] of the token that's being vested",

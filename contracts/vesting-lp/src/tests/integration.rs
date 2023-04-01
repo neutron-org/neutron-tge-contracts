@@ -1,20 +1,19 @@
-use crate::msg::QueryMsg::{UnclaimedAmountAtHeight, UnclaimedTotalAmountAtHeight};
+use crate::msg::InstantiateMsg;
 use astroport::asset::{native_asset_info, token_asset_info};
 use astroport::querier::query_balance;
-use astroport::vesting::{QueryMsg, VestingAccountResponse};
-use astroport::{
-    token::InstantiateMsg as TokenInstantiateMsg,
-    vesting::{
-        Cw20HookMsg, ExecuteMsg, InstantiateMsg, VestingAccount, VestingSchedule,
-        VestingSchedulePoint,
-    },
-};
+use astroport::token::InstantiateMsg as TokenInstantiateMsg;
 use cosmwasm_std::{coin, coins, to_binary, Addr, StdResult, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use cw_utils::PaymentError;
 use vesting_base::error::ContractError;
-use vesting_base::state::Config;
+use vesting_base::msg::{
+    Cw20HookMsg, ExecuteMsg, ExecuteMsgWithManagers, QueryMsg, QueryMsgHistorical,
+    QueryMsgWithManagers,
+};
+use vesting_base::types::{
+    Config, VestingAccount, VestingAccountResponse, VestingSchedule, VestingSchedulePoint,
+};
 
 const OWNER1: &str = "owner1";
 const USER1: &str = "user1";
@@ -965,9 +964,11 @@ fn query_at_height() {
         .unwrap();
     assert_eq!(vesting_res, Uint128::new(0u128));
 
-    let query_user_unclamed = UnclaimedAmountAtHeight {
-        address: user1.to_string(),
-        height: start_block_height - 1,
+    let query_user_unclamed = QueryMsg::HistoricalExtension {
+        msg: QueryMsgHistorical::UnclaimedAmountAtHeight {
+            address: user1.to_string(),
+            height: start_block_height - 1,
+        },
     };
     let vesting_res: Uint128 = app
         .wrap()
@@ -975,8 +976,10 @@ fn query_at_height() {
         .unwrap();
     assert_eq!(vesting_res, Uint128::new(0u128));
 
-    let query_total_unclamed = UnclaimedTotalAmountAtHeight {
-        height: start_block_height - 1,
+    let query_total_unclamed = QueryMsg::HistoricalExtension {
+        msg: QueryMsgHistorical::UnclaimedTotalAmountAtHeight {
+            height: start_block_height - 1,
+        },
     };
     let vesting_res: Uint128 = app
         .wrap()
@@ -986,9 +989,11 @@ fn query_at_height() {
     let max_unclaimed_user1: u128 = 200;
     let max_unclaimed_total: u128 = 1200;
     for i in 0..=10 {
-        let query = UnclaimedAmountAtHeight {
-            address: user1.to_string(),
-            height: start_block_height + 1 + i * 10,
+        let query = QueryMsg::HistoricalExtension {
+            msg: QueryMsgHistorical::UnclaimedAmountAtHeight {
+                address: user1.to_string(),
+                height: start_block_height + 1 + i * 10,
+            },
         };
         let vesting_res: Uint128 = app
             .wrap()
@@ -999,8 +1004,10 @@ fn query_at_height() {
             Uint128::new(max_unclaimed_user1 - (i as u128) * 20)
         );
 
-        let query_total_unclamed = UnclaimedTotalAmountAtHeight {
-            height: start_block_height + 1 + i * 10,
+        let query_total_unclamed = QueryMsg::HistoricalExtension {
+            msg: QueryMsgHistorical::UnclaimedTotalAmountAtHeight {
+                height: start_block_height + 1 + i * 10,
+            },
         };
         let vesting_res: Uint128 = app
             .wrap()
@@ -1022,7 +1029,9 @@ fn vesting_managers() {
     let mut app = mock_app(&owner);
     let vesting_instance = instantiate_vesting_remote_chain(&mut app);
 
-    let query = QueryMsg::VestingManagers {};
+    let query = QueryMsg::WithManagersExtension {
+        msg: QueryMsgWithManagers::VestingManagers {},
+    };
     let vesting_res: Vec<Addr> = app
         .wrap()
         .query_wasm_smart(vesting_instance.clone(), &query)
@@ -1053,8 +1062,10 @@ fn vesting_managers() {
         .unwrap_err();
     assert_eq!(ContractError::Unauthorized {}, err.downcast().unwrap());
 
-    let add_manager_msg = ExecuteMsg::AddVestingManagers {
-        managers: vec![user1.to_string()],
+    let add_manager_msg = ExecuteMsg::WithManagersExtension {
+        msg: ExecuteMsgWithManagers::AddVestingManagers {
+            managers: vec![user1.to_string()],
+        },
     };
 
     let err = app
@@ -1098,8 +1109,10 @@ fn vesting_managers() {
         .unwrap_err();
     assert_eq!(ContractError::Unauthorized {}, err.downcast().unwrap());
 
-    let remove_manager_msg = ExecuteMsg::RemoveVestingManagers {
-        managers: vec![user1.to_string()],
+    let remove_manager_msg = ExecuteMsg::WithManagersExtension {
+        msg: ExecuteMsgWithManagers::RemoveVestingManagers {
+            managers: vec![user1.to_string()],
+        },
     };
     let err = app
         .execute_contract(user1, vesting_instance.clone(), &remove_manager_msg, &[])

@@ -1,51 +1,10 @@
-# Neutron Vesting Base
+use crate::types::{
+    Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingState,
+};
+use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::{Addr, Uint128};
+use cw20::Cw20ReceiveMsg;
 
-This library contains basis for configuration and initialisation of vesting contracts. It also contains data models and handlers for interaction with vesting contracts.
-
-## Usage
-
-1. To use the library for initialisation of a simple vesting contract just build a default vesting base in its instantiate message:
-```rust
-use vesting_base::builder::VestingBaseBuilder;
-
-pub fn instantiate(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    msg: InstantiateMsg,
-) -> StdResult<Response> {
-    ...
-    VestingBaseBuilder::default().build(deps, msg.owner, msg.vesting_token)?;
-    ...
-```
-
-Read about more advanced building in the [Extensions](#extensions) section.
-
-2. Simply pass the execute and query requests to the vesting base's execute and query handlers:
-```rust
-use vesting_base::handlers::{execute as base_execute, query as base_query};
-
-pub fn execute(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
-    base_execute(deps, env, info, msg)
-}
-
-pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    base_query(deps, env, msg)
-}
-```
-
-### Messages
-
-The default version exposes the following messages:
-
-#### ExecuteMsg
-
-```rust
 /// This structure describes the execute messages available in a vesting contract.
 #[cw_serde]
 pub enum ExecuteMsg {
@@ -86,19 +45,43 @@ pub enum ExecuteMsg {
     /// Contains messages associated with the historical extension for vesting contracts.
     HistoricalExtension { msg: ExecuteMsgHistorical },
 }
-```
 
-The `ManagedExtension`, `WithManagersExtension`, and `HistoricalExtension` messages are extensiom messages. Read about them in the [Extensions](#extensions) section.
+/// This structure describes the execute messages available in a managed vesting contract.
+#[cw_serde]
+pub enum ExecuteMsgManaged {
+    /// Removes vesting targets/accounts.
+    /// ## Executor
+    /// Only the current owner can execute this
+    RemoveVestingAccounts {
+        vesting_accounts: Vec<String>,
+        /// Specifies the account that will receive the funds taken from the vesting accounts.
+        clawback_account: String,
+    },
+}
 
-#### QueryMsg
+/// This structure describes the execute messages available in a with_managers vesting contract.
+#[cw_serde]
+pub enum ExecuteMsgWithManagers {
+    /// Adds vesting managers
+    /// ## Executor
+    /// Only the current owner can execute this
+    AddVestingManagers { managers: Vec<String> },
+    /// Removes vesting managers
+    /// ## Executor
+    /// Only the current owner can execute this
+    RemoveVestingManagers { managers: Vec<String> },
+}
 
-```rust
+/// This structure describes the execute messages available in a historical vesting contract.
+#[cw_serde]
+pub enum ExecuteMsgHistorical {}
+
 /// This structure describes the query messages available in a vesting contract.
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns the configuration for the contract using a [`ConfigResponse`] object.
-    #[returns(ConfigResponse)]
+    #[returns(Config)]
     Config {},
     /// Returns information about an address vesting tokens using a [`VestingAccountResponse`] object.
     #[returns(VestingAccountResponse)]
@@ -129,55 +112,11 @@ pub enum QueryMsg {
     #[returns(QueryMsgHistorical)]
     HistoricalExtension { msg: QueryMsgHistorical },
 }
-```
-
-The `ManagedExtension`, `WithManagersExtension`, and `HistoricalExtension` messages are extensiom messages. Read about them in the [Extensions](#extensions) section.
-
-## Extensions
-
-Created contracts can be extended with a number of features.
-
-### Managed
-
-The `managed` extension allows the owner of the vesting contract to remove registered vesting accounts and redeem the corresponding funds.
-
-```rust
-/// This structure describes the execute messages available in a managed vesting contract.
-#[cw_serde]
-pub enum ExecuteMsgManaged {
-    /// Removes vesting targets/accounts.
-    /// ## Executor
-    /// Only the current owner can execute this
-    RemoveVestingAccounts {
-        vesting_accounts: Vec<String>,
-        /// Specifies the account that will receive the funds taken from the vesting accounts.
-        clawback_account: String,
-    },
-}
 
 /// This structure describes the query messages available in a managed vesting contract.
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsgManaged {}
-```
-
-### WithManagers
-
-The `with_managers` extension allows the owner of the vesting contract to add/remove vesting managers — addresses that just like the owner are capable of registering new vesting accounts.
-
-```rust
-/// This structure describes the execute messages available in a with_managers vesting contract.
-#[cw_serde]
-pub enum ExecuteMsgWithManagers {
-    /// Adds vesting managers
-    /// ## Executor
-    /// Only the current owner can execute this
-    AddVestingManagers { managers: Vec<String> },
-    /// Removes vesting managers
-    /// ## Executor
-    /// Only the current owner can execute this
-    RemoveVestingManagers { managers: Vec<String> },
-}
 
 /// This structure describes the query messages available in a with_managers vesting contract.
 #[cw_serde]
@@ -188,16 +127,6 @@ pub enum QueryMsgWithManagers {
     #[returns(Vec<Addr>)]
     VestingManagers {},
 }
-```
-
-### Historical
-
-The `historical` allows to query vesting accounts and total vesting state based on a given height.
-
-```rust
-/// This structure describes the execute messages available in a historical vesting contract.
-#[cw_serde]
-pub enum ExecuteMsgHistorical {}
 
 /// This structure describes the query messages available in a historical vesting contract.
 #[cw_serde]
@@ -210,38 +139,17 @@ pub enum QueryMsgHistorical {
     #[returns(Uint128)]
     UnclaimedTotalAmountAtHeight { height: u64 },
 }
-```
 
-### Extensions usage
-
-The following example adds all three extensions to the contract, but it's allowed to combine them in any way.
-```rust
-use vesting_base::builder::VestingBaseBuilder;
-use astroport::asset::AssetInfo;
-use cosmwasm_schema::cw_serde;
-
-/// This structure describes the parameters used for creating a contract.
+/// This structure describes a migration message.
+/// We currently take no arguments for migrations.
 #[cw_serde]
-pub struct InstantiateMsg {
-    /// Address allowed to change contract parameters
-    pub owner: String,
-    /// [`AssetInfo`] of the token that's being vested
-    pub vesting_token: AssetInfo,
-    /// Initial list of whitelisted vesting managers
-    pub vesting_managers: Vec<String>,
-}
+pub struct MigrateMsg {}
 
-pub fn instantiate(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    msg: InstantiateMsg,
-) -> StdResult<Response> {
-    ...
-    VestingBaseBuilder::default()
-        .historical()
-        .managed()
-        .with_managers(msg.vesting_managers)
-        .build(deps, msg.owner, msg.vesting_token)?;
-    ...
-```
+/// This structure describes a CW20 hook message.
+#[cw_serde]
+pub enum Cw20HookMsg {
+    /// RegisterVestingAccounts registers vesting targets/accounts
+    RegisterVestingAccounts {
+        vesting_accounts: Vec<VestingAccount>,
+    },
+}
