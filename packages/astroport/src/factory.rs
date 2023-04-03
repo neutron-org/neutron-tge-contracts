@@ -81,6 +81,7 @@ pub struct InstantiateMsg {
     pub owner: String,
     /// CW1 whitelist contract code id used to store 3rd party rewards for staking Astroport LP tokens
     pub whitelist_code_id: u64,
+    pub coin_registry_address: String,
 }
 
 /// This structure describes the execute messages of the contract.

@@ -17,6 +17,7 @@ pub mod staking;
 pub mod token;
 pub mod vesting;
 pub mod xastro_token;
+pub mod native_coin_registry;
 
 #[cfg(test)]
 mod mock_querier;
