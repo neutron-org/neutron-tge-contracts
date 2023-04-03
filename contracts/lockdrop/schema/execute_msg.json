@@ -83,6 +83,34 @@
     {
       "type": "object",
       "required": [
+        "set_token_info"
+      ],
+      "properties": {
+        "set_token_info": {
+          "type": "object",
+          "required": [
+            "atom_token",
+            "generator",
+            "usdc_token"
+          ],
+          "properties": {
+            "atom_token": {
+              "type": "string"
+            },
+            "generator": {
+              "type": "string"
+            },
+            "usdc_token": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "withdraw_from_lockup"
       ],
       "properties": {

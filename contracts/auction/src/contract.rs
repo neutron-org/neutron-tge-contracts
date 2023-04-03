@@ -72,6 +72,7 @@ pub fn instantiate(
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
+        denom_manager: deps.api.addr_validate(&msg.denom_manager)?,
         lockdrop_contract_address,
         price_feed_contract: deps.api.addr_validate(msg.price_feed_contract.as_str())?,
         reserve_contract_address: deps.api.addr_validate(&msg.reserve_contract_address)?,
@@ -86,8 +87,8 @@ pub fn instantiate(
         init_timestamp: msg.init_timestamp,
         deposit_window: msg.deposit_window,
         withdrawal_window: msg.withdrawal_window,
-        usdc_denom: msg.usdc_denom,
-        atom_denom: msg.atom_denom,
+        usdc_denom: None,
+        atom_denom: None,
         ntrn_denom: UNTRN_DENOM.to_string(),
         max_exchange_rate_age: msg.max_exchange_rate_age,
         min_ntrn_amount: msg.min_ntrn_amount,
@@ -125,6 +126,10 @@ pub fn execute(
 ) -> Result<Response, StdError> {
     match msg {
         ExecuteMsg::UpdateConfig { new_config } => execute_update_config(deps, info, new_config),
+        ExecuteMsg::SetDenoms {
+            usdc_denom,
+            atom_denom,
+        } => execute_set_denoms(deps, info, usdc_denom, atom_denom),
         ExecuteMsg::Deposit {} => execute_deposit(deps, env, info),
         ExecuteMsg::Withdraw {
             amount_usdc,
@@ -162,6 +167,7 @@ fn execute_callback(
 
 pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
+    let (usdc_denom, atom_denom) = get_denoms(&config)?;
     let users_store = get_users_store();
 
     // CHECK :: Auction deposit window open
@@ -173,21 +179,21 @@ pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Res
     let mut atom_amount = Uint128::zero();
 
     for fund in info.funds.iter() {
-        if fund.denom == config.usdc_denom {
+        if fund.denom == usdc_denom {
             usdc_amount = fund.amount;
-        } else if fund.denom == config.atom_denom {
+        } else if fund.denom == atom_denom {
             atom_amount = fund.amount;
         } else {
             return Err(StdError::generic_err(format!(
                 "Invalid denom. Expected {} or {}",
-                config.usdc_denom, config.atom_denom
+                usdc_denom, atom_denom
             )));
         }
     }
     if usdc_amount.is_zero() && atom_amount.is_zero() {
         return Err(StdError::generic_err(format!(
             "You must send at least one of {} or {}",
-            config.usdc_denom, config.atom_denom
+            usdc_denom, atom_denom
         )));
     }
 
@@ -312,6 +318,31 @@ fn is_deposit_open(current_timestamp: u64, config: &Config) -> bool {
         && current_timestamp < config.init_timestamp + config.deposit_window
 }
 
+pub fn execute_set_denoms(
+    deps: DepsMut,
+    info: MessageInfo,
+    usdc_denom: String,
+    atom_denom: String,
+) -> StdResult<Response> {
+    let mut config = CONFIG.load(deps.storage)?;
+    let mut attributes = vec![attr("action", "set_denoms")];
+
+    if info.sender != config.denom_manager && info.sender != config.owner {
+        return Err(StdError::generic_err(
+            "Only owner and denom_manager can update denoms",
+        ));
+    }
+
+    config.usdc_denom = Some(usdc_denom.clone());
+    config.atom_denom = Some(atom_denom.clone());
+    CONFIG.save(deps.storage, &config)?;
+
+    attributes.push(attr("new_usdc_denom", usdc_denom));
+    attributes.push(attr("new_atom_denom", atom_denom));
+
+    Ok(Response::new().add_attributes(attributes))
+}
+
 /// Facilitates Opposite (native) token withdrawals by users. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
@@ -329,6 +360,7 @@ pub fn execute_withdraw(
     amount_atom: Uint128,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
+    let (usdc_denom, atom_denom) = get_denoms(&config)?;
     let mut state = STATE.load(deps.storage)?;
     let user_address = info.sender;
     let users_store = get_users_store();
@@ -369,7 +401,7 @@ pub fn execute_withdraw(
         let transfer_msg = CosmosMsg::Bank(BankMsg::Send {
             to_address: user_address.to_string(),
             amount: vec![Coin {
-                denom: config.usdc_denom,
+                denom: usdc_denom,
                 amount: amount_usdc,
             }],
         });
@@ -381,7 +413,7 @@ pub fn execute_withdraw(
         let transfer_msg = CosmosMsg::Bank(BankMsg::Send {
             to_address: user_address.to_string(),
             amount: vec![Coin {
-                denom: config.atom_denom,
+                denom: atom_denom,
                 amount: amount_atom,
             }],
         });
@@ -492,6 +524,7 @@ pub fn execute_set_pool_size(
     _info: MessageInfo,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
+    let (usdc_denom, atom_denom) = get_denoms(&config)?;
     let mut state = STATE.load(deps.storage)?;
     // CHECK :: Can be executed once
     if state.lp_usdc_shares_minted.is_some() || state.lp_atom_shares_minted.is_some() {
@@ -512,8 +545,8 @@ pub fn execute_set_pool_size(
     let (usdc_amount, atom_amount, ntrn_amount) = get_contract_balances(
         deps.as_ref(),
         &env.contract.address,
-        &config.usdc_denom,
-        &config.atom_denom,
+        &usdc_denom,
+        &atom_denom,
         &config.ntrn_denom,
     )?;
 
@@ -588,6 +621,7 @@ pub fn execute_init_pool(
     _info: MessageInfo,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
+    let (usdc_denom, atom_denom) = get_denoms(&config)?;
     let state = STATE.load(deps.storage)?;
 
     // CHECK :: Can be executed once
@@ -624,14 +658,14 @@ pub fn execute_init_pool(
             state.usdc_ntrn_size,
             config.ntrn_denom.clone(),
             state.total_usdc_deposited,
-            config.usdc_denom,
+            usdc_denom,
         )?);
         msgs.push(build_provide_liquidity_to_lp_pool_msg(
             ntrn_atom_pool_address,
             state.atom_ntrn_size,
             config.ntrn_denom,
             state.total_atom_deposited,
-            config.atom_denom,
+            atom_denom,
         )?);
         msgs.push(
             CallbackMsg::FinalizePoolInitialization {
@@ -1140,4 +1174,17 @@ fn query_user_info(deps: Deps, _env: Env, user_address: String) -> StdResult<Use
         atom_lp_locked: user_info.atom_lp_locked,
         usdc_lp_locked: user_info.usdc_lp_locked,
     })
+}
+
+fn get_denoms(config: &astroport_periphery::auction::Config) -> StdResult<(String, String)> {
+    let usdc_denom = config
+        .usdc_denom
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("USDC Denom is not set yet. Please set it first."))?;
+    let atom_denom = config
+        .atom_denom
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("ATOM Denom is not set yet. Please set it first."))?;
+
+    Ok((usdc_denom.to_string(), atom_denom.to_string()))
 }

@@ -10,8 +10,8 @@ use crate::asset::AssetInfo;
 pub struct InstantiateMsg {
     /// Address allowed to change contract parameters
     pub owner: String,
-    /// [`AssetInfo`] of the token that's being vested
-    pub vesting_token: AssetInfo,
+    /// Initial list of whitelisted vesting managers
+    pub token_info_manager: String,
     /// Initial list of whitelisted vesting managers
     pub vesting_managers: Vec<String>,
 }
@@ -57,6 +57,11 @@ pub enum ExecuteMsg {
     /// ## Executor
     /// Only the current owner can execute this
     RemoveVestingManagers { managers: Vec<String> },
+    ///
+    SetVestingToken {
+        /// [`AssetInfo`] of the token that's being vested
+        vesting_token: AssetInfo,
+    },
 }
 
 /// This structure stores the accumulated vesting information for all addresses.
@@ -144,6 +149,8 @@ pub struct ConfigResponse {
     pub owner: Addr,
     /// [`AssetInfo`] of the token that's being vested
     pub vesting_token: AssetInfo,
+    /// Token info manager
+    pub token_info_manager: Addr,
 }
 
 /// This structure describes a custom struct used to return vesting data about a specific vesting target.

@@ -7,6 +7,7 @@ use crate::lockdrop::PoolType;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct InstantiateMsg {
     pub owner: Option<String>,
+    pub denom_manager: String,
     pub price_feed_contract: String,
     pub lockdrop_contract_address: Option<String>,
     pub reserve_contract_address: String,
@@ -16,12 +17,16 @@ pub struct InstantiateMsg {
     pub init_timestamp: u64,
     pub deposit_window: u64,
     pub withdrawal_window: u64,
-    pub usdc_denom: String,
-    pub atom_denom: String,
     pub max_exchange_rate_age: u64,
     pub min_ntrn_amount: Uint128,
     pub vesting_migration_pack_size: u16,
     pub vesting_lp_duration: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub struct SetDenomsMsg {
+    pub usdc_denom: String,
+    pub atom_denom: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -51,6 +56,10 @@ pub struct PoolInfo {
 pub enum ExecuteMsg {
     UpdateConfig {
         new_config: UpdateConfigMsg,
+    },
+    SetDenoms {
+        usdc_denom: String,
+        atom_denom: String,
     },
     Deposit {},
     Withdraw {
@@ -107,6 +116,8 @@ pub struct MigrateMsg {}
 pub struct Config {
     /// Account who can update config
     pub owner: Addr,
+    /// Account who can update denoms
+    pub denom_manager: Addr,
     /// Reserve Contract address
     pub reserve_contract_address: Addr,
     /// Vesting LP-USDC Contract address
@@ -130,9 +141,9 @@ pub struct Config {
     /// Base denom
     pub ntrn_denom: String,
     /// USDC denom
-    pub usdc_denom: String,
+    pub usdc_denom: Option<String>,
     /// ATOM denom
-    pub atom_denom: String,
+    pub atom_denom: Option<String>,
     /// Min NTRN amount to be distributed as pool liquidity
     pub min_ntrn_amount: Uint128,
     /// min exchange freshness rate (seconds)

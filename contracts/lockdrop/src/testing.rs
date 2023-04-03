@@ -5,8 +5,8 @@ use astroport_periphery::lockdrop::{
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
 use cosmwasm_std::{coin, from_binary, Addr, Decimal256, StdError, Uint128};
 
-const ATOM_LP_TOKEN_ADDR: &str = "atom_lp";
-const USDC_LP_TOKEN_ADDR: &str = "usdc_lp";
+// const ATOM_LP_TOKEN_ADDR: &str = "atom_lp";
+// const USDC_LP_TOKEN_ADDR: &str = "usdc_lp";
 
 #[test]
 fn update_owner() {
@@ -14,11 +14,13 @@ fn update_owner() {
     let info = mock_info("addr0000", &[]);
 
     let owner = Addr::unchecked("owner");
+    let token_info_manager = Addr::unchecked("token_info_manager");
 
     let env = mock_env();
 
     let msg = InstantiateMsg {
         owner: Some(owner.to_string()),
+        token_info_manager: token_info_manager.to_string(),
         init_timestamp: env.block.time.seconds(),
         lock_window: 10_000_000,
         withdrawal_window: 500_000,
@@ -26,8 +28,6 @@ fn update_owner() {
         max_lock_duration: 52u64,
         max_positions_per_user: 14,
         credits_contract: "credit_contract".to_string(),
-        atom_token: ATOM_LP_TOKEN_ADDR.to_string(),
-        usdc_token: USDC_LP_TOKEN_ADDR.to_string(),
         lockup_rewards_info: vec![LockupRewardsInfo {
             duration: 1,
             coefficient: Decimal256::zero(),
@@ -102,11 +102,13 @@ fn increase_ntrn_incentives() {
     let info = mock_info("addr0000", &[]);
 
     let owner = Addr::unchecked("owner");
+    let token_info_manager = Addr::unchecked("token_info_manager");
 
     let env = mock_env();
 
     let msg = InstantiateMsg {
         owner: Some(owner.to_string()),
+        token_info_manager: token_info_manager.to_string(),
         init_timestamp: env.block.time.seconds(),
         lock_window: 10_000_000,
         withdrawal_window: 500_000,
@@ -115,8 +117,6 @@ fn increase_ntrn_incentives() {
         max_positions_per_user: 14,
         credits_contract: "credit_contract".to_string(),
         auction_contract: "auction_contract".to_string(),
-        atom_token: ATOM_LP_TOKEN_ADDR.to_string(),
-        usdc_token: USDC_LP_TOKEN_ADDR.to_string(),
         lockup_rewards_info: vec![LockupRewardsInfo {
             duration: 1,
             coefficient: Decimal256::zero(),

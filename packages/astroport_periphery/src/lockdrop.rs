@@ -69,10 +69,8 @@ impl<'a> Prefixer<'a> for PoolType {
 pub struct InstantiateMsg {
     /// Account which can update config
     pub owner: Option<String>,
-    /// Address of ATOM/NTRN token
-    pub atom_token: String,
-    /// Address of USDC/NTRN token
-    pub usdc_token: String,
+    /// Account which can update token addresses and generator
+    pub token_info_manager: String,
     /// Credits contract address
     pub credits_contract: String,
     /// Auction contract address
@@ -91,6 +89,16 @@ pub struct InstantiateMsg {
     pub max_positions_per_user: u32,
     /// Describes rewards coefficients for each lockup duration
     pub lockup_rewards_info: Vec<LockupRewardsInfo>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+pub struct UpdateTokenInfo {
+    /// Address of ATOM/NTRN token
+    pub atom_token: String,
+    /// Address of USDC/NTRN token
+    pub usdc_token: String,
+    /// Generator (Staking for dual rewards) contract address
+    pub generator_address: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -117,6 +125,11 @@ pub enum ExecuteMsg {
     // ADMIN Function ::: To update configuration
     UpdateConfig {
         new_config: UpdateConfigMsg,
+    },
+    SetTokenInfo {
+        atom_token: String,
+        usdc_token: String,
+        generator: String,
     },
     // Function to facilitate LP Token withdrawals from lockups
     WithdrawFromLockup {
@@ -257,6 +270,8 @@ pub struct LockupRewardsInfo {
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
+    /// Account which can update the generator and token addresses
+    pub token_info_manager: Addr,
     /// Credits contract address
     pub credits_contract: Addr,
     /// Bootstrap Auction contract address
