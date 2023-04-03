@@ -40,8 +40,8 @@ fn store_coin_registry_code(app: &mut App) -> u64 {
     app.store_code(coin_registry_contract)
 }
 
-fn instantiate_coin_registry(mut app: &mut App, coins: Option<Vec<(String, u8)>>) -> Addr {
-    let coin_registry_id = store_coin_registry_code(&mut app);
+fn instantiate_coin_registry(app: &mut App, coins: Option<Vec<(String, u8)>>) -> Addr {
+    let coin_registry_id = store_coin_registry_code(app);
     let coin_registry_address = app
         .instantiate_contract(
             coin_registry_id,
@@ -70,7 +70,7 @@ fn instantiate_coin_registry(mut app: &mut App, coins: Option<Vec<(String, u8)>>
     coin_registry_address
 }
 
-fn instantiate_contracts(mut router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
+fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
     let astro_token_contract = Box::new(ContractWrapper::new_with_empty(
         astroport_token::contract::execute,
         astroport_token::contract::instantiate,
@@ -125,7 +125,7 @@ fn instantiate_contracts(mut router: &mut App, owner: Addr) -> (Addr, Addr, u64)
     let pair_stable_code_id = router.store_code(pair_stable_contract);
 
     let coin_registry_address = instantiate_coin_registry(
-        &mut router,
+        router,
         Some(vec![("uluna".to_string(), 6), ("cny".to_string(), 6)]),
     );
 
