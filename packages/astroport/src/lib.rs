@@ -5,6 +5,7 @@ pub mod factory;
 pub mod generator;
 pub mod generator_proxy;
 pub mod maker;
+pub mod native_coin_registry;
 pub mod oracle;
 pub mod pair;
 pub mod pair_bonded;
@@ -17,7 +18,6 @@ pub mod staking;
 pub mod token;
 pub mod vesting;
 pub mod xastro_token;
-pub mod native_coin_registry;
 
 #[cfg(test)]
 mod mock_querier;

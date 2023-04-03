@@ -64,7 +64,7 @@ fn instantiate_coin_registry(mut app: &mut App, coins: Option<Vec<(String, u8)>>
             },
             &[],
         )
-            .unwrap();
+        .unwrap();
     }
 
     coin_registry_address
