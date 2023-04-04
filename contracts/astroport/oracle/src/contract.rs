@@ -1,14 +1,14 @@
 use crate::error::ContractError;
 use crate::querier::{query_cumulative_prices, query_prices};
 use crate::state::{Config, PriceCumulativeLast, CONFIG, LAST_UPDATE_HEIGHT, PRICE_LAST};
-use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext};
+use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext, PairInfo};
 use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::oracle::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::{query_pair_info, query_token_precision};
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
-    StdError, StdResult, Uint128, Uint256, Uint64,
+    entry_point, to_binary, Addr, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
+    Uint128, Uint256, Uint64,
 };
 use cw2::set_contract_version;
 use std::ops::Div;
@@ -18,44 +18,63 @@ const CONTRACT_NAME: &str = "astroport-oracle";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+fn prepare_asset_infos(
+    deps: &mut DepsMut,
+    env: &Env,
+    factory_contract: &Addr,
+    asset_infos: Option<Vec<AssetInfo>>,
+) -> Result<(Option<Vec<AssetInfo>>, Option<PairInfo>), ContractError> {
+    Ok(match asset_infos {
+        None => (None, None),
+        Some(asset_infos) => {
+            asset_infos[0].check(deps.api)?;
+            asset_infos[1].check(deps.api)?;
+
+            let pair_info = query_pair_info(&deps.querier, factory_contract, &asset_infos)?;
+
+            let prices = query_cumulative_prices(deps.querier, &pair_info.contract_addr)?;
+            let average_prices = prices
+                .cumulative_prices
+                .iter()
+                .cloned()
+                .map(|(from, to, _)| (from, to, Decimal256::zero()))
+                .collect();
+            let price = PriceCumulativeLast {
+                cumulative_prices: prices.cumulative_prices,
+                average_prices,
+                block_timestamp_last: env.block.time.seconds(),
+            };
+            PRICE_LAST.save(deps.storage, &price, env.block.height)?;
+
+            (Some(asset_infos), Some(pair_info))
+        }
+    })
+}
+
 /// Creates a new contract with the specified parameters in the [`InstantiateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    deps: DepsMut,
+    mut deps: DepsMut,
     env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    msg.asset_infos[0].check(deps.api)?;
-    msg.asset_infos[1].check(deps.api)?;
-
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-
     let factory_contract = addr_validate_to_lower(deps.api, &msg.factory_contract)?;
-    let pair_info = query_pair_info(&deps.querier, &factory_contract, &msg.asset_infos)?;
+
+    let (asset_infos, pair_info) =
+        prepare_asset_infos(&mut deps, &env, &factory_contract, msg.asset_infos)?;
 
     let config = Config {
         owner: info.sender,
         factory: factory_contract,
-        asset_infos: msg.asset_infos,
-        pair: pair_info.clone(),
+        asset_infos,
+        pair: pair_info,
         period: msg.period,
+        manager: deps.api.addr_validate(&msg.manager)?,
     };
     CONFIG.save(deps.storage, &config)?;
-    let prices = query_cumulative_prices(deps.querier, pair_info.contract_addr)?;
-    let average_prices = prices
-        .cumulative_prices
-        .iter()
-        .cloned()
-        .map(|(from, to, _)| (from, to, Decimal256::zero()))
-        .collect();
 
-    let price = PriceCumulativeLast {
-        cumulative_prices: prices.cumulative_prices,
-        average_prices,
-        block_timestamp_last: env.block.time.seconds(),
-    };
-    PRICE_LAST.save(deps.storage, &price, env.block.height)?;
     LAST_UPDATE_HEIGHT.save(deps.storage, &Uint64::zero())?;
     Ok(Response::default())
 }
@@ -74,6 +93,8 @@ pub fn execute(
     match msg {
         ExecuteMsg::Update {} => update(deps, env),
         ExecuteMsg::UpdatePeriod { new_period } => update_period(deps, env, info, new_period),
+        ExecuteMsg::UpdateManager { new_manager } => update_manager(deps, env, info, new_manager),
+        ExecuteMsg::SetAssetInfos(asset_infos) => set_asset_infos(deps, env, info, asset_infos),
     }
 }
 
@@ -96,12 +117,62 @@ pub fn update_period(
         .add_attribute("new_period", config.period.to_string()))
 }
 
+pub fn update_manager(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    new_manager: String,
+) -> Result<Response, ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    config.manager = deps.api.addr_validate(&new_manager)?;
+    CONFIG.save(deps.storage, &config)?;
+
+    Ok(Response::new()
+        .add_attribute("action", "update_manager")
+        .add_attribute("new_manager", new_manager))
+}
+
+pub fn set_asset_infos(
+    mut deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    asset_infos: Vec<AssetInfo>,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    if info.sender != config.manager {
+        return Err(ContractError::Unauthorized {});
+    }
+    if config.asset_infos != None {
+        return Err(ContractError::AssetInfosAlreadySet {});
+    }
+
+    let (asset_infos, pair_info) =
+        prepare_asset_infos(&mut deps, &env, &config.factory, Some(asset_infos))?;
+
+    let config = Config {
+        owner: config.owner,
+        factory: config.factory,
+        asset_infos,
+        pair: pair_info,
+        period: config.period,
+        manager: config.manager,
+    };
+    CONFIG.save(deps.storage, &config)?;
+
+    Ok(Response::default())
+}
+
 /// Updates the local TWAP values for the tokens in the target Astroport pool.
 pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
+    let pair = config.pair.ok_or(ContractError::AssetInfosNotSet {})?;
     let price_last = PRICE_LAST.load(deps.storage)?;
 
-    let prices = query_cumulative_prices(deps.querier, config.pair.contract_addr)?;
+    let prices = query_cumulative_prices(deps.querier, pair.contract_addr)?;
     let time_elapsed = env.block.time.seconds() - price_last.block_timestamp_last;
 
     // Ensure that at least one full period has passed since the last update
@@ -141,11 +212,11 @@ pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
 /// * **QueryMsg::Consult { token, amount }** Validates assets and calculates a new average
 /// amount with updated precision
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
     match msg {
-        QueryMsg::Consult { token, amount } => to_binary(&consult(deps, token, amount)?),
+        QueryMsg::Consult { token, amount } => Ok(to_binary(&consult(deps, token, amount)?)?),
         QueryMsg::TWAPAtHeight { token, height } => {
-            to_binary(&twap_at_height(deps, token, height)?)
+            Ok(to_binary(&twap_at_height(deps, token, height)?)?)
         }
     }
 }
@@ -158,8 +229,9 @@ fn consult(
     deps: Deps,
     token: AssetInfo,
     amount: Uint128,
-) -> Result<Vec<(AssetInfo, Uint256)>, StdError> {
+) -> Result<Vec<(AssetInfo, Uint256)>, ContractError> {
     let config = CONFIG.load(deps.storage)?;
+    let pair = config.pair.ok_or(ContractError::AssetInfosNotSet {})?;
     let price_last = PRICE_LAST.load(deps.storage)?;
 
     let mut average_prices = vec![];
@@ -170,7 +242,7 @@ fn consult(
     }
 
     if average_prices.is_empty() {
-        return Err(StdError::generic_err("Invalid Token"));
+        return Err(ContractError::InvalidToken {});
     }
 
     // Get the token's precision
@@ -183,7 +255,7 @@ fn consult(
             if price_average.is_zero() {
                 let price = query_prices(
                     deps.querier,
-                    config.pair.contract_addr.clone(),
+                    pair.contract_addr.clone(),
                     Asset {
                         info: token.clone(),
                         amount: one,
@@ -203,7 +275,7 @@ fn consult(
                 ))
             }
         })
-        .collect::<Result<Vec<(AssetInfo, Uint256)>, StdError>>()
+        .collect::<Result<Vec<(AssetInfo, Uint256)>, ContractError>>()
 }
 
 /// Returns token TWAP value for given height.
@@ -214,8 +286,9 @@ fn twap_at_height(
     deps: Deps,
     token: AssetInfo,
     height: Uint64,
-) -> Result<Vec<(AssetInfo, Decimal256)>, StdError> {
+) -> Result<Vec<(AssetInfo, Decimal256)>, ContractError> {
     let config = CONFIG.load(deps.storage)?;
+    let pair = config.pair.ok_or(ContractError::AssetInfosNotSet {})?;
     let last_height = LAST_UPDATE_HEIGHT.load(deps.storage)?;
     let mut query_height = height;
     // if requested height > last snapshoted time, SnapshotItem.may_load_at_height() will return primary (default) value
@@ -235,7 +308,7 @@ fn twap_at_height(
     }
 
     if average_prices.is_empty() {
-        return Err(StdError::generic_err("Invalid Token"));
+        return Err(ContractError::InvalidToken {});
     }
 
     // Get the token's precision
@@ -248,7 +321,7 @@ fn twap_at_height(
             if price_average.is_zero() {
                 let price = query_prices(
                     deps.querier,
-                    config.pair.contract_addr.clone(),
+                    pair.contract_addr.clone(),
                     Asset {
                         info: token.clone(),
                         amount: one,
@@ -266,5 +339,5 @@ fn twap_at_height(
                 Ok((asset.clone(), *price_average / price_precision))
             }
         })
-        .collect::<Result<Vec<(AssetInfo, Decimal256)>, StdError>>()
+        .collect::<Result<Vec<(AssetInfo, Decimal256)>, ContractError>>()
 }

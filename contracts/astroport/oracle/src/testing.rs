@@ -1,9 +1,10 @@
 use crate::contract::{execute, instantiate};
+use crate::error::ContractError;
 use crate::mock_querier::mock_dependencies;
 use astroport::asset::{Asset, AssetInfo};
 use astroport::oracle::{ExecuteMsg, InstantiateMsg};
 use cosmwasm_std::testing::{mock_env, mock_info};
-use cosmwasm_std::{Addr, Decimal256, Uint128, Uint256};
+use cosmwasm_std::{Addr, Decimal256, DepsMut, Env, MessageInfo, Uint128, Uint256};
 use std::ops::Mul;
 
 #[test]
@@ -52,8 +53,9 @@ fn oracle_overflow() {
 
     let instantiate_msg = InstantiateMsg {
         factory_contract: factory.to_string(),
-        asset_infos: vec![astro_asset_info, usdc_asset_info],
+        asset_infos: Some(vec![astro_asset_info, usdc_asset_info]),
         period: 1,
+        manager: String::from("manager"),
     };
 
     // Set cumulative price to 192738282u128
@@ -96,4 +98,52 @@ fn oracle_overflow() {
     );
     env.block.time = env.block.time.plus_seconds(86400);
     execute(deps.as_mut(), env, info, ExecuteMsg::Update {}).unwrap();
+}
+
+fn setup(deps: DepsMut, env: Env, info: MessageInfo) {
+    instantiate(
+        deps,
+        env,
+        info,
+        InstantiateMsg {
+            factory_contract: String::from("factory"),
+            asset_infos: None,
+            period: 0,
+            manager: String::from("manager"),
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn update_does_not_work_without_pair_info() {
+    let mut deps = mock_dependencies(&[]);
+    let env = mock_env();
+    setup(deps.as_mut(), env.clone(), mock_info("dao", &[]));
+
+    for caller in ["someone", "dao"] {
+        let res = execute(
+            deps.as_mut(),
+            env.clone(),
+            mock_info(caller, &[]),
+            ExecuteMsg::Update {},
+        )
+        .unwrap_err();
+        assert_eq!(res, ContractError::AssetInfosNotSet {});
+    }
+}
+
+#[test]
+fn update_period_works_without_pair_info() {
+    let mut deps = mock_dependencies(&[]);
+    let env = mock_env();
+    setup(deps.as_mut(), env.clone(), mock_info("dao", &[]));
+
+    execute(
+        deps.as_mut(),
+        env,
+        mock_info("dao", &[]),
+        ExecuteMsg::UpdatePeriod { new_period: 0 },
+    )
+    .unwrap();
 }
