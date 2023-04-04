@@ -455,7 +455,7 @@ pub fn handle_set_token_info(
 ) -> Result<Response, StdError> {
     let mut config = CONFIG.load(deps.storage)?;
 
-    // CHECK :: Only owner can call this function
+    // CHECK :: Only owner and token info manager can call this function
     if info.sender != config.owner && info.sender != config.token_info_manager {
         return Err(StdError::generic_err("Unauthorized"));
     }
