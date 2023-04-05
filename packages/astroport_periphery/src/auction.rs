@@ -24,12 +24,6 @@ pub struct InstantiateMsg {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct SetDenomsMsg {
-    pub usdc_denom: String,
-    pub atom_denom: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
     pub owner: Option<String>,
     pub price_feed_contract: Option<String>,

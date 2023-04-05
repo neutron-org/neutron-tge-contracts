@@ -92,16 +92,6 @@ pub struct InstantiateMsg {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct UpdateTokenInfo {
-    /// Address of ATOM/NTRN token
-    pub atom_token: String,
-    /// Address of USDC/NTRN token
-    pub usdc_token: String,
-    /// Generator (Staking for dual rewards) contract address
-    pub generator_address: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
     /// Bootstrap Auction contract address
     pub auction_contract_address: Option<String>,
