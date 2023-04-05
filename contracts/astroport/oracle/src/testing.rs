@@ -53,7 +53,6 @@ fn oracle_overflow() {
 
     let instantiate_msg = InstantiateMsg {
         factory_contract: factory.to_string(),
-        asset_infos: Some(vec![astro_asset_info, usdc_asset_info]),
         period: 1,
         manager: String::from("manager"),
     };
@@ -78,6 +77,13 @@ fn oracle_overflow() {
     );
     let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
     assert_eq!(0, res.messages.len());
+    execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("manager", &[]),
+        ExecuteMsg::SetAssetInfos(vec![astro_asset_info, usdc_asset_info]),
+    )
+    .unwrap();
     // Set cumulative price to 100 (overflow)
     deps.querier.set_cumulative_price(
         Addr::unchecked("pair"),
@@ -107,7 +113,6 @@ fn setup(deps: DepsMut, env: Env, info: MessageInfo) {
         info,
         InstantiateMsg {
             factory_contract: String::from("factory"),
-            asset_infos: None,
             period: 0,
             manager: String::from("manager"),
         },

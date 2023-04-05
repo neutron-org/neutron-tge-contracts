@@ -548,7 +548,6 @@ fn consult() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -560,6 +559,15 @@ fn consult() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -681,7 +689,6 @@ fn twap_at_height() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -693,6 +700,15 @@ fn twap_at_height() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -823,7 +839,6 @@ fn consult_pair_stable() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -835,6 +850,15 @@ fn consult_pair_stable() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -963,7 +987,6 @@ fn twap_at_height_pair_stable() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -975,6 +998,15 @@ fn twap_at_height_pair_stable() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -1154,7 +1186,6 @@ fn consult2() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -1166,6 +1197,15 @@ fn consult2() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -1370,7 +1410,6 @@ fn consult_zero_price() {
     router.update_block(next_day);
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -1382,6 +1421,15 @@ fn consult_zero_price() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -1498,13 +1546,21 @@ fn consult_zero_price() {
             owner,
             &InstantiateMsg {
                 factory_contract: factory_instance.to_string(),
-                asset_infos: Some(asset_infos.clone()),
                 period: 86400,
                 manager: String::from("manager"),
             },
             &[],
             String::from("ORACLE 2"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos.clone()),
+            &[],
         )
         .unwrap();
 
@@ -1611,7 +1667,6 @@ fn consult_multiple_assets() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -1623,6 +1678,15 @@ fn consult_multiple_assets() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -1954,7 +2018,6 @@ fn twap_at_height_multiple_assets() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -1966,6 +2029,15 @@ fn twap_at_height_multiple_assets() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -2366,7 +2438,6 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: Some(asset_infos),
         period: 86400,
         manager: String::from("manager"),
     };
@@ -2378,6 +2449,15 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -2758,7 +2838,6 @@ fn contract_works_after_pair_info_is_set() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: None,
         period: 86400,
         manager: String::from("manager"),
     };
@@ -2899,7 +2978,6 @@ fn only_manager_can_set_pair_info() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: None,
         period: 86400,
         manager: String::from("manager"),
     };
@@ -3005,7 +3083,6 @@ fn pair_info_can_only_be_set_once() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: None,
         period: 86400,
         manager: String::from("manager"),
     };
@@ -3111,7 +3188,6 @@ fn only_owner_can_change_manager() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos: None,
         period: 86400,
         manager: String::from("manager1"),
     };

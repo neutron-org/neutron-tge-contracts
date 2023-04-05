@@ -1,14 +1,14 @@
 use crate::error::ContractError;
 use crate::querier::{query_cumulative_prices, query_prices};
 use crate::state::{Config, PriceCumulativeLast, CONFIG, LAST_UPDATE_HEIGHT, PRICE_LAST};
-use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext, PairInfo};
+use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext};
 use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::oracle::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::{query_pair_info, query_token_precision};
 use cosmwasm_std::{
-    entry_point, to_binary, Addr, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
-    Uint128, Uint256, Uint64,
+    entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response, Uint128,
+    Uint256, Uint64,
 };
 use cw2::set_contract_version;
 use std::ops::Div;
@@ -18,58 +18,22 @@ const CONTRACT_NAME: &str = "astroport-oracle";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-fn prepare_asset_infos(
-    deps: &mut DepsMut,
-    env: &Env,
-    factory_contract: &Addr,
-    asset_infos: Option<Vec<AssetInfo>>,
-) -> Result<(Option<Vec<AssetInfo>>, Option<PairInfo>), ContractError> {
-    Ok(match asset_infos {
-        None => (None, None),
-        Some(asset_infos) => {
-            asset_infos[0].check(deps.api)?;
-            asset_infos[1].check(deps.api)?;
-
-            let pair_info = query_pair_info(&deps.querier, factory_contract, &asset_infos)?;
-
-            let prices = query_cumulative_prices(deps.querier, &pair_info.contract_addr)?;
-            let average_prices = prices
-                .cumulative_prices
-                .iter()
-                .cloned()
-                .map(|(from, to, _)| (from, to, Decimal256::zero()))
-                .collect();
-            let price = PriceCumulativeLast {
-                cumulative_prices: prices.cumulative_prices,
-                average_prices,
-                block_timestamp_last: env.block.time.seconds(),
-            };
-            PRICE_LAST.save(deps.storage, &price, env.block.height)?;
-
-            (Some(asset_infos), Some(pair_info))
-        }
-    })
-}
-
 /// Creates a new contract with the specified parameters in the [`InstantiateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    mut deps: DepsMut,
-    env: Env,
+    deps: DepsMut,
+    _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     let factory_contract = addr_validate_to_lower(deps.api, &msg.factory_contract)?;
 
-    let (asset_infos, pair_info) =
-        prepare_asset_infos(&mut deps, &env, &factory_contract, msg.asset_infos)?;
-
     let config = Config {
         owner: info.sender,
         factory: factory_contract,
-        asset_infos,
-        pair: pair_info,
+        asset_infos: None,
+        pair: None,
         period: msg.period,
         manager: deps.api.addr_validate(&msg.manager)?,
     };
@@ -137,7 +101,7 @@ pub fn update_manager(
 }
 
 pub fn set_asset_infos(
-    mut deps: DepsMut,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     asset_infos: Vec<AssetInfo>,
@@ -150,14 +114,30 @@ pub fn set_asset_infos(
         return Err(ContractError::AssetInfosAlreadySet {});
     }
 
-    let (asset_infos, pair_info) =
-        prepare_asset_infos(&mut deps, &env, &config.factory, Some(asset_infos))?;
+    asset_infos[0].check(deps.api)?;
+    asset_infos[1].check(deps.api)?;
+
+    let pair_info = query_pair_info(&deps.querier, &config.factory, &asset_infos)?;
+
+    let prices = query_cumulative_prices(deps.querier, &pair_info.contract_addr)?;
+    let average_prices = prices
+        .cumulative_prices
+        .iter()
+        .cloned()
+        .map(|(from, to, _)| (from, to, Decimal256::zero()))
+        .collect();
+    let price = PriceCumulativeLast {
+        cumulative_prices: prices.cumulative_prices,
+        average_prices,
+        block_timestamp_last: env.block.time.seconds(),
+    };
+    PRICE_LAST.save(deps.storage, &price, env.block.height)?;
 
     let config = Config {
         owner: config.owner,
         factory: config.factory,
-        asset_infos,
-        pair: pair_info,
+        asset_infos: Some(asset_infos),
+        pair: Some(pair_info),
         period: config.period,
         manager: config.manager,
     };
