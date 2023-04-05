@@ -9,8 +9,8 @@ use crate::error::ContractError;
 use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfoExt};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::vesting::{
-    ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, OrderBy, QueryMsg,
-    VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo, VestingSchedule,
+    Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, OrderBy, QueryMsg, VestingAccount,
+    VestingAccountResponse, VestingAccountsResponse, VestingInfo, VestingSchedule,
 };
 use cw2::set_contract_version;
 use cw20::Cw20ReceiveMsg;
@@ -414,18 +414,10 @@ impl BaseVesting {
         }
     }
 
-    /// Returns the vesting contract configuration using a [`ConfigResponse`] object.
-    pub fn query_config(&self, deps: Deps) -> StdResult<ConfigResponse> {
+    /// Returns the vesting contract configuration using a [`Config`] object.
+    pub fn query_config(&self, deps: Deps) -> StdResult<Config> {
         let config = self.config.load(deps.storage)?;
-        let vesting_token = get_vesting_token(&config).map_err(|_| {
-            StdError::generic_err("Vesting token is not set. Please set the vesting token.")
-        })?;
-
-        Ok(ConfigResponse {
-            owner: config.owner,
-            vesting_token,
-            token_info_manager: config.token_info_manager,
-        })
+        Ok(config)
     }
 
     /// Return the current block timestamp (in seconds)

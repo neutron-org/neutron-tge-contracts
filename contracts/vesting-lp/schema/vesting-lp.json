@@ -583,11 +583,20 @@
       "type": "object",
       "required": [
         "owner",
+        "token_info_manager",
         "vesting_token"
       ],
       "properties": {
         "owner": {
           "description": "Address allowed to set contract parameters",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "token_info_manager": {
+          "description": "Token info manager",
           "allOf": [
             {
               "$ref": "#/definitions/Addr"

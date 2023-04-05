@@ -10,7 +10,7 @@ use crate::asset::AssetInfo;
 pub struct InstantiateMsg {
     /// Address allowed to change contract parameters
     pub owner: String,
-    /// Initial list of whitelisted vesting managers
+    /// Token info manager address
     pub token_info_manager: String,
     /// Initial list of whitelisted vesting managers
     pub vesting_managers: Vec<String>,
@@ -57,7 +57,7 @@ pub enum ExecuteMsg {
     /// ## Executor
     /// Only the current owner can execute this
     RemoveVestingManagers { managers: Vec<String> },
-    ///
+    /// Sets the vesting token
     SetVestingToken {
         /// [`AssetInfo`] of the token that's being vested
         vesting_token: AssetInfo,

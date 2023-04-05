@@ -5,9 +5,6 @@ use astroport_periphery::lockdrop::{
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
 use cosmwasm_std::{coin, from_binary, Addr, Decimal256, StdError, Uint128};
 
-// const ATOM_LP_TOKEN_ADDR: &str = "atom_lp";
-// const USDC_LP_TOKEN_ADDR: &str = "usdc_lp";
-
 #[test]
 fn update_owner() {
     let mut deps = mock_dependencies();
