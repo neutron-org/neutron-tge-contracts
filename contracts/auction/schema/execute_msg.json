@@ -25,6 +25,30 @@
     {
       "type": "object",
       "required": [
+        "set_denoms"
+      ],
+      "properties": {
+        "set_denoms": {
+          "type": "object",
+          "required": [
+            "atom_denom",
+            "usdc_denom"
+          ],
+          "properties": {
+            "atom_denom": {
+              "type": "string"
+            },
+            "usdc_denom": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "deposit"
       ],
       "properties": {

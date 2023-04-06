@@ -3,7 +3,6 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
-    "atom_token",
     "auction_contract",
     "credits_contract",
     "init_timestamp",
@@ -12,14 +11,10 @@
     "max_lock_duration",
     "max_positions_per_user",
     "min_lock_duration",
-    "usdc_token",
+    "token_info_manager",
     "withdrawal_window"
   ],
   "properties": {
-    "atom_token": {
-      "description": "Address of ATOM/NTRN token",
-      "type": "string"
-    },
     "auction_contract": {
       "description": "Auction contract address",
       "type": "string"
@@ -72,8 +67,8 @@
         "null"
       ]
     },
-    "usdc_token": {
-      "description": "Address of USDC/NTRN token",
+    "token_info_manager": {
+      "description": "Account which can update token addresses and generator",
       "type": "string"
     },
     "withdrawal_window": {

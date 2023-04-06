@@ -90,36 +90,13 @@ pub fn instantiate(
         ));
     }
 
-    // POOL INFO :: Initialize new pool
-    let pool_info = PoolInfo {
-        lp_token: deps.api.addr_validate(&msg.atom_token)?,
-        amount_in_lockups: Default::default(),
-        incentives_share: Uint128::zero(),
-        weighted_amount: Default::default(),
-        generator_ntrn_per_share: Default::default(),
-        generator_proxy_per_share: RestrictedVector::default(),
-        is_staked: false,
-    };
-    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
-
-    // POOL INFO :: Initialize new pool
-    let pool_info = PoolInfo {
-        lp_token: deps.api.addr_validate(&msg.usdc_token)?,
-        amount_in_lockups: Default::default(),
-        incentives_share: Uint128::zero(),
-        weighted_amount: Default::default(),
-        generator_ntrn_per_share: Default::default(),
-        generator_proxy_per_share: RestrictedVector::default(),
-        is_staked: false,
-    };
-    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
-
     let config = Config {
         owner: msg
             .owner
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
+        token_info_manager: deps.api.addr_validate(&msg.token_info_manager)?,
         credits_contract: deps.api.addr_validate(&msg.credits_contract)?,
         auction_contract: deps.api.addr_validate(&msg.auction_contract)?,
         generator: None,
@@ -229,6 +206,11 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             handle_withdraw_from_lockup(deps, env, info, user_address, pool_type, duration, amount)
         }
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
+        ExecuteMsg::SetTokenInfo {
+            usdc_token,
+            atom_token,
+            generator,
+        } => handle_set_token_info(deps, env, info, usdc_token, atom_token, generator),
     }
 }
 
@@ -460,6 +442,58 @@ pub fn handle_update_config(
     }
 
     CONFIG.save(deps.storage, &config)?;
+    Ok(Response::new().add_attributes(attributes))
+}
+
+pub fn handle_set_token_info(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    usdc_token: String,
+    atom_token: String,
+    generator: String,
+) -> Result<Response, StdError> {
+    let mut config = CONFIG.load(deps.storage)?;
+
+    // CHECK :: Only owner and token info manager can call this function
+    if info.sender != config.owner && info.sender != config.token_info_manager {
+        return Err(StdError::generic_err("Unauthorized"));
+    }
+
+    // POOL INFO :: Initialize new pool
+    let pool_info = PoolInfo {
+        lp_token: deps.api.addr_validate(&atom_token)?,
+        amount_in_lockups: Default::default(),
+        incentives_share: Uint128::zero(),
+        weighted_amount: Default::default(),
+        generator_ntrn_per_share: Default::default(),
+        generator_proxy_per_share: RestrictedVector::default(),
+        is_staked: false,
+    };
+    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
+
+    // POOL INFO :: Initialize new pool
+    let pool_info = PoolInfo {
+        lp_token: deps.api.addr_validate(&usdc_token)?,
+        amount_in_lockups: Default::default(),
+        incentives_share: Uint128::zero(),
+        weighted_amount: Default::default(),
+        generator_ntrn_per_share: Default::default(),
+        generator_proxy_per_share: RestrictedVector::default(),
+        is_staked: false,
+    };
+    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
+
+    config.generator = Some(deps.api.addr_validate(&generator)?);
+    CONFIG.save(deps.storage, &config)?;
+
+    let attributes = vec![
+        attr("action", "update_config"),
+        attr("usdc_token", usdc_token),
+        attr("atom_token", atom_token),
+        attr("generator", generator),
+    ];
+
     Ok(Response::new().add_attributes(attributes))
 }
 

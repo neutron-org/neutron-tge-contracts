@@ -9,8 +9,8 @@ use crate::error::ContractError;
 use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfoExt};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::vesting::{
-    ConfigResponse, Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, OrderBy, QueryMsg,
-    VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo, VestingSchedule,
+    Cw20HookMsg, ExecuteMsg, InstantiateMsg, MigrateMsg, OrderBy, QueryMsg, VestingAccount,
+    VestingAccountResponse, VestingAccountsResponse, VestingInfo, VestingSchedule,
 };
 use cw2::set_contract_version;
 use cw20::Cw20ReceiveMsg;
@@ -32,13 +32,12 @@ impl BaseVesting {
     ) -> StdResult<Response> {
         set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-        msg.vesting_token.check(deps.api)?;
-
         self.config.save(
             deps.storage,
             &Config {
                 owner: deps.api.addr_validate(&msg.owner)?,
-                vesting_token: msg.vesting_token,
+                token_info_manager: deps.api.addr_validate(&msg.token_info_manager)?,
+                vesting_token: None,
             },
         )?;
 
@@ -71,8 +70,9 @@ impl BaseVesting {
             ExecuteMsg::Receive(msg) => self.receive_cw20(deps, env, info, msg),
             ExecuteMsg::RegisterVestingAccounts { vesting_accounts } => {
                 let config = self.config.load(deps.storage)?;
+                let vesting_token = get_vesting_token(&config)?;
 
-                match &config.vesting_token {
+                match &vesting_token {
                     AssetInfo::NativeToken { denom }
                         if self.is_sender_whitelisted(deps.as_ref(), &config, &info.sender) =>
                     {
@@ -128,6 +128,9 @@ impl BaseVesting {
             ExecuteMsg::RemoveVestingManagers { managers } => {
                 self.remove_vesting_managers(deps, env, info, managers)
             }
+            ExecuteMsg::SetVestingToken { vesting_token } => {
+                self.set_vesting_token(deps, env, info, vesting_token)
+            }
         }
     }
 
@@ -152,13 +155,14 @@ impl BaseVesting {
         cw20_msg: Cw20ReceiveMsg,
     ) -> Result<Response, ContractError> {
         let config = self.config.load(deps.storage)?;
+        let vesting_token = get_vesting_token(&config)?;
 
         // Permission check
         if !self.is_sender_whitelisted(
             deps.as_ref(),
             &config,
             &deps.api.addr_validate(&cw20_msg.sender)?,
-        ) || token_asset_info(info.sender) != config.vesting_token
+        ) || token_asset_info(info.sender) != vesting_token
         {
             return Err(ContractError::Unauthorized {});
         }
@@ -172,6 +176,24 @@ impl BaseVesting {
                     env.block.height,
                 ),
         }
+    }
+
+    pub fn set_vesting_token(
+        &self,
+        deps: DepsMut,
+        _env: Env,
+        info: MessageInfo,
+        token: AssetInfo,
+    ) -> Result<Response, ContractError> {
+        let mut config = self.config.load(deps.storage)?;
+        if info.sender != config.owner && info.sender != config.token_info_manager {
+            return Err(ContractError::Unauthorized {});
+        }
+        token.check(deps.api)?;
+        config.vesting_token = Some(token);
+
+        self.config.save(deps.storage, &config)?;
+        Ok(Response::new())
     }
 
     /// Adds new vesting managers, which have a permission to add/remove vesting schedule
@@ -310,6 +332,7 @@ impl BaseVesting {
         amount: Option<Uint128>,
     ) -> Result<Response, ContractError> {
         let config = self.config.load(deps.storage)?;
+        let vesting_token = get_vesting_token(&config)?;
         let mut vesting_info = self.vesting_info.load(deps.storage, &info.sender)?;
 
         let available_amount = compute_available_amount(env.block.time.seconds(), &vesting_info)?;
@@ -326,7 +349,7 @@ impl BaseVesting {
         let mut response = Response::new();
 
         if !claim_amount.is_zero() {
-            let transfer_msg = config.vesting_token.with_balance(claim_amount).into_msg(
+            let transfer_msg = vesting_token.with_balance(claim_amount).into_msg(
                 &deps.querier,
                 recipient.unwrap_or_else(|| info.sender.to_string()),
             )?;
@@ -391,14 +414,10 @@ impl BaseVesting {
         }
     }
 
-    /// Returns the vesting contract configuration using a [`ConfigResponse`] object.
-    pub fn query_config(&self, deps: Deps) -> StdResult<ConfigResponse> {
+    /// Returns the vesting contract configuration using a [`Config`] object.
+    pub fn query_config(&self, deps: Deps) -> StdResult<Config> {
         let config = self.config.load(deps.storage)?;
-
-        Ok(ConfigResponse {
-            owner: config.owner,
-            vesting_token: config.vesting_token,
-        })
+        Ok(config)
     }
 
     /// Return the current block timestamp (in seconds)
@@ -537,4 +556,11 @@ fn compute_available_amount(current_time: u64, vesting_info: &VestingInfo) -> St
     available_amount
         .checked_sub(vesting_info.released_amount)
         .map_err(StdError::from)
+}
+
+fn get_vesting_token(config: &Config) -> Result<AssetInfo, ContractError> {
+    config
+        .vesting_token
+        .clone()
+        .ok_or(ContractError::VestingTokenIsNotSet {})
 }
