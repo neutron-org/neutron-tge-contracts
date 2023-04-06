@@ -44,7 +44,8 @@ pub enum ExecuteMsg {
         /// Specifies the account that will receive the funds taken from the vesting accounts.
         clawback_account: String,
     },
-    SetVestingToken {
-        vesting_token: AssetInfo,
-    },
+    /// Sets vesting token
+    /// ## Executor
+    /// Only the current owner or token info manager can execute this
+    SetVestingToken { vesting_token: AssetInfo },
 }
