@@ -1,4 +1,4 @@
-use astroport::vesting::VestingAccount;
+use astroport::{asset::AssetInfo, vesting::VestingAccount};
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::Uint128;
 use cw20::Cw20ReceiveMsg;
@@ -44,4 +44,8 @@ pub enum ExecuteMsg {
         /// Specifies the account that will receive the funds taken from the vesting accounts.
         clawback_account: String,
     },
+    /// Sets vesting token
+    /// ## Executor
+    /// Only the current owner or token info manager can execute this
+    SetVestingToken { vesting_token: AssetInfo },
 }

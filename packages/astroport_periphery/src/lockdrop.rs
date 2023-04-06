@@ -1,7 +1,7 @@
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_std::{
-    from_slice, to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdResult, Uint128, Uint256,
+    to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
     WasmMsg,
 };
 use cw20::Cw20ReceiveMsg;
@@ -38,9 +38,12 @@ impl PoolType {
 impl KeyDeserialize for PoolType {
     type Output = PoolType;
 
-    #[inline(always)]
     fn from_vec(value: Vec<u8>) -> StdResult<Self::Output> {
-        from_slice(&value)
+        match value.as_slice() {
+            b"usdc" => Ok(PoolType::USDC),
+            b"atom" => Ok(PoolType::ATOM),
+            _ => Err(StdError::generic_err("Invalid PoolType")),
+        }
     }
 }
 
@@ -66,6 +69,8 @@ impl<'a> Prefixer<'a> for PoolType {
 pub struct InstantiateMsg {
     /// Account which can update config
     pub owner: Option<String>,
+    /// Account which can update token addresses and generator
+    pub token_info_manager: String,
     /// Credits contract address
     pub credits_contract: String,
     /// Auction contract address
@@ -111,8 +116,14 @@ pub enum ExecuteMsg {
     UpdateConfig {
         new_config: UpdateConfigMsg,
     },
+    SetTokenInfo {
+        atom_token: String,
+        usdc_token: String,
+        generator: String,
+    },
     // Function to facilitate LP Token withdrawals from lockups
     WithdrawFromLockup {
+        user_address: String,
         pool_type: PoolType,
         duration: u64,
         amount: Uint128,
@@ -151,11 +162,6 @@ pub enum ExecuteMsg {
     DropOwnershipProposal {},
     /// Used to claim contract ownership.
     ClaimOwnership {},
-    /// Sets pool info
-    SetPoolInfo {
-        pool_type: PoolType,
-        pool_info: PoolInfo,
-    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -167,7 +173,7 @@ pub enum Cw20HookMsg {
     // ADMIN Function ::: Add new Pool (Only Terraswap Pools)
     InitializePool {
         pool_type: PoolType,
-        incentives_share: u64,
+        incentives_share: Uint128,
     },
 }
 
@@ -254,6 +260,8 @@ pub struct LockupRewardsInfo {
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
+    /// Account which can update the generator and token addresses
+    pub token_info_manager: Addr,
     /// Credits contract address
     pub credits_contract: Addr,
     /// Bootstrap Auction contract address
@@ -281,7 +289,7 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 pub struct State {
     /// Total NTRN incentives share
-    pub total_incentives_share: u64,
+    pub total_incentives_share: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -290,7 +298,7 @@ pub struct PoolInfo {
     pub amount_in_lockups: Uint128,
     // pub migration_info: Option<MigrationInfo>,
     /// Share of total NTRN incentives allocated to this pool
-    pub incentives_share: u64,
+    pub incentives_share: Uint128,
     /// Weighted LP Token balance used to calculate NTRN rewards a particular user can claim
     pub weighted_amount: Uint256,
     /// Ratio of Generator NTRN rewards accured to astroport pool share
@@ -348,7 +356,7 @@ pub struct LockupInfoV2 {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct StateResponse {
     /// Total NTRN incentives share
-    pub total_incentives_share: u64,
+    pub total_incentives_share: Uint128,
     /// Vector containing LP addresses for all the supported LP Pools
     pub supported_pairs_list: Vec<PoolType>,
 }

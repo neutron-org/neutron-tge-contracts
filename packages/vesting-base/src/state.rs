@@ -46,8 +46,10 @@ impl BaseVesting {
 pub struct Config {
     /// Address that's allowed to change contract parameters
     pub owner: Addr,
+    /// Address that's allowed to change vesting token
+    pub token_info_manager: Addr,
     /// [`AssetInfo`] of the vested token
-    pub vesting_token: AssetInfo,
+    pub vesting_token: Option<AssetInfo>,
 }
 
 const MAX_LIMIT: u32 = 30;

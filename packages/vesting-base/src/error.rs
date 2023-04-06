@@ -25,6 +25,9 @@ pub enum ContractError {
 
     #[error("Contract can't be migrated!")]
     MigrationError {},
+
+    #[error("Vesting token is not set!")]
+    VestingTokenIsNotSet {},
 }
 
 impl From<OverflowError> for ContractError {
