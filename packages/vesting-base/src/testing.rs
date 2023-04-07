@@ -1,4 +1,4 @@
-use astroport::vesting::{ConfigResponse, InstantiateMsg, QueryMsg};
+use astroport::vesting::{ConfigResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
 
 use astroport::asset::token_asset_info;
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
@@ -14,14 +14,21 @@ fn proper_initialization() {
 
     let msg = InstantiateMsg {
         owner: "owner".to_string(),
-        vesting_token: token_asset_info(Addr::unchecked("ntrn_token")),
+        token_info_manager: "token_info_manager".to_string(),
         vesting_managers: vec!["manager1".to_string(), "manager2".to_string()],
     };
 
     let env = mock_env();
     let info = mock_info("addr0000", &[]);
+    let _res = vest_app.instantiate(deps.as_mut(), env, info, msg).unwrap();
+
+    let msg = ExecuteMsg::SetVestingToken {
+        vesting_token: token_asset_info(Addr::unchecked("ntrn_token")),
+    };
+    let env = mock_env();
+    let info = mock_info("token_info_manager", &[]);
     let _res = vest_app
-        .instantiate(deps.as_mut(), env.clone(), info, msg)
+        .execute(deps.as_mut(), env.clone(), info, msg)
         .unwrap();
 
     assert_eq!(
@@ -33,6 +40,7 @@ fn proper_initialization() {
         .unwrap(),
         ConfigResponse {
             owner: Addr::unchecked("owner"),
+            token_info_manager: Addr::unchecked("token_info_manager"),
             vesting_token: token_asset_info(Addr::unchecked("ntrn_token")),
         }
     );
