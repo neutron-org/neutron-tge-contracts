@@ -412,21 +412,5 @@ pub fn query_address_map(deps: Deps, external_address: String) -> StdResult<Acco
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
-    let contract_info = get_contract_version(deps.storage)?;
-    if contract_info.contract != CONTRACT_NAME {
-        return Err(ContractError::CannotMigrate {
-            previous_contract: contract_info.contract,
-        });
-    }
-    let contract_version: Version = contract_info.version.parse()?;
-    let current_version: Version = CONTRACT_VERSION.parse()?;
-    if contract_version < current_version {
-        set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-        v0_12_1::set_initial_pause_status(deps)?;
-        Ok(Response::default())
-    } else {
-        Err(ContractError::CannotMigrate {
-            previous_contract: contract_info.version,
-        })
-    }
+    Ok(Response::default())
 }
