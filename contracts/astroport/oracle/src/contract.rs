@@ -110,9 +110,6 @@ pub fn set_asset_infos(
     if info.sender != config.manager {
         return Err(ContractError::Unauthorized {});
     }
-    if config.asset_infos != None {
-        return Err(ContractError::AssetInfosAlreadySet {});
-    }
 
     asset_infos[0].check(deps.api)?;
     asset_infos[1].check(deps.api)?;
