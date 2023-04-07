@@ -5,16 +5,14 @@ use cosmwasm_std::{
     attr, coin, from_binary, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env,
     MessageInfo, Response, StdResult, Uint128, WasmMsg,
 };
-use cw2::{get_contract_version, set_contract_version};
+use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw_utils::{Expiration, Scheduled};
-use semver::Version;
 use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
 use crate::helpers::CosmosSignature;
-use crate::migrations::v0_12_1;
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
     IsPausedResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
@@ -411,6 +409,6 @@ pub fn query_address_map(deps: Deps, external_address: String) -> StdResult<Acco
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
     Ok(Response::default())
 }

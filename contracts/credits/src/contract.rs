@@ -166,6 +166,11 @@ pub fn execute_add_vesting(
         return Err(Unauthorized);
     }
 
+    let user_balance = cw20_base::contract::query_balance(deps.as_ref(), address.clone())?;
+    if user_balance.balance.lt(&amount) {
+        return Err(NoFundsSupplied());
+    }
+
     let vested_to = deps.api.addr_validate(&address)?;
 
     ALLOCATIONS.update(

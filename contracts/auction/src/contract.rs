@@ -300,10 +300,14 @@ pub fn execute_update_config(
         ));
     }
     if let Some(pool_info) = new_config.pool_info {
-        deps.api.addr_validate(pool_info.ntrn_atom_lp_token_address.as_str())?;
-        deps.api.addr_validate(pool_info.ntrn_usdc_lp_token_address.as_str())?;
-        deps.api.addr_validate(pool_info.ntrn_atom_pool_address.as_str())?;
-        deps.api.addr_validate(pool_info.ntrn_usdc_pool_address.as_str())?;
+        deps.api
+            .addr_validate(pool_info.ntrn_atom_lp_token_address.as_str())?;
+        deps.api
+            .addr_validate(pool_info.ntrn_usdc_lp_token_address.as_str())?;
+        deps.api
+            .addr_validate(pool_info.ntrn_atom_pool_address.as_str())?;
+        deps.api
+            .addr_validate(pool_info.ntrn_usdc_pool_address.as_str())?;
 
         config.pool_info = Some(pool_info);
         attributes.push(attr("pool_info", format!("{:?}", config.pool_info)));
