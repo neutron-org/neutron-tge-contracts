@@ -179,7 +179,6 @@ pub struct State {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct UserInfo {
-    pub address: String,
     /// Total USDC delegated by the user
     pub usdc_deposited: Uint128,
     /// Total ATOM delegated by the user
