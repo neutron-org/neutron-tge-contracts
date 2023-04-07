@@ -54,11 +54,17 @@ pub fn execute(
         ExecuteMsg::Claim { recipient, amount } => {
             vest_app.claim(deps, env, info, recipient, amount)
         }
+        ExecuteMsg::SetVestingToken { vesting_token } => {
+            vest_app.set_vesting_token(deps, env, info, vesting_token)
+        }
         ExecuteMsg::Receive(msg) => vest_app.receive_cw20(deps, env, info, msg),
         ExecuteMsg::RegisterVestingAccounts { vesting_accounts } => {
             let config = vest_app.config.load(deps.storage)?;
+            let vesting_token = config
+                .vesting_token
+                .ok_or(ContractError::VestingTokenIsNotSet {})?;
 
-            match &config.vesting_token {
+            match &vesting_token {
                 AssetInfo::NativeToken { denom } if info.sender == config.owner => {
                     let amount = must_pay(&info, denom)?;
                     vest_app.register_vesting_accounts(
@@ -141,6 +147,9 @@ fn remove_vesting_accounts(
     if info.sender != config.owner {
         return Err(ContractError::Unauthorized {});
     }
+    let vesting_token = config
+        .vesting_token
+        .ok_or(ContractError::VestingTokenIsNotSet {})?;
 
     let mut response = Response::new();
 
@@ -167,8 +176,7 @@ fn remove_vesting_accounts(
             let amount_to_claw_back =
                 total_granted_for_user.checked_sub(account_info.released_amount)?;
 
-            let transfer_msg = config
-                .vesting_token
+            let transfer_msg = vesting_token
                 .with_balance(amount_to_claw_back)
                 .into_msg(&deps.querier, clawback_address.clone())?;
             response = response.add_submessage(SubMsg::new(transfer_msg));
