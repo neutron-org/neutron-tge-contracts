@@ -25,6 +25,30 @@
     {
       "type": "object",
       "required": [
+        "set_denoms"
+      ],
+      "properties": {
+        "set_denoms": {
+          "type": "object",
+          "required": [
+            "atom_denom",
+            "usdc_denom"
+          ],
+          "properties": {
+            "atom_denom": {
+              "type": "string"
+            },
+            "usdc_denom": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "deposit"
       ],
       "properties": {
@@ -93,7 +117,7 @@
           "required": [
             "amount",
             "asset",
-            "period"
+            "duration"
           ],
           "properties": {
             "amount": {
@@ -102,7 +126,7 @@
             "asset": {
               "$ref": "#/definitions/PoolType"
             },
-            "period": {
+            "duration": {
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0
@@ -123,7 +147,7 @@
           "required": [
             "amount",
             "asset",
-            "period"
+            "duration"
           ],
           "properties": {
             "amount": {
@@ -132,7 +156,7 @@
             "asset": {
               "$ref": "#/definitions/PoolType"
             },
-            "period": {
+            "duration": {
               "type": "integer",
               "format": "uint64",
               "minimum": 0.0

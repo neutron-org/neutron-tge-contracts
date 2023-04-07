@@ -1,6 +1,5 @@
 use crate::state::{CONFIG, VESTING_MANAGERS};
 use crate::types::{Config, Extensions};
-use astroport::asset::AssetInfo;
 use cosmwasm_std::{DepsMut, StdResult};
 
 /// A builder for vesting contracts with different extensions.
@@ -33,14 +32,14 @@ impl VestingBaseBuilder {
     }
 
     /// Validates the inputs and initialises the created contract state.
-    pub fn build(&self, deps: DepsMut, owner: String, vesting_token: AssetInfo) -> StdResult<()> {
-        vesting_token.check(deps.api)?;
+    pub fn build(&self, deps: DepsMut, owner: String, token_info_manager: String) -> StdResult<()> {
         let owner = deps.api.addr_validate(&owner)?;
         CONFIG.save(
             deps.storage,
             &Config {
                 owner,
-                vesting_token,
+                vesting_token: None,
+                token_info_manager: deps.api.addr_validate(&token_info_manager)?,
                 extensions: Extensions {
                     historical: self.historical,
                     managed: self.managed,

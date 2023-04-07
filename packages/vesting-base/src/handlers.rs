@@ -30,8 +30,9 @@ pub fn execute(
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::RegisterVestingAccounts { vesting_accounts } => {
             let config = CONFIG.load(deps.storage)?;
+            let vesting_token = get_vesting_token(&config)?;
 
-            match &config.vesting_token {
+            match &vesting_token {
                 AssetInfo::NativeToken { denom }
                     if is_sender_whitelisted(deps.storage, &config, &info.sender) =>
                 {
@@ -72,6 +73,9 @@ pub fn execute(
             })
             .map_err(Into::into)
         }
+        ExecuteMsg::SetVestingToken { vesting_token } => {
+            set_vesting_token(deps, env, info, vesting_token)
+        }
         ExecuteMsg::ManagedExtension { msg } => handle_execute_managed_msg(deps, env, info, msg),
         ExecuteMsg::WithManagersExtension { msg } => {
             handle_execute_with_managers_msg(deps, env, info, msg)
@@ -92,13 +96,14 @@ fn receive_cw20(
     cw20_msg: Cw20ReceiveMsg,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
+    let vesting_token = get_vesting_token(&config)?;
 
     // Permission check
     if !is_sender_whitelisted(
         deps.storage,
         &config,
         &deps.api.addr_validate(&cw20_msg.sender)?,
-    ) || token_asset_info(info.sender) != config.vesting_token
+    ) || token_asset_info(info.sender) != vesting_token
     {
         return Err(ContractError::Unauthorized {});
     }
@@ -192,6 +197,7 @@ fn claim(
     amount: Option<Uint128>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
+    let vesting_token = get_vesting_token(&config)?;
     let vesting_info = vesting_info(config.extensions.historical);
     let mut sender_vesting_info = vesting_info.load(deps.storage, info.sender.clone())?;
 
@@ -210,7 +216,7 @@ fn claim(
     let mut response = Response::new();
 
     if !claim_amount.is_zero() {
-        let transfer_msg = config.vesting_token.with_balance(claim_amount).into_msg(
+        let transfer_msg = vesting_token.with_balance(claim_amount).into_msg(
             &deps.querier,
             recipient.unwrap_or_else(|| info.sender.to_string()),
         )?;
@@ -242,6 +248,30 @@ fn claim(
         attr("available_amount", available_amount),
         attr("claimed_amount", claim_amount),
     ]))
+}
+
+pub(crate) fn set_vesting_token(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    token: AssetInfo,
+) -> Result<Response, ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+    if info.sender != config.owner && info.sender != config.token_info_manager {
+        return Err(ContractError::Unauthorized {});
+    }
+    token.check(deps.api)?;
+    config.vesting_token = Some(token);
+
+    CONFIG.save(deps.storage, &config)?;
+    Ok(Response::new())
+}
+
+pub(crate) fn get_vesting_token(config: &Config) -> Result<AssetInfo, ContractError> {
+    config
+        .vesting_token
+        .clone()
+        .ok_or(ContractError::VestingTokenIsNotSet {})
 }
 
 /// Exposes all the queries available in the contract.

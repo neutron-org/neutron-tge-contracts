@@ -3,24 +3,22 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
-    "atom_denom",
+    "denom_manager",
     "deposit_window",
     "init_timestamp",
     "lp_tokens_lock_window",
     "max_exchange_rate_age",
-    "max_lock_period",
-    "min_lock_period",
     "min_ntrn_amount",
     "price_feed_contract",
     "reserve_contract_address",
-    "usdc_denom",
     "vesting_atom_contract_address",
+    "vesting_lp_duration",
     "vesting_migration_pack_size",
     "vesting_usdc_contract_address",
     "withdrawal_window"
   ],
   "properties": {
-    "atom_denom": {
+    "denom_manager": {
       "type": "string"
     },
     "deposit_window": {
@@ -49,16 +47,6 @@
       "format": "uint64",
       "minimum": 0.0
     },
-    "max_lock_period": {
-      "type": "integer",
-      "format": "uint16",
-      "minimum": 0.0
-    },
-    "min_lock_period": {
-      "type": "integer",
-      "format": "uint16",
-      "minimum": 0.0
-    },
     "min_ntrn_amount": {
       "$ref": "#/definitions/Uint128"
     },
@@ -74,11 +62,13 @@
     "reserve_contract_address": {
       "type": "string"
     },
-    "usdc_denom": {
-      "type": "string"
-    },
     "vesting_atom_contract_address": {
       "type": "string"
+    },
+    "vesting_lp_duration": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     },
     "vesting_migration_pack_size": {
       "type": "integer",

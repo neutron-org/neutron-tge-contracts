@@ -34,7 +34,7 @@ pub fn instantiate(
 
     VestingBaseBuilder::default()
         .managed()
-        .build(deps, msg.owner, msg.vesting_token)?;
+        .build(deps, msg.owner, msg.token_info_manager)?;
     Ok(Response::default())
 }
 

@@ -16,6 +16,7 @@ use vesting_base::types::{
 };
 
 const OWNER1: &str = "owner1";
+const TOKEN_MANAGER: &str = "token_manager";
 const USER1: &str = "user1";
 const USER2: &str = "user2";
 const TOKEN_INITIAL_AMOUNT: u128 = 1_000_000_000_000_000;
@@ -1188,11 +1189,12 @@ fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
         crate::contract::query,
     ));
     let owner = Addr::unchecked(OWNER1);
+    let token_manager = Addr::unchecked(TOKEN_MANAGER);
     let vesting_code_id = app.store_code(vesting_contract);
 
     let init_msg = InstantiateMsg {
         owner: OWNER1.to_string(),
-        vesting_token: token_asset_info(cw20_token_instance.clone()),
+        token_info_manager: TOKEN_MANAGER.to_string(),
         vesting_managers: vec![],
     };
 
@@ -1206,6 +1208,16 @@ fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
             None,
         )
         .unwrap();
+    let set_vesting_token_msg = ExecuteMsg::SetVestingToken {
+        vesting_token: token_asset_info(cw20_token_instance.clone()),
+    };
+    app.execute_contract(
+        token_manager,
+        vesting_instance.clone(),
+        &set_vesting_token_msg,
+        &[],
+    )
+    .unwrap();
 
     let res: Config = app
         .wrap()
@@ -1213,7 +1225,7 @@ fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
         .unwrap();
     assert_eq!(
         cw20_token_instance.to_string(),
-        res.vesting_token.to_string()
+        res.vesting_token.unwrap().to_string()
     );
 
     mint_tokens(app, cw20_token_instance, &owner, TOKEN_INITIAL_AMOUNT);
@@ -1230,16 +1242,24 @@ fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
         crate::contract::query,
     ));
     let owner = Addr::unchecked(OWNER1);
+    let token_manager = Addr::unchecked(TOKEN_MANAGER);
     let vesting_code_id = app.store_code(vesting_contract);
 
     let init_msg = InstantiateMsg {
         owner: OWNER1.to_string(),
-        vesting_token: native_asset_info(VESTING_TOKEN.to_string()),
+        token_info_manager: TOKEN_MANAGER.to_string(),
         vesting_managers: vec![],
     };
 
-    app.instantiate_contract(vesting_code_id, owner, &init_msg, &[], "Vesting", None)
-        .unwrap()
+    let res = app
+        .instantiate_contract(vesting_code_id, owner, &init_msg, &[], "Vesting", None)
+        .unwrap();
+    let msg = ExecuteMsg::SetVestingToken {
+        vesting_token: native_asset_info(VESTING_TOKEN.to_string()),
+    };
+    app.execute_contract(token_manager, res.clone(), &msg, &[])
+        .unwrap();
+    res
 }
 
 fn mint_tokens(app: &mut App, token: &Addr, recipient: &Addr, amount: u128) {

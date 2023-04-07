@@ -7,6 +7,7 @@ use crate::lockdrop::PoolType;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct InstantiateMsg {
     pub owner: Option<String>,
+    pub denom_manager: String,
     pub price_feed_contract: String,
     pub lockdrop_contract_address: Option<String>,
     pub reserve_contract_address: String,
@@ -16,13 +17,10 @@ pub struct InstantiateMsg {
     pub init_timestamp: u64,
     pub deposit_window: u64,
     pub withdrawal_window: u64,
-    pub usdc_denom: String,
-    pub atom_denom: String,
-    pub max_lock_period: u16,
-    pub min_lock_period: u16,
     pub max_exchange_rate_age: u64,
     pub min_ntrn_amount: Uint128,
     pub vesting_migration_pack_size: u16,
+    pub vesting_lp_duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -53,6 +51,10 @@ pub enum ExecuteMsg {
     UpdateConfig {
         new_config: UpdateConfigMsg,
     },
+    SetDenoms {
+        usdc_denom: String,
+        atom_denom: String,
+    },
     Deposit {},
     Withdraw {
         amount_atom: Uint128,
@@ -63,12 +65,12 @@ pub enum ExecuteMsg {
     LockLp {
         asset: PoolType,
         amount: Uint128,
-        period: u64,
+        duration: u64,
     },
     WithdrawLp {
         asset: PoolType,
         amount: Uint128,
-        period: u64,
+        duration: u64,
     },
     MigrateToVesting {},
     Callback(CallbackMsg),
@@ -108,6 +110,8 @@ pub struct MigrateMsg {}
 pub struct Config {
     /// Account who can update config
     pub owner: Addr,
+    /// Account who can update denoms
+    pub denom_manager: Addr,
     /// Reserve Contract address
     pub reserve_contract_address: Addr,
     /// Vesting LP-USDC Contract address
@@ -131,15 +135,17 @@ pub struct Config {
     /// Base denom
     pub ntrn_denom: String,
     /// USDC denom
-    pub usdc_denom: String,
+    pub usdc_denom: Option<String>,
     /// ATOM denom
-    pub atom_denom: String,
+    pub atom_denom: Option<String>,
     /// Min NTRN amount to be distributed as pool liquidity
     pub min_ntrn_amount: Uint128,
     /// min exchange freshness rate (seconds)
     pub max_exchange_rate_age: u64,
     /// vesting migration users pack size
     pub vesting_migration_pack_size: u16,
+    /// vesting for lp duration
+    pub vesting_lp_duration: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
@@ -228,17 +234,4 @@ pub struct UserLpInfo {
 pub struct PoolBalance {
     pub atom: Uint128,
     pub usdc: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct VestingMigrationUser {
-    pub address: String,
-    pub amount: Uint128,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum VestingExecuteMsg {
-    MigrateVestingUsers { users: Vec<VestingMigrationUser> },
 }

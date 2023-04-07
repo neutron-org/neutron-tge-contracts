@@ -1,4 +1,5 @@
 use crate::error::{ext_unsupported_err, ContractError};
+use crate::handlers::get_vesting_token;
 use crate::msg::{ExecuteMsgManaged, QueryMsgManaged};
 use crate::state::{vesting_info, vesting_state, CONFIG};
 use astroport::asset::AssetInfoExt;
@@ -37,6 +38,7 @@ pub(crate) fn handle_query_managed_msg(
         return Err(ext_unsupported_err("managed"));
     }
 
+    // empty handler kept for uniformity with other extensions
     unimplemented!()
 }
 
@@ -52,6 +54,7 @@ fn remove_vesting_accounts(
     if info.sender != config.owner {
         return Err(ContractError::Unauthorized {});
     }
+    let vesting_token = get_vesting_token(&config)?;
 
     let mut response = Response::new();
 
@@ -80,8 +83,7 @@ fn remove_vesting_accounts(
             let amount_to_claw_back =
                 total_granted_for_user.checked_sub(account_info.released_amount)?;
 
-            let transfer_msg = config
-                .vesting_token
+            let transfer_msg = vesting_token
                 .with_balance(amount_to_claw_back)
                 .into_msg(&deps.querier, clawback_address.clone())?;
             response = response.add_submessage(SubMsg::new(transfer_msg));

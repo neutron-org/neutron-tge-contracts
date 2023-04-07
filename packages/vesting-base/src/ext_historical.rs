@@ -18,6 +18,7 @@ pub(crate) fn handle_execute_historical_msg(
         return Err(ext_unsupported_err("historical").into());
     }
 
+    // empty handler kept for uniformity with other extensions
     unimplemented!()
 }
 

@@ -1,6 +1,7 @@
 use crate::types::{
     Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingState,
 };
+use astroport::asset::AssetInfo;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Uint128};
 use cw20::Cw20ReceiveMsg;
@@ -44,6 +45,10 @@ pub enum ExecuteMsg {
     WithManagersExtension { msg: ExecuteMsgWithManagers },
     /// Contains messages associated with the historical extension for vesting contracts.
     HistoricalExtension { msg: ExecuteMsgHistorical },
+    /// Sets vesting token
+    /// ## Executor
+    /// Only the current owner or token info manager can execute this
+    SetVestingToken { vesting_token: AssetInfo },
 }
 
 /// This structure describes the execute messages available in a managed vesting contract.
