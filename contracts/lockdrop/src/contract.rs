@@ -567,13 +567,6 @@ pub fn handle_initialize_pool(
         return Err(StdError::generic_err("Unauthorized"));
     }
 
-    // CHECK :: Is lockdrop deposit window closed
-    if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
-        return Err(StdError::generic_err(
-            "Pools cannot be staked post deposit window closure",
-        ));
-    }
-
     // CHECK ::: Is LP Token Pool initialized
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 

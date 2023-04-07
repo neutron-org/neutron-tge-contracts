@@ -4,7 +4,7 @@ use astroport::U256;
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
-    MessageInfo, Order, Response, StdError, StdResult, Uint128, Uint64, WasmMsg,
+    MessageInfo, Order, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use std::str::FromStr;
 
