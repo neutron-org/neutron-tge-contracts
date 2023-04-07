@@ -2,7 +2,7 @@ use crate::enumerable::query_all_address_map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, coin, from_binary, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env,
+    attr, coin, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env,
     MessageInfo, Response, StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
@@ -12,11 +12,9 @@ use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
-use crate::helpers::CosmosSignature;
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    IsPausedResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
-    TotalClaimedResponse,
+    IsPausedResponse, MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse,
 };
 use crate::state::{
     Config, ACCOUNT_MAP, AIRDROP_START, AMOUNT, AMOUNT_CLAIMED, CLAIM, CONFIG, HRP, MERKLE_ROOT,
@@ -91,11 +89,7 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Claim {
-            amount,
-            proof,
-            sig_info,
-        } => execute_claim(deps, env, info, amount, proof, sig_info),
+        ExecuteMsg::Claim { amount, proof } => execute_claim(deps, env, info, amount, proof),
         ExecuteMsg::WithdrawAll {} => execute_withdraw_all(deps, env, info),
         ExecuteMsg::Pause {} => execute_pause(deps, env, info),
         ExecuteMsg::Resume {} => execute_resume(deps, env, info),
@@ -108,7 +102,6 @@ pub fn execute_claim(
     info: MessageInfo,
     amount: Uint128,
     proof: Vec<String>,
-    sig_info: Option<SignatureInfo>,
 ) -> Result<Response, ContractError> {
     // airdrop begun
     let start = AIRDROP_START.load(deps.storage)?;
@@ -130,26 +123,7 @@ pub fn execute_claim(
 
     // if present verify signature and extract external address or use info.sender as proof
     // if signature is not present in the message, verification will fail since info.sender is not present in the merkle root
-    let proof_addr = match sig_info {
-        None => info.sender.to_string(),
-        Some(sig) => {
-            // verify signature
-            let cosmos_signature: CosmosSignature = from_binary(&sig.signature)?;
-            cosmos_signature.verify(deps.as_ref(), &sig.claim_msg)?;
-            // get airdrop bech32 prefix and derive proof address from public key
-            let hrp = HRP.load(deps.storage)?;
-            let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
-
-            if sig.extract_addr()? != info.sender {
-                return Err(ContractError::VerificationFailed {});
-            }
-
-            // Save external address index
-            ACCOUNT_MAP.save(deps.storage, proof_addr.clone(), &info.sender.to_string())?;
-
-            proof_addr
-        }
-    };
+    let proof_addr = info.sender.to_string();
 
     // verify not claimed
     let claimed = CLAIM.may_load(deps.storage, proof_addr.clone())?;

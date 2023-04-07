@@ -3,8 +3,8 @@ use crate::{
     error::ContractError,
     helpers::CosmosSignature,
     msg::{
-        AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-        MerkleRootResponse, QueryMsg, SignatureInfo, TotalClaimedResponse,
+        ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, MerkleRootResponse,
+        QueryMsg, SignatureInfo, TotalClaimedResponse,
     },
 };
 use cosmwasm_std::{
@@ -143,7 +143,6 @@ fn claim() {
     let msg = ExecuteMsg::Claim {
         amount: test_data.amount,
         proof: test_data.proofs,
-        sig_info: None,
     };
 
     let env = mock_env();
@@ -258,7 +257,6 @@ fn multiple_claim() {
         let msg = ExecuteMsg::Claim {
             amount: account.amount,
             proof: account.proofs.clone(),
-            sig_info: None,
         };
 
         let env = mock_env();
@@ -339,7 +337,6 @@ fn expiration() {
     let msg = ExecuteMsg::Claim {
         amount: Uint128::new(5),
         proof: vec![],
-        sig_info: None,
     };
 
     let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -552,7 +549,6 @@ fn starts() {
     let msg = ExecuteMsg::Claim {
         amount: Uint128::new(5),
         proof: vec![],
-        sig_info: None,
     };
 
     let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -599,137 +595,6 @@ mod external_sig {
     }
 
     #[test]
-    fn claim_with_external_sigs() {
-        let mut deps = mock_dependencies();
-        let env = mock_env();
-        let airdrop_start = env.block.time.minus_seconds(5_000);
-        let vesting_start = env.block.time.plus_seconds(10_000);
-        let vesting_duration_seconds = 20_000;
-        let test_data: Encoded = from_slice(TEST_DATA_EXTERNAL_SIG).unwrap();
-        let claim_addr = test_data
-            .signed_msg
-            .clone()
-            .unwrap()
-            .extract_addr()
-            .unwrap();
-
-        let msg = InstantiateMsg {
-            credits_address: "credits0000".to_string(),
-            reserve_address: "reserve0000".to_string(),
-            merkle_root: test_data.root,
-            airdrop_start,
-            vesting_start,
-            vesting_duration_seconds,
-            total_amount: None,
-            hrp: Some(test_data.hrp.unwrap()),
-        };
-
-        let info = mock_info("owner0000", &[]);
-        let _res = instantiate(deps.as_mut(), env, info, msg).unwrap();
-
-        // cant claim without sig, info.sender is not present in the root
-        let msg = ExecuteMsg::Claim {
-            amount: test_data.amount,
-            proof: test_data.proofs.clone(),
-            sig_info: None,
-        };
-
-        let env = mock_env();
-        let info = mock_info(claim_addr.as_str(), &[]);
-        let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
-        assert_eq!(res, ContractError::VerificationFailed {});
-
-        // can claim with sig
-        let msg = ExecuteMsg::Claim {
-            amount: test_data.amount,
-            proof: test_data.proofs,
-            sig_info: test_data.signed_msg,
-        };
-
-        let env = mock_env();
-        let info = mock_info(claim_addr.as_str(), &[]);
-        let res = execute(deps.as_mut(), env.clone(), info.clone(), msg.clone()).unwrap();
-        let expected = vec![
-            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: "credits0000".to_string(),
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: claim_addr.to_string(),
-                    amount: test_data.amount,
-                })
-                .unwrap(),
-                funds: vec![],
-            })),
-            SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: "credits0000".to_string(),
-                msg: to_binary(&AddVesting {
-                    address: claim_addr.clone(),
-                    amount: test_data.amount,
-                    start_time: vesting_start.seconds(),
-                    duration: vesting_duration_seconds,
-                })
-                .unwrap(),
-                funds: vec![],
-            })),
-        ];
-
-        assert_eq!(res.messages, expected);
-        assert_eq!(
-            res.attributes,
-            vec![
-                attr("action", "claim"),
-                attr("address", claim_addr.clone()),
-                attr("amount", test_data.amount),
-            ]
-        );
-
-        // Check total claimed
-        assert_eq!(
-            from_binary::<TotalClaimedResponse>(
-                &query(deps.as_ref(), env.clone(), QueryMsg::TotalClaimed {},).unwrap()
-            )
-            .unwrap()
-            .total_claimed,
-            test_data.amount
-        );
-
-        // Check address is claimed
-        assert!(
-            from_binary::<IsClaimedResponse>(
-                &query(
-                    deps.as_ref(),
-                    env.clone(),
-                    QueryMsg::IsClaimed {
-                        address: test_data.account.clone(),
-                    },
-                )
-                .unwrap()
-            )
-            .unwrap()
-            .is_claimed
-        );
-
-        // check error on double claim
-        let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap_err();
-        assert_eq!(res, ContractError::Claimed {});
-
-        // query map
-
-        let map = from_binary::<AccountMapResponse>(
-            &query(
-                deps.as_ref(),
-                env,
-                QueryMsg::AccountMap {
-                    external_address: test_data.account.clone(),
-                },
-            )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(map.external_address, test_data.account);
-        assert_eq!(map.host_address, claim_addr);
-    }
-
-    #[test]
     fn claim_paused_airdrop() {
         let mut deps = mock_dependencies();
         let env = mock_env();
@@ -765,7 +630,6 @@ mod external_sig {
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
             proof: test_data.proofs.clone(),
-            sig_info: None,
         };
 
         let env = mock_env();
@@ -786,7 +650,6 @@ mod external_sig {
         let msg = ExecuteMsg::Claim {
             amount: test_data.amount,
             proof: test_data.proofs.clone(),
-            sig_info: None,
         };
         let env = mock_env();
         let info = mock_info(test_data.account.as_str(), &[]);
