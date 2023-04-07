@@ -184,6 +184,7 @@
       "additionalProperties": false
     },
     {
+      "description": "Sets the vesting token",
       "type": "object",
       "required": [
         "set_vesting_token"

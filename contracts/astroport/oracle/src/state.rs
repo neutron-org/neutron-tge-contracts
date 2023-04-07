@@ -36,9 +36,11 @@ pub struct Config {
     /// The factory contract address
     pub factory: Addr,
     /// The assets in the pool. Each asset is described using a [`AssetInfo`]
-    pub asset_infos: Vec<AssetInfo>,
+    pub asset_infos: Option<Vec<AssetInfo>>,
     /// Information about the pair (LP token address, pair type etc)
-    pub pair: PairInfo,
+    pub pair: Option<PairInfo>,
     /// Time between two consecutive TWAP updates.
     pub period: u64,
+    /// Manager is the only one who can set pair info, if not set already
+    pub manager: Addr,
 }
