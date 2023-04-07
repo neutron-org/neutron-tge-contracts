@@ -1,9 +1,10 @@
 use astroport::asset::{Asset, AssetInfo, MINIMUM_LIQUIDITY_AMOUNT};
+use astroport::U256;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
-    MessageInfo, Order, Response, StdError, StdResult, Uint128, WasmMsg,
+    MessageInfo, Order, Response, StdError, StdResult, Uint128, Uint64, WasmMsg,
 };
 use std::str::FromStr;
 
@@ -474,9 +475,14 @@ fn allowed_withdrawal_percent(current_timestamp: u64, config: &Config) -> Decima
     }
 }
 
-pub fn get_lp_size(token1: Uint128, token2: Uint128) -> Uint128 {
-    Decimal::sqrt(&Decimal::from_ratio(token1 * token2, Uint128::one())).to_uint_floor()
-        - MINIMUM_LIQUIDITY_AMOUNT
+pub fn get_lp_size(token1: Uint128, token2: Uint128) -> StdResult<Uint128> {
+    Uint128::new(
+        (U256::from(token1.u128()) * U256::from(token2.u128()))
+            .integer_sqrt()
+            .as_u128(),
+    )
+    .checked_sub(MINIMUM_LIQUIDITY_AMOUNT)
+    .map_err(|_| StdError::generic_err("LP size is too big"))
 }
 
 pub fn get_contract_balances(
@@ -576,8 +582,8 @@ pub fn execute_set_pool_size(
     let div_ratio = Decimal::from_ratio(usdc_amount, all_in_usdc);
     let usdc_ntrn_size = ntrn_amount * div_ratio;
     let atom_ntrn_size = ntrn_amount - usdc_ntrn_size;
-    let atom_lp_size = get_lp_size(atom_ntrn_size, atom_amount);
-    let usdc_lp_size = get_lp_size(usdc_ntrn_size, usdc_amount);
+    let atom_lp_size = get_lp_size(atom_ntrn_size, atom_amount)?;
+    let usdc_lp_size = get_lp_size(usdc_ntrn_size, usdc_amount)?;
 
     // UPDATE STATE
     state.usdc_ntrn_size = usdc_ntrn_size;
