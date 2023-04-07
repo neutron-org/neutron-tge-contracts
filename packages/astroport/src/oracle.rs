@@ -8,10 +8,10 @@ use cosmwasm_std::{Decimal256, Uint128, Uint256, Uint64};
 pub struct InstantiateMsg {
     /// The factory contract address
     pub factory_contract: String,
-    /// The assets that have a pool for which this contract provides price feeds
-    pub asset_infos: Vec<AssetInfo>,
     /// Minimal interval between Update{}'s
     pub period: u64,
+    /// Manager is the only one who can set pair info, if not set already
+    pub manager: String,
 }
 
 /// This structure describes the execute functions available in the contract.
@@ -21,6 +21,11 @@ pub enum ExecuteMsg {
     Update {},
     /// Update period
     UpdatePeriod { new_period: u64 },
+    /// Set a new manager, only owner can use this message
+    UpdateManager { new_manager: String },
+    /// Set asset infos that have a pool for which this contract provides price feeds.
+    /// Only manager can use this message
+    SetAssetInfos(Vec<AssetInfo>),
 }
 
 /// This structure describes the query messages available in the contract.

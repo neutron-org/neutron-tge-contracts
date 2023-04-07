@@ -14,7 +14,7 @@
       "type": "string"
     },
     "token_info_manager": {
-      "description": "Initial list of whitelisted vesting managers",
+      "description": "Token info manager address",
       "type": "string"
     },
     "vesting_managers": {
