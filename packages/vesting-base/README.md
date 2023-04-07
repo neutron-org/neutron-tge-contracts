@@ -79,6 +79,10 @@ pub enum ExecuteMsg {
     /// ## Executor
     /// Only the newly proposed owner can execute this
     ClaimOwnership {},
+    /// Sets vesting token
+    /// ## Executor
+    /// Only the current owner or token info manager can execute this
+    SetVestingToken { vesting_token: AssetInfo },
     /// Contains messages associated with the managed extension for vesting contracts.
     ManagedExtension { msg: ExecuteMsgManaged },
     /// Contains messages associated with the with_managers extension for vesting contracts.
