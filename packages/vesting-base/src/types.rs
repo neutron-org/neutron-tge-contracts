@@ -19,11 +19,11 @@ pub struct Config {
 #[cw_serde]
 pub struct Extensions {
     /// Whether the historical extension is enabled for the contract.
-    pub(crate) historical: bool,
+    pub historical: bool,
     /// Whether the managed extension is enabled for the contract.
-    pub(crate) managed: bool,
+    pub managed: bool,
     /// Whether the with_managers extension is enabled for the contract.
-    pub(crate) with_managers: bool,
+    pub with_managers: bool,
 }
 
 /// This structure stores the accumulated vesting information for all addresses.
