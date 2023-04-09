@@ -9,7 +9,7 @@ use vesting_base::{
 };
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "neutron-managed-vesting";
+const CONTRACT_NAME: &str = "neutron-vesting-managed";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
