@@ -246,7 +246,7 @@ pub fn execute_withdraw(
     let when_withdrawable = config
         .when_withdrawable
         .ok_or(ContractError::WhenWithdrawableIsNotConfigured)?;
-    if when_withdrawable > env.block.time {
+    if when_withdrawable > env.block.time.seconds() {
         return Err(ContractError::TooEarlyToClaim);
     }
 
