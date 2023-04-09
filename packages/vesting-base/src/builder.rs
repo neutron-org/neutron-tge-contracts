@@ -12,20 +12,20 @@ pub struct VestingBaseBuilder {
 }
 
 impl VestingBaseBuilder {
-    /// Appends a managed extension to the created vesting contract.
+    /// Appends the `managed` extension to the created vesting contract.
     pub fn managed(&mut self) -> &mut VestingBaseBuilder {
         self.managed = true;
         self
     }
 
-    /// Appends a with_managers extension to the created vesting contract.
+    /// Appends the `with_managers` extension to the created vesting contract.
     pub fn with_managers(&mut self, managers: Vec<String>) -> &mut VestingBaseBuilder {
         self.vesting_managers.extend(managers);
         self.with_managers = true;
         self
     }
 
-    /// Appends a historical extension to the created vesting contract.
+    /// Appends the `historical` extension to the created vesting contract.
     pub fn historical(&mut self) -> &mut VestingBaseBuilder {
         self.historical = true;
         self
