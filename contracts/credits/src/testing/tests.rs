@@ -82,8 +82,7 @@ fn _do_instantiate(
     let env = mock_env();
     let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
     if let Some(funds) = maybe_funds {
-        deps.querier
-            .update_balance(env.clone().contract.address, funds);
+        deps.querier.update_balance(&env.contract.address, funds);
     }
 
     assert_eq!(0, res.messages.len());

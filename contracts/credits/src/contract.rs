@@ -372,7 +372,7 @@ pub fn execute_mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respon
     // mint in 1:1 proportion to locked untrn tokens
     let untrn_funds = deps
         .querier
-        .query_balance(env.clone().contract.address, DEPOSITED_SYMBOL)?;
+        .query_balance(&env.contract.address, DEPOSITED_SYMBOL)?;
     if untrn_funds.amount.is_zero() {
         return Err(NoFundsSupplied());
     }
