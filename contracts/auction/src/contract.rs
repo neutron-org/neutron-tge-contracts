@@ -73,7 +73,7 @@ pub fn instantiate(
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
-        denom_manager: deps.api.addr_validate(&msg.denom_manager)?,
+        token_info_manager: deps.api.addr_validate(&msg.token_info_manager)?,
         lockdrop_contract_address,
         price_feed_contract: deps.api.addr_validate(msg.price_feed_contract.as_str())?,
         reserve_contract_address: deps.api.addr_validate(&msg.reserve_contract_address)?,
@@ -127,10 +127,11 @@ pub fn execute(
 ) -> Result<Response, StdError> {
     match msg {
         ExecuteMsg::UpdateConfig { new_config } => execute_update_config(deps, info, new_config),
-        ExecuteMsg::SetDenoms {
+        ExecuteMsg::SetTokenInfo {
             usdc_denom,
             atom_denom,
-        } => execute_set_denoms(deps, info, usdc_denom, atom_denom),
+            pool_info,
+        } => execute_set_token_info(deps, info, usdc_denom, atom_denom, pool_info),
         ExecuteMsg::Deposit {} => execute_deposit(deps, env, info),
         ExecuteMsg::Withdraw {
             amount_usdc,
@@ -301,6 +302,12 @@ pub fn execute_update_config(
         ));
     }
     if let Some(pool_info) = new_config.pool_info {
+        deps.api.addr_validate(&pool_info.ntrn_usdc_pool_address)?;
+        deps.api.addr_validate(&pool_info.ntrn_atom_pool_address)?;
+        deps.api
+            .addr_validate(&pool_info.ntrn_usdc_lp_token_address)?;
+        deps.api
+            .addr_validate(&pool_info.ntrn_atom_lp_token_address)?;
         config.pool_info = Some(pool_info);
         attributes.push(attr("pool_info", format!("{:?}", config.pool_info)));
     }
@@ -319,28 +326,40 @@ fn is_deposit_open(current_timestamp: u64, config: &Config) -> bool {
         && current_timestamp < config.init_timestamp + config.deposit_window
 }
 
-pub fn execute_set_denoms(
+pub fn execute_set_token_info(
     deps: DepsMut,
     info: MessageInfo,
-    usdc_denom: String,
-    atom_denom: String,
+    usdc_denom: Option<String>,
+    atom_denom: Option<String>,
+    pool_info: Option<PoolInfo>,
 ) -> StdResult<Response> {
     let mut config = CONFIG.load(deps.storage)?;
     let mut attributes = vec![attr("action", "set_denoms")];
 
-    if info.sender != config.denom_manager && info.sender != config.owner {
+    if info.sender != config.token_info_manager && info.sender != config.owner {
         return Err(StdError::generic_err(
             "Only owner and denom_manager can update denoms",
         ));
     }
-
-    config.usdc_denom = Some(usdc_denom.clone());
-    config.atom_denom = Some(atom_denom.clone());
+    if let Some(usdc_denom) = usdc_denom {
+        config.usdc_denom = Some(usdc_denom.clone());
+        attributes.push(attr("new_usdc_denom", usdc_denom));
+    }
+    if let Some(atom_denom) = atom_denom {
+        config.atom_denom = Some(atom_denom.clone());
+        attributes.push(attr("new_atom_denom", atom_denom));
+    }
+    if let Some(pool_info) = pool_info {
+        deps.api.addr_validate(&pool_info.ntrn_usdc_pool_address)?;
+        deps.api.addr_validate(&pool_info.ntrn_atom_pool_address)?;
+        deps.api
+            .addr_validate(&pool_info.ntrn_usdc_lp_token_address)?;
+        deps.api
+            .addr_validate(&pool_info.ntrn_atom_lp_token_address)?;
+        config.pool_info = Some(pool_info);
+        attributes.push(attr("pool_info", format!("{:?}", config.pool_info)));
+    }
     CONFIG.save(deps.storage, &config)?;
-
-    attributes.push(attr("new_usdc_denom", usdc_denom));
-    attributes.push(attr("new_atom_denom", atom_denom));
-
     Ok(Response::new().add_attributes(attributes))
 }
 
@@ -514,8 +533,8 @@ pub fn get_contract_balances(
 pub fn get_lp_balances(
     deps: Deps,
     owner_address: &Addr,
-    ntrn_usdc_lp_token_address: &Addr,
-    ntrn_atom_lp_token_address: &Addr,
+    ntrn_usdc_lp_token_address: &String,
+    ntrn_atom_lp_token_address: &String,
 ) -> Result<(Uint128, Uint128), StdError> {
     let usdc_lp_amount =
         query_token_balance(&deps.querier, ntrn_usdc_lp_token_address, owner_address)?;
@@ -749,7 +768,7 @@ pub fn execute_finalize_init_pool(
         // Send locked tokens to the lockdrop contract
         if !state.atom_lp_locked.is_zero() {
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: ntrn_atom_lp_token_address.to_string(),
+                contract_addr: ntrn_atom_lp_token_address,
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Send {
                     contract: lockdrop_address.to_string(),
@@ -763,7 +782,7 @@ pub fn execute_finalize_init_pool(
         }
         if !state.usdc_lp_locked.is_zero() {
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: ntrn_usdc_lp_token_address.to_string(),
+                contract_addr: ntrn_usdc_lp_token_address,
                 funds: vec![],
                 msg: to_binary(&Cw20ExecuteMsg::Send {
                     contract: lockdrop_address.to_string(),
@@ -868,7 +887,7 @@ fn execute_migrate_to_vesting(
     let mut msgs = vec![];
     if !atom_lp_amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: pool_info.ntrn_atom_lp_token_address.to_string(),
+            contract_addr: pool_info.ntrn_atom_lp_token_address,
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: config.vesting_atom_contract_address.to_string(),
@@ -881,7 +900,7 @@ fn execute_migrate_to_vesting(
     }
     if !usdc_lp_amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: pool_info.ntrn_usdc_lp_token_address.to_string(),
+            contract_addr: pool_info.ntrn_usdc_lp_token_address,
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: config.vesting_usdc_contract_address.to_string(),
@@ -911,7 +930,7 @@ fn execute_migrate_to_vesting(
 /// * **other_denom** is an object of type [`String`].
 
 fn build_provide_liquidity_to_lp_pool_msg(
-    pool_address: Addr,
+    pool_address: String,
     base_amount: Uint128,
     base_denom: String,
     other_amount: Uint128,
@@ -941,7 +960,7 @@ fn build_provide_liquidity_to_lp_pool_msg(
     ];
     funds.sort_by(|a, b| a.denom.cmp(&b.denom));
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: pool_address.to_string(),
+        contract_addr: pool_address,
         funds,
         msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
             assets: vec![base, other],
