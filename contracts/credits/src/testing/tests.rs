@@ -39,7 +39,7 @@ fn _instantiate_vest_to_somebody(
     let (_info, env) = _do_simple_update_config(deps.as_mut());
 
     // mint
-    let dao_info = mock_info("dao_address", &Vec::new());
+    let dao_info = mock_info("dao_address", &[]);
     let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
     assert!(res.is_ok());
 
@@ -356,7 +356,7 @@ mod transfer {
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // mint
-        let dao_info = mock_info("dao_address", &Vec::new());
+        let dao_info = mock_info("dao_address", &[]);
         let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
         assert!(res.is_ok());
 
@@ -566,7 +566,7 @@ mod burn {
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // mint
-        let dao_info = mock_info("dao_address", &Vec::new());
+        let dao_info = mock_info("dao_address", &[]);
         let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
         assert!(res.is_ok());
 
@@ -631,7 +631,7 @@ mod burn_from {
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // mint
-        let dao_info = mock_info("dao_address", &Vec::new());
+        let dao_info = mock_info("dao_address", &[]);
         let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
         assert!(res.is_ok());
 
@@ -677,7 +677,7 @@ mod burn_from {
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // mint
-        let dao_info = mock_info("dao_address", &Vec::new());
+        let dao_info = mock_info("dao_address", &[]);
         let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
         assert!(res.is_ok());
 
@@ -749,7 +749,7 @@ mod mint {
         let (mut deps, _info, _env) = _do_instantiate(Some(funds));
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
-        let dao_info = mock_info("dao_address", &Vec::new());
+        let dao_info = mock_info("dao_address", &[]);
         let res = execute_mint(deps.as_mut(), env, dao_info);
         assert!(res.is_ok());
 
