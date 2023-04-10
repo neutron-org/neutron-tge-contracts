@@ -2,8 +2,8 @@ use crate::enumerable::query_all_address_map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, coin, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, Response, StdResult, Uint128, WasmMsg,
+    attr, coin, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
+    StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
