@@ -668,6 +668,10 @@ pub fn handle_increase_lockup(
         return Err(StdError::generic_err("Unauthorized"));
     }
 
+    if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
+        return Err(StdError::generic_err("Lock window is closed"));
+    };
+
     let user_address = deps.api.addr_validate(&user_address_raw)?;
 
     if !config
@@ -783,6 +787,12 @@ pub fn handle_withdraw_from_lockup(
     if info.sender != config.auction_contract {
         return Err(StdError::generic_err("Unauthorized"));
     }
+
+    if env.block.time.seconds()
+        >= config.init_timestamp + config.lock_window + config.withdrawal_window
+    {
+        return Err(StdError::generic_err("Withdrawal window is closed"));
+    };
 
     // CHECK :: Valid Withdraw Amount
     if amount.is_zero() {
@@ -923,8 +933,10 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     let config = CONFIG.load(deps.storage)?;
     let state = STATE.load(deps.storage)?;
 
-    if env.block.time.seconds() < config.init_timestamp + config.lock_window {
-        return Err(StdError::generic_err("Lock window is still open"));
+    if env.block.time.seconds()
+        < config.init_timestamp + config.lock_window + config.withdrawal_window
+    {
+        return Err(StdError::generic_err("Lock/withdrawal window is still open"));
     }
 
     let user_address = info.sender;
