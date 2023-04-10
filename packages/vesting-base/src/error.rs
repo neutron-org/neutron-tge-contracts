@@ -35,3 +35,10 @@ impl From<OverflowError> for ContractError {
         StdError::from(o).into()
     }
 }
+
+pub fn ext_unsupported_err(extension: impl Into<String> + std::fmt::Display) -> StdError {
+    StdError::generic_err(format!(
+        "Extension is not enabled for the contract: {}.",
+        extension
+    ))
+}
