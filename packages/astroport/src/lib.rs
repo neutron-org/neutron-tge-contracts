@@ -15,6 +15,7 @@ pub mod restricted_vector;
 pub mod router;
 pub mod staking;
 pub mod token;
+pub mod vesting;
 pub mod xastro_token;
 
 #[cfg(test)]
