@@ -250,7 +250,7 @@ mod add_vesting {
         let airdrop_info = mock_info("airdrop_address", &[]);
         let dao_info = mock_info("dao_address", &[Coin::new(1000, "untrn")]);
 
-        execute_mint(deps.as_mut(), env.clone(), dao_info.clone()).unwrap();
+        execute_mint(deps.as_mut(), env.clone(), dao_info).unwrap();
 
         execute_transfer(
             deps.as_mut(),
@@ -315,7 +315,7 @@ mod add_vesting {
 
         let dao_info = mock_info("dao_address", &[Coin::new(1000, "untrn")]);
 
-        execute_mint(deps.as_mut(), env.clone(), dao_info.clone()).unwrap();
+        execute_mint(deps.as_mut(), env.clone(), dao_info).unwrap();
 
         execute_transfer(
             deps.as_mut(),
