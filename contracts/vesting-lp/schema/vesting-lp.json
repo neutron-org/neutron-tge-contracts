@@ -34,7 +34,7 @@
   "execute": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "ExecuteMsg",
-    "description": "This structure describes the execute messages available in the contract.",
+    "description": "This structure describes the execute messages available in a vesting contract.",
     "oneOf": [
       {
         "description": "Claim claims vested tokens and sends them to a recipient",
@@ -167,6 +167,29 @@
         "additionalProperties": false
       },
       {
+        "description": "Sets vesting token ## Executor Only the current owner or token info manager can execute this",
+        "type": "object",
+        "required": [
+          "set_vesting_token"
+        ],
+        "properties": {
+          "set_vesting_token": {
+            "type": "object",
+            "required": [
+              "vesting_token"
+            ],
+            "properties": {
+              "vesting_token": {
+                "$ref": "#/definitions/AssetInfo"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Contains messages associated with the managed extension for vesting contracts.",
         "type": "object",
         "required": [
           "managed_extension"
@@ -188,6 +211,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the with_managers extension for vesting contracts.",
         "type": "object",
         "required": [
           "with_managers_extension"
@@ -209,6 +233,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the historical extension for vesting contracts.",
         "type": "object",
         "required": [
           "historical_extension"
@@ -222,33 +247,6 @@
             "properties": {
               "msg": {
                 "$ref": "#/definitions/ExecuteMsgHistorical"
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
-      {
-        "description": "Sets the vesting token",
-        "type": "object",
-        "required": [
-          "set_vesting_token"
-        ],
-        "properties": {
-          "set_vesting_token": {
-            "type": "object",
-            "required": [
-              "vesting_token"
-            ],
-            "properties": {
-              "vesting_token": {
-                "description": "[`AssetInfo`] of the token that's being vested",
-                "allOf": [
-                  {
-                    "$ref": "#/definitions/AssetInfo"
-                  }
-                ]
               }
             },
             "additionalProperties": false
@@ -337,10 +335,12 @@
         "additionalProperties": false
       },
       "ExecuteMsgHistorical": {
+        "description": "This structure describes the execute messages available in a historical vesting contract.",
         "type": "string",
         "enum": []
       },
       "ExecuteMsgManaged": {
+        "description": "This structure describes the execute messages available in a managed vesting contract.",
         "oneOf": [
           {
             "description": "Removes vesting targets/accounts. ## Executor Only the current owner can execute this",
@@ -375,6 +375,7 @@
         ]
       },
       "ExecuteMsgWithManagers": {
+        "description": "This structure describes the execute messages available in a with_managers vesting contract.",
         "oneOf": [
           {
             "description": "Adds vesting managers ## Executor Only the current owner can execute this",
@@ -513,7 +514,7 @@
   "query": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "QueryMsg",
-    "description": "This structure describes the query messages available in the contract.",
+    "description": "This structure describes the query messages available in a vesting contract.",
     "oneOf": [
       {
         "description": "Returns the configuration for the contract using a [`ConfigResponse`] object.",
@@ -642,6 +643,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the managed extension for vesting contracts.",
         "type": "object",
         "required": [
           "managed_extension"
@@ -663,6 +665,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the with_managers extension for vesting contracts.",
         "type": "object",
         "required": [
           "with_managers_extension"
@@ -684,6 +687,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the historical extension for vesting contracts.",
         "type": "object",
         "required": [
           "historical_extension"
@@ -715,6 +719,7 @@
         ]
       },
       "QueryMsgHistorical": {
+        "description": "This structure describes the query messages available in a historical vesting contract.",
         "oneOf": [
           {
             "description": "Returns the total unclaimed amount of tokens for a specific address at certain height.",
@@ -771,10 +776,12 @@
         ]
       },
       "QueryMsgManaged": {
+        "description": "This structure describes the query messages available in a managed vesting contract.",
         "type": "string",
         "enum": []
       },
       "QueryMsgWithManagers": {
+        "description": "This structure describes the query messages available in a with_managers vesting contract.",
         "oneOf": [
           {
             "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",
@@ -811,17 +818,25 @@
     },
     "config": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ConfigResponse",
-      "description": "This structure describes a custom struct used to return the contract configuration.",
+      "title": "Config",
+      "description": "This structure stores the main parameters for the generator vesting contract.",
       "type": "object",
       "required": [
+        "extensions",
         "owner",
-        "token_info_manager",
-        "vesting_token"
+        "token_info_manager"
       ],
       "properties": {
+        "extensions": {
+          "description": "Contains extensions information of the contract",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Extensions"
+            }
+          ]
+        },
         "owner": {
-          "description": "Address allowed to set contract parameters",
+          "description": "Address that's allowed to change contract parameters",
           "allOf": [
             {
               "$ref": "#/definitions/Addr"
@@ -829,7 +844,7 @@
           ]
         },
         "token_info_manager": {
-          "description": "Token info manager",
+          "description": "Address that's allowed to change vesting token",
           "allOf": [
             {
               "$ref": "#/definitions/Addr"
@@ -837,10 +852,13 @@
           ]
         },
         "vesting_token": {
-          "description": "[`AssetInfo`] of the token that's being vested",
-          "allOf": [
+          "description": "[`AssetInfo`] of the vested token",
+          "anyOf": [
             {
               "$ref": "#/definitions/AssetInfo"
+            },
+            {
+              "type": "null"
             }
           ]
         }
@@ -899,12 +917,37 @@
               "additionalProperties": false
             }
           ]
+        },
+        "Extensions": {
+          "description": "Contains extensions information for the contract.",
+          "type": "object",
+          "required": [
+            "historical",
+            "managed",
+            "with_managers"
+          ],
+          "properties": {
+            "historical": {
+              "description": "Whether the historical extension is enabled for the contract.",
+              "type": "boolean"
+            },
+            "managed": {
+              "description": "Whether the managed extension is enabled for the contract.",
+              "type": "boolean"
+            },
+            "with_managers": {
+              "description": "Whether the with_managers extension is enabled for the contract.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         }
       }
     },
     "historical_extension": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "QueryMsgHistorical",
+      "description": "This structure describes the query messages available in a historical vesting contract.",
       "oneOf": [
         {
           "description": "Returns the total unclaimed amount of tokens for a specific address at certain height.",
@@ -963,6 +1006,7 @@
     "managed_extension": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "QueryMsgManaged",
+      "description": "This structure describes the query messages available in a managed vesting contract.",
       "type": "string",
       "enum": []
     },
@@ -1266,6 +1310,7 @@
     "with_managers_extension": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "QueryMsgWithManagers",
+      "description": "This structure describes the query messages available in a with_managers vesting contract.",
       "oneOf": [
         {
           "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",

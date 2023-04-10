@@ -1,5 +1,5 @@
 {
-  "contract_name": "vesting-lp",
+  "contract_name": "vesting-investors",
   "contract_version": "1.1.0",
   "idl_version": "1.0.0",
   "instantiate": {
@@ -9,91 +9,24 @@
     "type": "object",
     "required": [
       "owner",
-      "vesting_managers",
-      "vesting_token"
+      "token_info_manager"
     ],
     "properties": {
       "owner": {
         "description": "Address allowed to change contract parameters",
         "type": "string"
       },
-      "vesting_managers": {
-        "description": "Initial list of whitelisted vesting managers",
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      },
-      "vesting_token": {
-        "description": "[`AssetInfo`] of the token that's being vested",
-        "allOf": [
-          {
-            "$ref": "#/definitions/AssetInfo"
-          }
-        ]
+      "token_info_manager": {
+        "description": "Token info manager address",
+        "type": "string"
       }
     },
-    "additionalProperties": false,
-    "definitions": {
-      "Addr": {
-        "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
-        "type": "string"
-      },
-      "AssetInfo": {
-        "description": "This enum describes available Token types. ## Examples ``` # use cosmwasm_std::Addr; # use astroport::asset::AssetInfo::{NativeToken, Token}; Token { contract_addr: Addr::unchecked(\"stake...\") }; NativeToken { denom: String::from(\"uluna\") }; ```",
-        "oneOf": [
-          {
-            "description": "Non-native Token",
-            "type": "object",
-            "required": [
-              "token"
-            ],
-            "properties": {
-              "token": {
-                "type": "object",
-                "required": [
-                  "contract_addr"
-                ],
-                "properties": {
-                  "contract_addr": {
-                    "$ref": "#/definitions/Addr"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "description": "Native token",
-            "type": "object",
-            "required": [
-              "native_token"
-            ],
-            "properties": {
-              "native_token": {
-                "type": "object",
-                "required": [
-                  "denom"
-                ],
-                "properties": {
-                  "denom": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      }
-    }
+    "additionalProperties": false
   },
   "execute": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "ExecuteMsg",
-    "description": "This structure describes the execute messages available in the contract.",
+    "description": "This structure describes the execute messages available in a vesting contract.",
     "oneOf": [
       {
         "description": "Claim claims vested tokens and sends them to a recipient",
@@ -226,6 +159,29 @@
         "additionalProperties": false
       },
       {
+        "description": "Sets vesting token ## Executor Only the current owner or token info manager can execute this",
+        "type": "object",
+        "required": [
+          "set_vesting_token"
+        ],
+        "properties": {
+          "set_vesting_token": {
+            "type": "object",
+            "required": [
+              "vesting_token"
+            ],
+            "properties": {
+              "vesting_token": {
+                "$ref": "#/definitions/AssetInfo"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "description": "Contains messages associated with the managed extension for vesting contracts.",
         "type": "object",
         "required": [
           "managed_extension"
@@ -247,6 +203,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the with_managers extension for vesting contracts.",
         "type": "object",
         "required": [
           "with_managers_extension"
@@ -268,6 +225,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the historical extension for vesting contracts.",
         "type": "object",
         "required": [
           "historical_extension"
@@ -290,6 +248,59 @@
       }
     ],
     "definitions": {
+      "Addr": {
+        "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
+        "type": "string"
+      },
+      "AssetInfo": {
+        "description": "This enum describes available Token types. ## Examples ``` # use cosmwasm_std::Addr; # use astroport::asset::AssetInfo::{NativeToken, Token}; Token { contract_addr: Addr::unchecked(\"stake...\") }; NativeToken { denom: String::from(\"uluna\") }; ```",
+        "oneOf": [
+          {
+            "description": "Non-native Token",
+            "type": "object",
+            "required": [
+              "token"
+            ],
+            "properties": {
+              "token": {
+                "type": "object",
+                "required": [
+                  "contract_addr"
+                ],
+                "properties": {
+                  "contract_addr": {
+                    "$ref": "#/definitions/Addr"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Native token",
+            "type": "object",
+            "required": [
+              "native_token"
+            ],
+            "properties": {
+              "native_token": {
+                "type": "object",
+                "required": [
+                  "denom"
+                ],
+                "properties": {
+                  "denom": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "Binary": {
         "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>. See also <https://github.com/CosmWasm/cosmwasm/blob/main/docs/MESSAGE_TYPES.md>.",
         "type": "string"
@@ -316,10 +327,12 @@
         "additionalProperties": false
       },
       "ExecuteMsgHistorical": {
+        "description": "This structure describes the execute messages available in a historical vesting contract.",
         "type": "string",
         "enum": []
       },
       "ExecuteMsgManaged": {
+        "description": "This structure describes the execute messages available in a managed vesting contract.",
         "oneOf": [
           {
             "description": "Removes vesting targets/accounts. ## Executor Only the current owner can execute this",
@@ -354,6 +367,7 @@
         ]
       },
       "ExecuteMsgWithManagers": {
+        "description": "This structure describes the execute messages available in a with_managers vesting contract.",
         "oneOf": [
           {
             "description": "Adds vesting managers ## Executor Only the current owner can execute this",
@@ -492,7 +506,7 @@
   "query": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "QueryMsg",
-    "description": "This structure describes the query messages available in the contract.",
+    "description": "This structure describes the query messages available in a vesting contract.",
     "oneOf": [
       {
         "description": "Returns the configuration for the contract using a [`ConfigResponse`] object.",
@@ -621,6 +635,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the managed extension for vesting contracts.",
         "type": "object",
         "required": [
           "managed_extension"
@@ -642,6 +657,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the with_managers extension for vesting contracts.",
         "type": "object",
         "required": [
           "with_managers_extension"
@@ -663,6 +679,7 @@
         "additionalProperties": false
       },
       {
+        "description": "Contains messages associated with the historical extension for vesting contracts.",
         "type": "object",
         "required": [
           "historical_extension"
@@ -694,6 +711,7 @@
         ]
       },
       "QueryMsgHistorical": {
+        "description": "This structure describes the query messages available in a historical vesting contract.",
         "oneOf": [
           {
             "description": "Returns the total unclaimed amount of tokens for a specific address at certain height.",
@@ -750,10 +768,12 @@
         ]
       },
       "QueryMsgManaged": {
+        "description": "This structure describes the query messages available in a managed vesting contract.",
         "type": "string",
         "enum": []
       },
       "QueryMsgWithManagers": {
+        "description": "This structure describes the query messages available in a with_managers vesting contract.",
         "oneOf": [
           {
             "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",
@@ -790,16 +810,33 @@
     },
     "config": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "ConfigResponse",
-      "description": "This structure describes a custom struct used to return the contract configuration.",
+      "title": "Config",
+      "description": "This structure stores the main parameters for the generator vesting contract.",
       "type": "object",
       "required": [
+        "extensions",
         "owner",
-        "vesting_token"
+        "token_info_manager"
       ],
       "properties": {
+        "extensions": {
+          "description": "Contains extensions information of the contract",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Extensions"
+            }
+          ]
+        },
         "owner": {
-          "description": "Address allowed to set contract parameters",
+          "description": "Address that's allowed to change contract parameters",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "token_info_manager": {
+          "description": "Address that's allowed to change vesting token",
           "allOf": [
             {
               "$ref": "#/definitions/Addr"
@@ -807,10 +844,13 @@
           ]
         },
         "vesting_token": {
-          "description": "[`AssetInfo`] of the token that's being vested",
-          "allOf": [
+          "description": "[`AssetInfo`] of the vested token",
+          "anyOf": [
             {
               "$ref": "#/definitions/AssetInfo"
+            },
+            {
+              "type": "null"
             }
           ]
         }
@@ -869,12 +909,37 @@
               "additionalProperties": false
             }
           ]
+        },
+        "Extensions": {
+          "description": "Contains extensions information for the contract.",
+          "type": "object",
+          "required": [
+            "historical",
+            "managed",
+            "with_managers"
+          ],
+          "properties": {
+            "historical": {
+              "description": "Whether the historical extension is enabled for the contract.",
+              "type": "boolean"
+            },
+            "managed": {
+              "description": "Whether the managed extension is enabled for the contract.",
+              "type": "boolean"
+            },
+            "with_managers": {
+              "description": "Whether the with_managers extension is enabled for the contract.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         }
       }
     },
     "historical_extension": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "QueryMsgHistorical",
+      "description": "This structure describes the query messages available in a historical vesting contract.",
       "oneOf": [
         {
           "description": "Returns the total unclaimed amount of tokens for a specific address at certain height.",
@@ -933,6 +998,7 @@
     "managed_extension": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "QueryMsgManaged",
+      "description": "This structure describes the query messages available in a managed vesting contract.",
       "type": "string",
       "enum": []
     },
@@ -1236,6 +1302,7 @@
     "with_managers_extension": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "QueryMsgWithManagers",
+      "description": "This structure describes the query messages available in a with_managers vesting contract.",
       "oneOf": [
         {
           "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",

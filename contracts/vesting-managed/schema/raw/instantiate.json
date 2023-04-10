@@ -5,8 +5,7 @@
   "type": "object",
   "required": [
     "owner",
-    "token_info_manager",
-    "vesting_managers"
+    "token_info_manager"
   ],
   "properties": {
     "owner": {
@@ -16,13 +15,6 @@
     "token_info_manager": {
       "description": "Token info manager address",
       "type": "string"
-    },
-    "vesting_managers": {
-      "description": "Initial list of whitelisted vesting managers",
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
     }
   },
   "additionalProperties": false

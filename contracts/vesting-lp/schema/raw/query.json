@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "QueryMsg",
-  "description": "This structure describes the query messages available in the contract.",
+  "description": "This structure describes the query messages available in a vesting contract.",
   "oneOf": [
     {
       "description": "Returns the configuration for the contract using a [`ConfigResponse`] object.",
@@ -130,6 +130,7 @@
       "additionalProperties": false
     },
     {
+      "description": "Contains messages associated with the managed extension for vesting contracts.",
       "type": "object",
       "required": [
         "managed_extension"
@@ -151,6 +152,7 @@
       "additionalProperties": false
     },
     {
+      "description": "Contains messages associated with the with_managers extension for vesting contracts.",
       "type": "object",
       "required": [
         "with_managers_extension"
@@ -172,6 +174,7 @@
       "additionalProperties": false
     },
     {
+      "description": "Contains messages associated with the historical extension for vesting contracts.",
       "type": "object",
       "required": [
         "historical_extension"
@@ -203,6 +206,7 @@
       ]
     },
     "QueryMsgHistorical": {
+      "description": "This structure describes the query messages available in a historical vesting contract.",
       "oneOf": [
         {
           "description": "Returns the total unclaimed amount of tokens for a specific address at certain height.",
@@ -259,10 +263,12 @@
       ]
     },
     "QueryMsgManaged": {
+      "description": "This structure describes the query messages available in a managed vesting contract.",
       "type": "string",
       "enum": []
     },
     "QueryMsgWithManagers": {
+      "description": "This structure describes the query messages available in a with_managers vesting contract.",
       "oneOf": [
         {
           "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",
