@@ -1025,9 +1025,8 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: generator.to_string(),
                 funds: vec![],
-                msg: to_binary(&GenExecuteMsg::Withdraw {
-                    lp_token: astroport_lp_token.to_string(),
-                    amount: Uint128::zero(),
+                msg: to_binary(&GenExecuteMsg::ClaimRewards {
+                    lp_tokens: vec![astroport_lp_token.to_string()],
                 })?,
             }));
 
