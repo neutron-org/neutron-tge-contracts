@@ -936,7 +936,9 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     if env.block.time.seconds()
         < config.init_timestamp + config.lock_window + config.withdrawal_window
     {
-        return Err(StdError::generic_err("Lock/withdrawal window is still open"));
+        return Err(StdError::generic_err(
+            "Lock/withdrawal window is still open",
+        ));
     }
 
     let user_address = info.sender;
