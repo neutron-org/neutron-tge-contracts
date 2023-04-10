@@ -717,7 +717,10 @@ pub fn handle_increase_lockup(
                     lp_units_locked: amount,
                     astroport_lp_transferred: None,
                     ntrn_rewards: Uint128::zero(),
-                    unlock_timestamp: config.init_timestamp + config.lock_window + duration,
+                    unlock_timestamp: config.init_timestamp
+                        + config.lock_window
+                        + duration
+                        + config.withdrawal_window,
                     generator_ntrn_debt: Uint128::zero(),
                     generator_proxy_debt: Default::default(),
                     withdrawal_flag: false,
