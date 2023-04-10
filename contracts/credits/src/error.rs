@@ -16,9 +16,6 @@ pub enum ContractError {
     #[error("No funds to claim")]
     NoFundsToClaim,
 
-    #[error("Incorrect funds supplied")]
-    IncorrectFundsSupplied,
-
     #[error("No funds supplied")]
     NoFundsSupplied(),
 

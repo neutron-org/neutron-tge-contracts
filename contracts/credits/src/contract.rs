@@ -1,7 +1,5 @@
 use crate::error::ContractError;
-use crate::error::ContractError::{
-    AlreadyVested, Cw20Error, IncorrectFundsSupplied, NoFundsSupplied, Unauthorized,
-};
+use crate::error::ContractError::{AlreadyVested, Cw20Error, NoFundsSupplied, Unauthorized};
 use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
@@ -372,14 +370,19 @@ pub fn execute_burn_from(
 /// * **info** is an object of type [`MessageInfo`].
 pub fn execute_mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Response, ContractError> {
     // mint in 1:1 proportion to locked untrn tokens
-    let untrn_amount = try_find_untrns(info.funds.clone())?;
+    let untrn_funds = deps
+        .querier
+        .query_balance(env.clone().contract.address, DEPOSITED_SYMBOL)?;
+    if untrn_funds.amount.is_zero() {
+        return Err(NoFundsSupplied());
+    }
 
     let config = CONFIG.load(deps.storage)?;
     let recipient = config
         .airdrop_address
         .ok_or(ContractError::AirdropNotConfigured)?;
 
-    ::cw20_base::contract::execute_mint(deps, env, info, recipient.to_string(), untrn_amount)
+    ::cw20_base::contract::execute_mint(deps, env, info, recipient.to_string(), untrn_funds.amount)
         .map_err(Cw20Error)
 }
 
@@ -564,15 +567,6 @@ pub fn query_vested_amount(
 fn query_allocation(deps: Deps, address: String) -> StdResult<Allocation> {
     let owner = deps.api.addr_validate(&address)?;
     ALLOCATIONS.load(deps.storage, &owner)
-}
-
-fn try_find_untrns(funds: Vec<Coin>) -> Result<Uint128, ContractError> {
-    let token = funds.first().ok_or_else(NoFundsSupplied)?;
-    if token.denom != DEPOSITED_SYMBOL {
-        return Err(IncorrectFundsSupplied);
-    }
-
-    Ok(token.amount)
 }
 
 // burns cNTRN tokens and send untrn tokens to the sender
