@@ -3,7 +3,7 @@
   "title": "Config",
   "type": "object",
   "required": [
-    "atom_denom",
+    "denom_manager",
     "deposit_window",
     "init_timestamp",
     "lp_tokens_lock_window",
@@ -13,8 +13,8 @@
     "owner",
     "price_feed_contract",
     "reserve_contract_address",
-    "usdc_denom",
     "vesting_atom_contract_address",
+    "vesting_lp_duration",
     "vesting_migration_pack_size",
     "vesting_usdc_contract_address",
     "withdrawal_window"
@@ -22,7 +22,18 @@
   "properties": {
     "atom_denom": {
       "description": "ATOM denom",
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "denom_manager": {
+      "description": "Account who can update denoms",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
     },
     "deposit_window": {
       "description": "Number of seconds post init_timestamp during which deposits / withdrawals will be allowed",
@@ -108,7 +119,10 @@
     },
     "usdc_denom": {
       "description": "USDC denom",
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "vesting_atom_contract_address": {
       "description": "Vesting LP-ATOM Contract address",
@@ -117,6 +131,12 @@
           "$ref": "#/definitions/Addr"
         }
       ]
+    },
+    "vesting_lp_duration": {
+      "description": "vesting for lp duration",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
     },
     "vesting_migration_pack_size": {
       "description": "vesting migration users pack size",

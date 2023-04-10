@@ -11,11 +11,13 @@ fn update_owner() {
     let info = mock_info("addr0000", &[]);
 
     let owner = Addr::unchecked("owner");
+    let token_info_manager = Addr::unchecked("token_info_manager");
 
     let env = mock_env();
 
     let msg = InstantiateMsg {
         owner: Some(owner.to_string()),
+        token_info_manager: token_info_manager.to_string(),
         init_timestamp: env.block.time.seconds(),
         lock_window: 10_000_000,
         withdrawal_window: 500_000,
@@ -97,11 +99,13 @@ fn increase_ntrn_incentives() {
     let info = mock_info("addr0000", &[]);
 
     let owner = Addr::unchecked("owner");
+    let token_info_manager = Addr::unchecked("token_info_manager");
 
     let env = mock_env();
 
     let msg = InstantiateMsg {
         owner: Some(owner.to_string()),
+        token_info_manager: token_info_manager.to_string(),
         init_timestamp: env.block.time.seconds(),
         lock_window: 10_000_000,
         withdrawal_window: 500_000,

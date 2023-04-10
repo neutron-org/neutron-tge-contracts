@@ -25,10 +25,20 @@ pub enum ContractError {
 
     #[error("Contract can't be migrated!")]
     MigrationError {},
+
+    #[error("Vesting token is not set!")]
+    VestingTokenIsNotSet {},
 }
 
 impl From<OverflowError> for ContractError {
     fn from(o: OverflowError) -> Self {
         StdError::from(o).into()
     }
+}
+
+pub fn ext_unsupported_err(extension: impl Into<String> + std::fmt::Display) -> StdError {
+    StdError::generic_err(format!(
+        "Extension is not enabled for the contract: {}.",
+        extension
+    ))
 }

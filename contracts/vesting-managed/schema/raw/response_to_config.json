@@ -1,15 +1,32 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ConfigResponse",
-  "description": "This structure describes a custom struct used to return the contract configuration.",
+  "title": "Config",
+  "description": "This structure stores the main parameters for the generator vesting contract.",
   "type": "object",
   "required": [
+    "extensions",
     "owner",
-    "vesting_token"
+    "token_info_manager"
   ],
   "properties": {
+    "extensions": {
+      "description": "Contains extensions information of the contract",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Extensions"
+        }
+      ]
+    },
     "owner": {
-      "description": "Address allowed to set contract parameters",
+      "description": "Address that's allowed to change contract parameters",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
+    },
+    "token_info_manager": {
+      "description": "Address that's allowed to change vesting token",
       "allOf": [
         {
           "$ref": "#/definitions/Addr"
@@ -17,10 +34,13 @@
       ]
     },
     "vesting_token": {
-      "description": "[`AssetInfo`] of the token that's being vested",
-      "allOf": [
+      "description": "[`AssetInfo`] of the vested token",
+      "anyOf": [
         {
           "$ref": "#/definitions/AssetInfo"
+        },
+        {
+          "type": "null"
         }
       ]
     }
@@ -79,6 +99,30 @@
           "additionalProperties": false
         }
       ]
+    },
+    "Extensions": {
+      "description": "Contains extensions information for the contract.",
+      "type": "object",
+      "required": [
+        "historical",
+        "managed",
+        "with_managers"
+      ],
+      "properties": {
+        "historical": {
+          "description": "Whether the historical extension is enabled for the contract.",
+          "type": "boolean"
+        },
+        "managed": {
+          "description": "Whether the managed extension is enabled for the contract.",
+          "type": "boolean"
+        },
+        "with_managers": {
+          "description": "Whether the with_managers extension is enabled for the contract.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

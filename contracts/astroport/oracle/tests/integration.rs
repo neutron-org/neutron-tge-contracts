@@ -16,6 +16,7 @@ use astroport::factory::{PairConfig, PairType};
 use astroport::oracle::QueryMsg::{Consult, TWAPAtHeight};
 use astroport::oracle::{ExecuteMsg, InstantiateMsg};
 use astroport::pair::StablePoolParams;
+use astroport_oracle::error::ContractError;
 
 fn mock_app(owner: Option<Addr>, coins: Option<Vec<Coin>>) -> App {
     if let (Some(own), Some(coinz)) = ((owner), (coins)) {
@@ -547,8 +548,8 @@ fn consult() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -558,6 +559,15 @@ fn consult() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -679,8 +689,8 @@ fn twap_at_height() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -690,6 +700,15 @@ fn twap_at_height() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -820,8 +839,8 @@ fn consult_pair_stable() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -831,6 +850,15 @@ fn consult_pair_stable() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -959,8 +987,8 @@ fn twap_at_height_pair_stable() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -970,6 +998,15 @@ fn twap_at_height_pair_stable() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -1149,8 +1186,8 @@ fn consult2() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -1160,6 +1197,15 @@ fn consult2() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -1364,8 +1410,8 @@ fn consult_zero_price() {
     router.update_block(next_day);
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -1375,6 +1421,15 @@ fn consult_zero_price() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -1436,7 +1491,7 @@ fn consult_zero_price() {
     );
     assert_eq!(
         res.unwrap_err().to_string(),
-        "Generic error: Querier contract error: Generic error: Invalid Token"
+        "Generic error: Querier contract error: Invalid token"
     );
 
     // Consult zero price
@@ -1491,12 +1546,21 @@ fn consult_zero_price() {
             owner,
             &InstantiateMsg {
                 factory_contract: factory_instance.to_string(),
-                asset_infos: asset_infos.clone(),
                 period: 86400,
+                manager: String::from("manager"),
             },
             &[],
             String::from("ORACLE 2"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos.clone()),
+            &[],
         )
         .unwrap();
 
@@ -1603,8 +1667,8 @@ fn consult_multiple_assets() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -1614,6 +1678,15 @@ fn consult_multiple_assets() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -1945,8 +2018,8 @@ fn twap_at_height_multiple_assets() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -1956,6 +2029,15 @@ fn twap_at_height_multiple_assets() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -2356,8 +2438,8 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
 
     let msg = InstantiateMsg {
         factory_contract: factory_instance.to_string(),
-        asset_infos,
         period: 86400,
+        manager: String::from("manager"),
     };
     let oracle_instance = router
         .instantiate_contract(
@@ -2367,6 +2449,15 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
             &[],
             String::from("ORACLE"),
             None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
         )
         .unwrap();
 
@@ -2676,4 +2767,381 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
             .unwrap();
         assert_eq!(res, amount_exp);
     }
+}
+
+#[test]
+fn contract_works_after_pair_info_is_set() {
+    let mut router = mock_app(None, None);
+    let owner = Addr::unchecked("dao");
+    let user = Addr::unchecked("user");
+    let (astro_token_instance, factory_instance, oracle_code_id) =
+        instantiate_contracts(&mut router, owner.clone());
+    let usdc_token_instance = instantiate_token(
+        &mut router,
+        owner.clone(),
+        "Usdc token".to_string(),
+        "USDC".to_string(),
+    );
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: usdc_token_instance.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: astro_token_instance.clone(),
+        },
+    ];
+
+    let assets = vec![
+        Asset {
+            info: asset_infos[0].clone(),
+            amount: Uint128::from(100_000_u128),
+        },
+        Asset {
+            info: asset_infos[1].clone(),
+            amount: Uint128::from(100_000_u128),
+        },
+    ];
+
+    let pair_info = create_pair(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        &factory_instance,
+        assets.clone(),
+    );
+    provide_liquidity(&mut router, owner.clone(), user.clone(), &pair_info, assets).unwrap();
+
+    router.update_block(next_day);
+    let pair_info: PairInfo = router
+        .wrap()
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: factory_instance.clone().to_string(),
+            msg: to_binary(&astroport::factory::QueryMsg::Pair {
+                asset_infos: asset_infos.clone(),
+            })
+            .unwrap(),
+        }))
+        .unwrap();
+
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        pair_info.contract_addr.clone(),
+        vec![
+            (astro_token_instance.clone(), Uint128::from(50_000_u128)),
+            (usdc_token_instance.clone(), Uint128::from(50_000_u128)),
+        ],
+    );
+    router.update_block(next_day);
+
+    let msg = InstantiateMsg {
+        factory_contract: factory_instance.to_string(),
+        period: 86400,
+        manager: String::from("manager"),
+    };
+    let oracle_instance = router
+        .instantiate_contract(
+            oracle_code_id,
+            owner.clone(),
+            &msg,
+            &[],
+            String::from("ORACLE"),
+            None,
+        )
+        .unwrap();
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
+
+    let e = router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap_err();
+    assert_eq!(e.root_cause().to_string(), "Period not elapsed",);
+    router.update_block(next_day);
+
+    // Change pair liquidity
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user,
+        pair_info.contract_addr,
+        vec![
+            (astro_token_instance.clone(), Uint128::from(10_000_u128)),
+            (usdc_token_instance.clone(), Uint128::from(10_000_u128)),
+        ],
+    );
+    router.update_block(next_day);
+    router
+        .execute_contract(owner, oracle_instance.clone(), &ExecuteMsg::Update {}, &[])
+        .unwrap();
+
+    for (addr, amount) in [
+        (astro_token_instance, Uint128::from(1000u128)),
+        (usdc_token_instance, Uint128::from(100u128)),
+    ] {
+        let msg = Consult {
+            token: AssetInfo::Token {
+                contract_addr: addr,
+            },
+            amount,
+        };
+        let res: Vec<(AssetInfo, Uint128)> = router
+            .wrap()
+            .query(&QueryRequest::Wasm(WasmQuery::Smart {
+                contract_addr: oracle_instance.to_string(),
+                msg: to_binary(&msg).unwrap(),
+            }))
+            .unwrap();
+        assert_eq!(res[0].1, amount);
+    }
+}
+
+#[test]
+fn only_manager_can_set_pair_info() {
+    let mut router = mock_app(None, None);
+    let owner = Addr::unchecked("dao");
+    let user = Addr::unchecked("user");
+    let (astro_token_instance, factory_instance, oracle_code_id) =
+        instantiate_contracts(&mut router, owner.clone());
+    let usdc_token_instance = instantiate_token(
+        &mut router,
+        owner.clone(),
+        "Usdc token".to_string(),
+        "USDC".to_string(),
+    );
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: usdc_token_instance.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: astro_token_instance.clone(),
+        },
+    ];
+
+    let assets = vec![
+        Asset {
+            info: asset_infos[0].clone(),
+            amount: Uint128::from(100_000_u128),
+        },
+        Asset {
+            info: asset_infos[1].clone(),
+            amount: Uint128::from(100_000_u128),
+        },
+    ];
+
+    let pair_info = create_pair(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        &factory_instance,
+        assets.clone(),
+    );
+    provide_liquidity(&mut router, owner.clone(), user.clone(), &pair_info, assets).unwrap();
+
+    router.update_block(next_day);
+    let pair_info: PairInfo = router
+        .wrap()
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: factory_instance.clone().to_string(),
+            msg: to_binary(&astroport::factory::QueryMsg::Pair {
+                asset_infos: asset_infos.clone(),
+            })
+            .unwrap(),
+        }))
+        .unwrap();
+
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user,
+        pair_info.contract_addr,
+        vec![
+            (astro_token_instance, Uint128::from(50_000_u128)),
+            (usdc_token_instance, Uint128::from(50_000_u128)),
+        ],
+    );
+    router.update_block(next_day);
+
+    let msg = InstantiateMsg {
+        factory_contract: factory_instance.to_string(),
+        period: 86400,
+        manager: String::from("manager"),
+    };
+    let oracle_instance = router
+        .instantiate_contract(
+            oracle_code_id,
+            owner,
+            &msg,
+            &[],
+            String::from("ORACLE"),
+            None,
+        )
+        .unwrap();
+
+    let res = router
+        .execute_contract(
+            Addr::unchecked("someone"),
+            oracle_instance.clone(),
+            &ExecuteMsg::SetAssetInfos(asset_infos.clone()),
+            &[],
+        )
+        .unwrap_err()
+        .downcast::<ContractError>()
+        .unwrap();
+    assert_eq!(res, ContractError::Unauthorized {});
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager"),
+            oracle_instance,
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
+}
+
+#[test]
+fn only_owner_can_change_manager() {
+    let mut router = mock_app(None, None);
+    let owner = Addr::unchecked("dao");
+    let user = Addr::unchecked("user");
+    let (astro_token_instance, factory_instance, oracle_code_id) =
+        instantiate_contracts(&mut router, owner.clone());
+    let usdc_token_instance = instantiate_token(
+        &mut router,
+        owner.clone(),
+        "Usdc token".to_string(),
+        "USDC".to_string(),
+    );
+
+    let asset_infos = vec![
+        AssetInfo::Token {
+            contract_addr: usdc_token_instance.clone(),
+        },
+        AssetInfo::Token {
+            contract_addr: astro_token_instance.clone(),
+        },
+    ];
+
+    let assets = vec![
+        Asset {
+            info: asset_infos[0].clone(),
+            amount: Uint128::from(100_000_u128),
+        },
+        Asset {
+            info: asset_infos[1].clone(),
+            amount: Uint128::from(100_000_u128),
+        },
+    ];
+
+    let pair_info = create_pair(
+        &mut router,
+        owner.clone(),
+        user.clone(),
+        &factory_instance,
+        assets.clone(),
+    );
+    provide_liquidity(&mut router, owner.clone(), user.clone(), &pair_info, assets).unwrap();
+
+    router.update_block(next_day);
+    let pair_info: PairInfo = router
+        .wrap()
+        .query(&QueryRequest::Wasm(WasmQuery::Smart {
+            contract_addr: factory_instance.clone().to_string(),
+            msg: to_binary(&astroport::factory::QueryMsg::Pair {
+                asset_infos: asset_infos.clone(),
+            })
+            .unwrap(),
+        }))
+        .unwrap();
+
+    change_provide_liquidity(
+        &mut router,
+        owner.clone(),
+        user,
+        pair_info.contract_addr,
+        vec![
+            (astro_token_instance, Uint128::from(50_000_u128)),
+            (usdc_token_instance, Uint128::from(50_000_u128)),
+        ],
+    );
+    router.update_block(next_day);
+
+    let msg = InstantiateMsg {
+        factory_contract: factory_instance.to_string(),
+        period: 86400,
+        manager: String::from("manager1"),
+    };
+    let oracle_instance = router
+        .instantiate_contract(
+            oracle_code_id,
+            owner,
+            &msg,
+            &[],
+            String::from("ORACLE"),
+            None,
+        )
+        .unwrap();
+
+    let res = router
+        .execute_contract(
+            Addr::unchecked("someone"),
+            oracle_instance.clone(),
+            &ExecuteMsg::UpdateManager {
+                new_manager: String::from("someone"),
+            },
+            &[],
+        )
+        .unwrap_err()
+        .downcast::<ContractError>()
+        .unwrap();
+    assert_eq!(res, ContractError::Unauthorized {});
+
+    router
+        .execute_contract(
+            Addr::unchecked("dao"),
+            oracle_instance.clone(),
+            &ExecuteMsg::UpdateManager {
+                new_manager: String::from("manager2"),
+            },
+            &[],
+        )
+        .unwrap();
+
+    for caller in ["someone", "manager1"] {
+        let res = router
+            .execute_contract(
+                Addr::unchecked(caller),
+                oracle_instance.clone(),
+                &ExecuteMsg::SetAssetInfos(asset_infos.clone()),
+                &[],
+            )
+            .unwrap_err()
+            .downcast::<ContractError>()
+            .unwrap();
+        assert_eq!(res, ContractError::Unauthorized {});
+    }
+
+    router
+        .execute_contract(
+            Addr::unchecked("manager2"),
+            oracle_instance,
+            &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
 }

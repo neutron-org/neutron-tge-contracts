@@ -13,6 +13,7 @@
     "max_positions_per_user",
     "min_lock_duration",
     "owner",
+    "token_info_manager",
     "withdrawal_window"
   ],
   "properties": {
@@ -90,6 +91,14 @@
     },
     "owner": {
       "description": "Account which can update the config",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
+    },
+    "token_info_manager": {
+      "description": "Account which can update the generator and token addresses",
       "allOf": [
         {
           "$ref": "#/definitions/Addr"

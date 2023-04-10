@@ -96,6 +96,7 @@ pub fn instantiate(
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
+        token_info_manager: deps.api.addr_validate(&msg.token_info_manager)?,
         credits_contract: deps.api.addr_validate(&msg.credits_contract)?,
         auction_contract: deps.api.addr_validate(&msg.auction_contract)?,
         generator: None,
@@ -197,48 +198,22 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             duration,
         } => handle_increase_lockup(deps, env, info, user_address, pool_type, duration, amount),
         ExecuteMsg::WithdrawFromLockup {
+            user_address,
             pool_type,
             duration,
             amount,
-        } => handle_withdraw_from_lockup(deps, env, info, pool_type, duration, amount),
+        } => {
+            handle_withdraw_from_lockup(deps, env, info, user_address, pool_type, duration, amount)
+        }
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
-        ExecuteMsg::SetPoolInfo {
-            pool_type,
-            pool_info,
-        } => handle_set_pool(deps, env, info, pool_type, pool_info),
+        ExecuteMsg::SetTokenInfo {
+            usdc_token,
+            atom_token,
+            generator,
+        } => handle_set_token_info(deps, env, info, usdc_token, atom_token, generator),
     }
 }
 
-/// Admin function to set info about pools. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **pool_type** is an object of type [`PoolType`].
-///
-/// * **pool_info** is an object of type [`PoolInfo`].
-pub fn handle_set_pool(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    pool_type: PoolType,
-    pool_info: PoolInfo,
-) -> StdResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-    let attributes = vec![attr("action", "set_pool"), attr("pool_type", pool_type)];
-
-    // CHECK :: Only owner can call this function
-    if info.sender != config.owner {
-        return Err(StdError::generic_err("Unauthorized"));
-    }
-
-    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
-
-    Ok(Response::new().add_attributes(attributes))
-}
 /// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template.
 /// If the template is not found in the received message, then an [`StdError`] is returned,
 /// otherwise it returns the [`Response`] with the specified attributes if the operation was successful.
@@ -470,6 +445,58 @@ pub fn handle_update_config(
     Ok(Response::new().add_attributes(attributes))
 }
 
+pub fn handle_set_token_info(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    usdc_token: String,
+    atom_token: String,
+    generator: String,
+) -> Result<Response, StdError> {
+    let mut config = CONFIG.load(deps.storage)?;
+
+    // CHECK :: Only owner and token info manager can call this function
+    if info.sender != config.owner && info.sender != config.token_info_manager {
+        return Err(StdError::generic_err("Unauthorized"));
+    }
+
+    // POOL INFO :: Initialize new pool
+    let pool_info = PoolInfo {
+        lp_token: deps.api.addr_validate(&atom_token)?,
+        amount_in_lockups: Default::default(),
+        incentives_share: Uint128::zero(),
+        weighted_amount: Default::default(),
+        generator_ntrn_per_share: Default::default(),
+        generator_proxy_per_share: RestrictedVector::default(),
+        is_staked: false,
+    };
+    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
+
+    // POOL INFO :: Initialize new pool
+    let pool_info = PoolInfo {
+        lp_token: deps.api.addr_validate(&usdc_token)?,
+        amount_in_lockups: Default::default(),
+        incentives_share: Uint128::zero(),
+        weighted_amount: Default::default(),
+        generator_ntrn_per_share: Default::default(),
+        generator_proxy_per_share: RestrictedVector::default(),
+        is_staked: false,
+    };
+    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
+
+    config.generator = Some(deps.api.addr_validate(&generator)?);
+    CONFIG.save(deps.storage, &config)?;
+
+    let attributes = vec![
+        attr("action", "update_config"),
+        attr("usdc_token", usdc_token),
+        attr("atom_token", atom_token),
+        attr("generator", generator),
+    ];
+
+    Ok(Response::new().add_attributes(attributes))
+}
+
 /// Facilitates increasing NTRN incentives that are to be distributed as Lockdrop participation reward. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
@@ -529,7 +556,7 @@ pub fn handle_initialize_pool(
     info: MessageInfo,
     pool_type: PoolType,
     cw20_sender_addr: Addr,
-    incentives_share: u64,
+    incentives_share: Uint128,
     amount: Uint128,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
@@ -750,6 +777,7 @@ pub fn handle_withdraw_from_lockup(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
+    user_address: String,
     pool_type: PoolType,
     duration: u64,
     amount: Uint128,
@@ -767,8 +795,9 @@ pub fn handle_withdraw_from_lockup(
 
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
+    let user_address = deps.api.addr_validate(&user_address)?;
+
     // Retrieve Lockup position
-    let user_address = info.sender;
     let lockup_key = (pool_type, &user_address, duration);
     let mut lockup_info =
         LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key, &config.generator)?;
@@ -1687,11 +1716,11 @@ pub fn query_lockup_info(
 pub fn calculate_astro_incentives_for_lockup(
     lockup_weighted_balance: Uint256,
     total_weighted_amount: Uint256,
-    pool_incentives_share: u64,
-    total_incentives_share: u64,
+    pool_incentives_share: Uint128,
+    total_incentives_share: Uint128,
     total_lockdrop_incentives: Uint128,
 ) -> StdResult<Uint128> {
-    if total_incentives_share == 0u64 || total_weighted_amount == Uint256::zero() {
+    if total_incentives_share.is_zero() || total_weighted_amount.is_zero() {
         Ok(Uint128::zero())
     } else {
         Ok(Decimal256::from_ratio(
