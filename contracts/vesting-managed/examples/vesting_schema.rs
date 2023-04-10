@@ -1,6 +1,6 @@
 use cosmwasm_schema::write_api;
-
-use astroport::vesting::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use vesting_base::msg::{ExecuteMsg, MigrateMsg, QueryMsg};
+use vesting_managed::msg::InstantiateMsg;
 
 fn main() {
     write_api! {

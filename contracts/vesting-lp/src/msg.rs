@@ -1,40 +1,12 @@
-use astroport::vesting::{
-    ConfigResponse, OrderBy, VestingAccountResponse, VestingAccountsResponse,
-};
-use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Uint128;
+use cosmwasm_schema::cw_serde;
 
-/// This structure describes the query messages available in the contract.
+/// This structure describes the parameters used for creating a contract.
 #[cw_serde]
-#[derive(QueryResponses)]
-pub enum QueryMsg {
-    /// Returns the configuration for the contract using a [`ConfigResponse`] object.
-    #[returns(ConfigResponse)]
-    Config {},
-    /// Returns information about an address vesting tokens using a [`VestingAccountResponse`] object.
-    #[returns(VestingAccountResponse)]
-    VestingAccount { address: String },
-    /// Returns a list of addresses that are vesting tokens using a [`VestingAccountsResponse`] object.
-    #[returns(VestingAccountsResponse)]
-    VestingAccounts {
-        start_after: Option<String>,
-        limit: Option<u32>,
-        order_by: Option<OrderBy>,
-    },
-    /// Returns the total unvested amount of tokens for a specific address.
-    #[returns(Uint128)]
-    AvailableAmount { address: String },
-    /// Timestamp returns the current timestamp
-    #[returns(u64)]
-    Timestamp {},
-    /// Returns list of vesting managers
-    /// (the persons who are able to add/remove vesting schedules)
-    #[returns(Vec<String>)]
-    VestingManagers {},
-    /// Returns the total unclaimed amount of tokens for a specific address at certain height.
-    #[returns(Uint128)]
-    UnclaimedAmountAtHeight { address: String, height: u64 },
-    /// Returns the total unclaimed amount of tokens for all the users at certain height.
-    #[returns(Uint128)]
-    UnclaimedTotalAmountAtHeight { height: u64 },
+pub struct InstantiateMsg {
+    /// Address allowed to change contract parameters
+    pub owner: String,
+    /// Initial list of whitelisted vesting managers
+    pub vesting_managers: Vec<String>,
+    /// Token info manager address
+    pub token_info_manager: String,
 }
