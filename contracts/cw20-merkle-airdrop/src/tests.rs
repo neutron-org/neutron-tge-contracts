@@ -1,7 +1,6 @@
 use crate::{
     contract::{execute, instantiate, query, NEUTRON_DENOM},
     error::ContractError,
-    helpers::CosmosSignature,
     msg::{
         ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse, MerkleRootResponse,
         QueryMsg, SignatureInfo, TotalClaimedResponse,
@@ -10,11 +9,10 @@ use crate::{
 use cosmwasm_std::{
     attr, coin, from_binary, from_slice,
     testing::{mock_dependencies, mock_env, mock_info},
-    to_binary, Addr, Attribute, Binary, BlockInfo, CosmosMsg, Empty, SubMsg, Timestamp, Uint128,
-    WasmMsg,
+    to_binary, Addr, BlockInfo, CosmosMsg, Empty, SubMsg, Timestamp, Uint128, WasmMsg,
 };
 use credits::msg::ExecuteMsg::AddVesting;
-use cw20::{BalanceResponse, Cw20ExecuteMsg, MinterResponse};
+use cw20::{BalanceResponse, Cw20ExecuteMsg};
 use cw_multi_test::{App, BankKeeper, Contract, ContractWrapper, Executor};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -25,15 +23,6 @@ fn mock_app() -> App {
 
 pub fn contract_merkle_airdrop() -> Box<dyn Contract<Empty>> {
     Box::new(ContractWrapper::new(execute, instantiate, query))
-}
-
-pub fn contract_cw20() -> Box<dyn Contract<Empty>> {
-    let contract = ContractWrapper::new(
-        cw20_base::contract::execute,
-        cw20_base::contract::instantiate,
-        cw20_base::contract::query,
-    );
-    Box::new(contract)
 }
 
 pub fn contract_credits() -> Box<dyn Contract<Empty>> {
