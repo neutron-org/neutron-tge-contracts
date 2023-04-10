@@ -204,15 +204,18 @@ pub fn execute_withdraw_all(
         return Err(ContractError::Unauthorized {});
     }
 
-    if !PAUSED.load(deps.storage)? {
-        let vesting_start = VESTING_START.load(deps.storage)?;
-        let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-        let expiration = vesting_start.plus_seconds(vesting_duration);
-        if env.block.time <= expiration {
-            return Err(ContractError::WithdrawAllUnavailable {
-                available_at: expiration,
-            });
-        }
+    let vesting_start = VESTING_START.load(deps.storage)?;
+    let vesting_duration = VESTING_DURATION.load(deps.storage)?;
+    let expiration = vesting_start.plus_seconds(vesting_duration);
+    if env.block.time <= expiration {
+        return Err(ContractError::WithdrawAllUnavailable {
+            available_at: expiration,
+        });
+    }
+
+    let is_paused = PAUSED.load(deps.storage)?;
+    if is_paused {
+        return Err(ContractError::Paused {});
     }
 
     // Get the current total balance for the contract and burn it all.
