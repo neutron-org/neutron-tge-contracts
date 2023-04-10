@@ -34,12 +34,12 @@ fn _instantiate_vest_to_somebody(
     vesting_duration: u64,
 ) -> (OwnedDeps<MockStorage, MockApi, MockQuerier, Empty>, Env) {
     // instantiate
-    let mut deps = mock_dependencies();
-    let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+    let funds = coins(total_to_mint, DEPOSITED_SYMBOL);
+    let (mut deps, _info, _env) = _do_instantiate(Some(funds));
     let (_info, env) = _do_simple_update_config(deps.as_mut());
 
     // mint
-    let dao_info = mock_info("dao_address", &coins(total_to_mint, DEPOSITED_SYMBOL));
+    let dao_info = mock_info("dao_address", &Vec::new());
     let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
     assert!(res.is_ok());
 
@@ -67,16 +67,28 @@ fn _instantiate_vest_to_somebody(
     (deps, env)
 }
 
-fn _do_instantiate(deps: DepsMut, funds: Option<Vec<Coin>>) -> (MessageInfo, Env) {
+fn _do_instantiate(
+    maybe_funds: Option<Vec<Coin>>,
+) -> (
+    OwnedDeps<MockStorage, MockApi, MockQuerier, Empty>,
+    MessageInfo,
+    Env,
+) {
+    let mut deps = mock_dependencies();
     let instantiate_msg = InstantiateMsg {
         dao_address: "dao_address".to_string(),
     };
-    let info = mock_info("dao_address", &funds.unwrap_or_default());
+    let info = mock_info("dao_address", &[]);
     let env = mock_env();
-    let res = instantiate(deps, env.clone(), info.clone(), instantiate_msg).unwrap();
+    let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
+    if let Some(funds) = maybe_funds {
+        deps.querier
+            .update_balance(env.clone().contract.address, funds);
+    }
+
     assert_eq!(0, res.messages.len());
 
-    (info, env)
+    (deps, info, env)
 }
 
 fn _do_simple_update_config(deps: DepsMut) -> (MessageInfo, Env) {
@@ -181,15 +193,13 @@ fn _assert_withdrawn(
 mod instantiate {
     use super::*;
     use crate::contract::{query_config, TOKEN_DECIMALS, TOKEN_NAME, TOKEN_SYMBOL};
-    use cosmwasm_std::testing::mock_dependencies;
     use cosmwasm_std::Uint128;
     use cw20_base::contract::{query_minter, query_token_info};
     use cw20_base::enumerable::query_all_accounts;
 
     #[test]
     fn basic() {
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         _do_update_config(
             deps.as_mut(),
             UpdateConfigMsg {
@@ -239,13 +249,12 @@ mod add_vesting {
     use crate::state::{Schedule, ALLOCATIONS};
     use crate::testing::tests::_do_instantiate;
     use crate::testing::tests::_do_simple_update_config;
-    use cosmwasm_std::testing::{mock_dependencies, mock_info};
+    use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::{Addr, Uint128};
 
     #[test]
     fn adds_vesting_for_account_with_correct_settings() {
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
         let airdrop_info = mock_info("airdrop_address", &[]);
 
@@ -277,8 +286,7 @@ mod add_vesting {
 
     #[test]
     fn non_airdrop_addresses_cannot_set_vesting() {
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
         let non_airdrop_info = mock_info("non_airdrop_address", &[]);
 
@@ -296,8 +304,7 @@ mod add_vesting {
 
     #[test]
     fn cannot_add_vesting_twice_to_same_address() {
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
         let airdrop_info = mock_info("airdrop_address", &[]);
 
@@ -335,7 +342,7 @@ mod transfer {
     use crate::error::ContractError::{Cw20Error, Unauthorized};
     use crate::testing::tests::_do_instantiate;
     use crate::testing::tests::_do_simple_update_config;
-    use cosmwasm_std::testing::{mock_dependencies, mock_info};
+    use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::OverflowOperation::Sub;
     use cosmwasm_std::{coins, Addr, OverflowError, StdError, Uint128};
     use cw20_base::state::BALANCES;
@@ -344,12 +351,12 @@ mod transfer {
     #[test]
     fn works_from_airdrop_and_lockdrop() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let funds = coins(1_000_000_000, DEPOSITED_SYMBOL);
+        let (mut deps, _info, _env) = _do_instantiate(Some(funds));
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // mint
-        let dao_info = mock_info("dao_address", &coins(1_000_000_000, DEPOSITED_SYMBOL));
+        let dao_info = mock_info("dao_address", &Vec::new());
         let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
         assert!(res.is_ok());
 
@@ -377,8 +384,7 @@ mod transfer {
     #[test]
     fn fails_when_try_non_existent_funds() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         let airdrop_info = mock_info("airdrop_address", &[]);
@@ -402,8 +408,7 @@ mod transfer {
     #[test]
     fn not_authorized_from_others() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         let airdrop_info = mock_info("somebody", &[]);
@@ -426,7 +431,7 @@ mod withdraw {
         _assert_withdrawn, _do_instantiate, _do_simple_update_config, _do_update_config,
         _instantiate_vest_to_somebody, _withdraw_rewards,
     };
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::testing::{mock_env, mock_info};
     use cosmwasm_std::StdError;
 
     // withdrawing rewards (burn_from) should not fail withdrawing all funds later
@@ -511,8 +516,7 @@ mod withdraw {
     #[test]
     fn does_not_withdraw_until_ready() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, env) = _do_instantiate(None);
         let somebody_info = mock_info("somebody", &[]);
         _do_update_config(
             deps.as_mut(),
@@ -530,8 +534,7 @@ mod withdraw {
     #[test]
     fn does_not_withdraw_if_no_tokens_vested_yet() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // check
@@ -549,20 +552,21 @@ mod burn {
     use crate::error::ContractError::Unauthorized;
     use crate::testing::tests::_do_instantiate;
     use crate::testing::tests::_do_simple_update_config;
-    use cosmwasm_std::testing::{mock_dependencies, mock_info};
+    use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::{coins, Addr, BankMsg, Uint128};
     use cw20_base::state::{BALANCES, TOKEN_INFO};
 
     #[test]
     fn works_with_correct_params_for_airdrop() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let minted_balance = 1_000_000_000;
+        let funds = coins(minted_balance, DEPOSITED_SYMBOL);
+
+        let (mut deps, _info, _env) = _do_instantiate(Some(funds));
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // mint
-        let minted_balance = 1_000_000_000;
-        let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
+        let dao_info = mock_info("dao_address", &Vec::new());
         let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
         assert!(res.is_ok());
 
@@ -597,8 +601,7 @@ mod burn {
     #[test]
     fn unauthorized_for_non_airdrop_addresses() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // burn amount
@@ -613,7 +616,7 @@ mod burn_from {
     use crate::error::ContractError::Cw20Error;
     use crate::testing::tests::_do_instantiate;
     use crate::testing::tests::_do_simple_update_config;
-    use cosmwasm_std::testing::{mock_dependencies, mock_info};
+    use cosmwasm_std::testing::mock_info;
     use cosmwasm_std::OverflowOperation::Sub;
     use cosmwasm_std::{coins, Addr, BankMsg, OverflowError, StdError, Uint128};
     use cw20_base::state::{BALANCES, TOKEN_INFO};
@@ -622,13 +625,13 @@ mod burn_from {
     #[test]
     fn works_properly_with_airdrop_account() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let minted_balance = 1_000_000_000;
+        let funds = coins(minted_balance, DEPOSITED_SYMBOL);
+        let (mut deps, _info, _env) = _do_instantiate(Some(funds));
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // mint
-        let minted_balance = 1_000_000_000;
-        let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
+        let dao_info = mock_info("dao_address", &Vec::new());
         let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
         assert!(res.is_ok());
 
@@ -668,13 +671,13 @@ mod burn_from {
     #[test]
     fn returns_error_if_not_enough() {
         // instantiate
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let minted_balance = 1_000_000_000;
+        let funds = coins(minted_balance, DEPOSITED_SYMBOL);
+        let (mut deps, _info, _env) = _do_instantiate(Some(funds));
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
         // mint
-        let minted_balance = 1_000_000_000;
-        let dao_info = mock_info("dao_address", &coins(minted_balance, DEPOSITED_SYMBOL));
+        let dao_info = mock_info("dao_address", &Vec::new());
         let res = execute_mint(deps.as_mut(), env.clone(), dao_info);
         assert!(res.is_ok());
 
@@ -712,14 +715,13 @@ mod mint {
     use crate::error::ContractError::{Cw20Error, NoFundsSupplied};
     use crate::testing::tests::_do_instantiate;
     use crate::testing::tests::_do_simple_update_config;
-    use cosmwasm_std::testing::{mock_dependencies, mock_info};
-    use cosmwasm_std::{Addr, Coin, Uint128};
+    use cosmwasm_std::testing::mock_info;
+    use cosmwasm_std::{coins, Addr, Uint128};
     use cw20_base::state::{BALANCES, TOKEN_INFO};
 
     #[test]
     fn does_not_work_without_funds_sent() {
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let (mut deps, _info, _env) = _do_instantiate(None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
         let dao_info = mock_info("dao_address", &[]);
 
@@ -729,12 +731,11 @@ mod mint {
 
     #[test]
     fn non_dao_cannot_mint() {
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let funds = coins(500, DEPOSITED_SYMBOL);
+        let (mut deps, _info, _env) = _do_instantiate(Some(funds));
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
-        let funds = vec![Coin::new(500, DEPOSITED_SYMBOL)];
-        let non_dao_info = mock_info("non dao", &funds);
+        let non_dao_info = mock_info("non dao", &[]);
         let res = execute_mint(deps.as_mut(), env, non_dao_info);
         assert_eq!(
             res,
@@ -744,12 +745,11 @@ mod mint {
 
     #[test]
     fn works_with_ntrn_funds() {
-        let mut deps = mock_dependencies();
-        let (_info, _env) = _do_instantiate(deps.as_mut(), None);
+        let funds = coins(500, DEPOSITED_SYMBOL);
+        let (mut deps, _info, _env) = _do_instantiate(Some(funds));
         let (_info, env) = _do_simple_update_config(deps.as_mut());
 
-        let funds = vec![Coin::new(500, DEPOSITED_SYMBOL)];
-        let dao_info = mock_info("dao_address", &funds);
+        let dao_info = mock_info("dao_address", &Vec::new());
         let res = execute_mint(deps.as_mut(), env, dao_info);
         assert!(res.is_ok());
 
