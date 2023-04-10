@@ -3,13 +3,17 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Order, Uint128};
 use cw20::Cw20ReceiveMsg;
 
+use crate::asset::AssetInfo;
+
 /// This structure describes the parameters used for creating a contract.
 #[cw_serde]
 pub struct InstantiateMsg {
     /// Address allowed to change contract parameters
     pub owner: String,
-    /// The address of the token that's being vested
-    pub token_addr: String,
+    /// Token info manager address
+    pub token_info_manager: String,
+    /// Initial list of whitelisted vesting managers
+    pub vesting_managers: Vec<String>,
 }
 
 /// This structure describes the execute messages available in the contract.
@@ -24,6 +28,10 @@ pub enum ExecuteMsg {
     },
     /// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template
     Receive(Cw20ReceiveMsg),
+    /// RegisterVestingAccounts registers vesting targets/accounts
+    RegisterVestingAccounts {
+        vesting_accounts: Vec<VestingAccount>,
+    },
     /// Creates a request to change contract ownership
     /// ## Executor
     /// Only the current owner can execute this
@@ -41,6 +49,29 @@ pub enum ExecuteMsg {
     /// ## Executor
     /// Only the newly proposed owner can execute this
     ClaimOwnership {},
+    /// Adds vesting managers
+    /// ## Executor
+    /// Only the current owner can execute this
+    AddVestingManagers { managers: Vec<String> },
+    /// Removes vesting managers
+    /// ## Executor
+    /// Only the current owner can execute this
+    RemoveVestingManagers { managers: Vec<String> },
+    /// Sets the vesting token
+    SetVestingToken {
+        /// [`AssetInfo`] of the token that's being vested
+        vesting_token: AssetInfo,
+    },
+}
+
+/// This structure stores the accumulated vesting information for all addresses.
+#[cw_serde]
+#[derive(Default)]
+pub struct VestingState {
+    /// The total amount of tokens granted to the users
+    pub total_granted: Uint128,
+    /// The total amount of tokens already claimed
+    pub total_released: Uint128,
 }
 
 /// This structure stores vesting information for a specific address that is getting tokens.
@@ -57,7 +88,7 @@ pub struct VestingAccount {
 pub struct VestingInfo {
     /// The vesting schedules
     pub schedules: Vec<VestingSchedule>,
-    /// The total amount of ASTRO already claimed
+    /// The total amount of vested tokens already claimed
     pub released_amount: Uint128,
 }
 
@@ -102,6 +133,13 @@ pub enum QueryMsg {
     /// Timestamp returns the current timestamp
     #[returns(u64)]
     Timestamp {},
+    /// VestingState returns the current vesting state.
+    #[returns(VestingState)]
+    VestingState {},
+    /// Returns list of vesting managers
+    /// (the persons who are able to add/remove vesting schedules)
+    #[returns(Vec<Addr>)]
+    VestingManagers {},
 }
 
 /// This structure describes a custom struct used to return the contract configuration.
@@ -109,8 +147,10 @@ pub enum QueryMsg {
 pub struct ConfigResponse {
     /// Address allowed to set contract parameters
     pub owner: Addr,
-    /// The address of the token being vested
-    pub token_addr: Addr,
+    /// [`AssetInfo`] of the token that's being vested
+    pub vesting_token: AssetInfo,
+    /// Token info manager
+    pub token_info_manager: Addr,
 }
 
 /// This structure describes a custom struct used to return vesting data about a specific vesting target.

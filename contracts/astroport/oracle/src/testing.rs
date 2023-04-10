@@ -1,9 +1,10 @@
 use crate::contract::{execute, instantiate, query};
+use crate::error::ContractError;
 use crate::mock_querier::mock_dependencies;
 use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::oracle::{Config, ExecuteMsg, InstantiateMsg, QueryMsg};
 use cosmwasm_std::testing::{mock_env, mock_info};
-use cosmwasm_std::{from_binary, Addr, Decimal256, Uint128, Uint256};
+use cosmwasm_std::{from_binary, Addr, Decimal256, DepsMut, Env, MessageInfo, Uint128, Uint256};
 use std::ops::{Add, Mul};
 
 #[test]
@@ -52,8 +53,8 @@ fn oracle_overflow() {
 
     let instantiate_msg = InstantiateMsg {
         factory_contract: factory.to_string(),
-        asset_infos: vec![astro_asset_info, usdc_asset_info],
         period: 1,
+        manager: String::from("manager"),
     };
 
     // Set cumulative price to 192738282u128
@@ -76,6 +77,13 @@ fn oracle_overflow() {
     );
     let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
     assert_eq!(0, res.messages.len());
+    execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("manager", &[]),
+        ExecuteMsg::SetAssetInfos(vec![astro_asset_info, usdc_asset_info]),
+    )
+    .unwrap();
     // Set cumulative price to 100 (overflow)
     deps.querier.set_cumulative_price(
         Addr::unchecked("pair"),
@@ -96,6 +104,39 @@ fn oracle_overflow() {
     );
     env.block.time = env.block.time.plus_seconds(86400);
     execute(deps.as_mut(), env, info, ExecuteMsg::Update {}).unwrap();
+}
+
+#[test]
+fn update_does_not_work_without_pair_info() {
+    let mut deps = mock_dependencies(&[]);
+    let env = mock_env();
+    setup(deps.as_mut(), env.clone(), mock_info("dao", &[]));
+
+    for caller in ["someone", "dao"] {
+        let res = execute(
+            deps.as_mut(),
+            env.clone(),
+            mock_info(caller, &[]),
+            ExecuteMsg::Update {},
+        )
+        .unwrap_err();
+        assert_eq!(res, ContractError::AssetInfosNotSet {});
+    }
+}
+
+#[test]
+fn update_period_works_without_pair_info() {
+    let mut deps = mock_dependencies(&[]);
+    let env = mock_env();
+    setup(deps.as_mut(), env.clone(), mock_info("dao", &[]));
+
+    execute(
+        deps.as_mut(),
+        env,
+        mock_info("dao", &[]),
+        ExecuteMsg::UpdatePeriod { new_period: 0 },
+    )
+    .unwrap();
 }
 
 #[test]
@@ -127,7 +168,7 @@ fn cfg_and_last_update_ts() {
 
     let instantiate_msg = InstantiateMsg {
         factory_contract: factory.to_string(),
-        asset_infos: vec![astro_asset_info, usdc_asset_info],
+        manager: String::from("manager"),
         period: 100,
     };
 
@@ -152,6 +193,14 @@ fn cfg_and_last_update_ts() {
     let inst_ts = env.block.time.seconds();
     let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
     assert_eq!(0, res.messages.len());
+    execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("manager", &[]),
+        ExecuteMsg::SetAssetInfos(vec![astro_asset_info, usdc_asset_info]),
+    )
+    .unwrap();
+    assert_eq!(0, res.messages.len());
 
     // make sure config query works as expected
     let cfg: Config =
@@ -161,15 +210,15 @@ fn cfg_and_last_update_ts() {
         Config {
             owner: Addr::unchecked("addr0000"),
             factory: Addr::unchecked("factory"),
-            asset_infos: vec![
+            asset_infos: Some(vec![
                 AssetInfo::Token {
                     contract_addr: Addr::unchecked("astro-token")
                 },
                 AssetInfo::Token {
                     contract_addr: Addr::unchecked("usdc-token")
                 },
-            ],
-            pair: PairInfo {
+            ]),
+            pair: Some(PairInfo {
                 asset_infos: vec![
                     AssetInfo::Token {
                         contract_addr: Addr::unchecked("astro-token")
@@ -181,8 +230,9 @@ fn cfg_and_last_update_ts() {
                 contract_addr: Addr::unchecked("pair"),
                 liquidity_token: Addr::unchecked("lp_token"),
                 pair_type: astroport::factory::PairType::Xyk {}
-            },
+            }),
             period: 100u64,
+            manager: Addr::unchecked("manager")
         }
     );
 
@@ -236,4 +286,18 @@ fn cfg_and_last_update_ts() {
     let last_update_ts: u64 =
         from_binary(&query(deps.as_ref(), env, QueryMsg::LastUpdateTimestamp {}).unwrap()).unwrap();
     assert_eq!(last_update_ts, inst_ts.add(700));
+}
+
+fn setup(deps: DepsMut, env: Env, info: MessageInfo) {
+    instantiate(
+        deps,
+        env,
+        info,
+        InstantiateMsg {
+            factory_contract: String::from("factory"),
+            period: 0,
+            manager: String::from("manager"),
+        },
+    )
+    .unwrap();
 }

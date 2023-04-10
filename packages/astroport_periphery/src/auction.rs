@@ -1,76 +1,89 @@
-use cosmwasm_std::{to_binary, Addr, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg};
-use cw20::Cw20ReceiveMsg;
+use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+use crate::lockdrop::PoolType;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct InstantiateMsg {
     pub owner: Option<String>,
-    pub astro_token_address: String,
-    pub airdrop_contract_address: String,
-    pub lockdrop_contract_address: String,
-    pub lp_tokens_vesting_duration: u64,
+    pub denom_manager: String,
+    pub price_feed_contract: String,
+    pub lockdrop_contract_address: Option<String>,
+    pub reserve_contract_address: String,
+    pub vesting_usdc_contract_address: String,
+    pub vesting_atom_contract_address: String,
+    pub lp_tokens_lock_window: u64,
     pub init_timestamp: u64,
     pub deposit_window: u64,
     pub withdrawal_window: u64,
+    pub max_exchange_rate_age: u64,
+    pub min_ntrn_amount: Uint128,
+    pub vesting_migration_pack_size: u16,
+    pub vesting_lp_duration: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
     pub owner: Option<String>,
-    pub astro_ust_pair_address: Option<String>,
-    pub generator_contract: Option<String>,
+    pub price_feed_contract: Option<String>,
+    pub lockdrop_contract_address: Option<String>,
+    pub vesting_migration_pack_size: Option<u16>,
+    pub pool_info: Option<PoolInfo>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct PoolInfo {
-    ///  ASTRO-UST LP Pool address
-    pub astro_ust_pool_address: Addr,
-    ///  ASTRO-UST LP Token address
-    pub astro_ust_lp_token_address: Addr,
+    ///  NTRN-USDC LP Pool address
+    pub ntrn_usdc_pool_address: Addr,
+    ///  NTRN-ATOM LP Pool address
+    pub ntrn_atom_pool_address: Addr,
+    ///  NTRN-USDC LP Token address
+    pub ntrn_usdc_lp_token_address: Addr,
+    ///  NTRN-ATOM LP Token address
+    pub ntrn_atom_lp_token_address: Addr,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    Receive(Cw20ReceiveMsg),
-    UpdateConfig { new_config: UpdateConfigMsg },
-
-    DepositUst {},
-    WithdrawUst { amount: Uint128 },
-
-    InitPool { slippage: Option<Decimal> },
-    StakeLpTokens {},
-
-    ClaimRewards { withdraw_lp_shares: Option<Uint128> },
+    UpdateConfig {
+        new_config: UpdateConfigMsg,
+    },
+    SetDenoms {
+        usdc_denom: String,
+        atom_denom: String,
+    },
+    Deposit {},
+    Withdraw {
+        amount_atom: Uint128,
+        amount_usdc: Uint128,
+    },
+    InitPool {},
+    SetPoolSize {},
+    LockLp {
+        asset: PoolType,
+        amount: Uint128,
+        duration: u64,
+    },
+    WithdrawLp {
+        asset: PoolType,
+        amount: Uint128,
+        duration: u64,
+    },
+    MigrateToVesting {},
     Callback(CallbackMsg),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum Cw20HookMsg {
-    DelegateAstroTokens { user_address: String },
-    IncreaseAstroIncentives {},
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CallbackMsg {
-    UpdateStateOnRewardClaim {
-        prev_astro_balance: Uint128,
-    },
-    UpdateStateOnLiquidityAdditionToPool {
-        prev_lp_balance: Uint128,
-    },
-    WithdrawUserRewardsCallback {
-        user_address: Addr,
-        withdraw_lp_shares: Option<Uint128>,
-    },
+    FinalizePoolInitialization { prev_lp_balance: PoolBalance },
 }
 
-// Modified from
-// https://github.com/CosmWasm/cosmwasm-plus/blob/v0.2.3/packages/cw20/src/receiver.rs#L15
+// // Modified from
+// // https://github.com/CosmWasm/cosmwasm-plus/blob/v0.2.3/packages/cw20/src/receiver.rs#L15
 impl CallbackMsg {
     pub fn to_cosmos_msg(&self, env: &Env) -> StdResult<CosmosMsg> {
         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -81,7 +94,7 @@ impl CallbackMsg {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Config {},
@@ -89,7 +102,7 @@ pub enum QueryMsg {
     UserInfo { address: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct MigrateMsg {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
@@ -97,91 +110,128 @@ pub struct MigrateMsg {}
 pub struct Config {
     /// Account who can update config
     pub owner: Addr,
-    ///  ASTRO token address
-    pub astro_token_address: Addr,
-    /// Airdrop Contract address
-    pub airdrop_contract_address: Addr,
+    /// Account who can update denoms
+    pub denom_manager: Addr,
+    /// Reserve Contract address
+    pub reserve_contract_address: Addr,
+    /// Vesting LP-USDC Contract address
+    pub vesting_usdc_contract_address: Addr,
+    /// Vesting LP-ATOM Contract address
+    pub vesting_atom_contract_address: Addr,
     /// Lockdrop Contract address
-    pub lockdrop_contract_address: Addr,
-    /// ASTRO-UST Pool info
+    pub lockdrop_contract_address: Option<Addr>,
+    /// Price feed contract address
+    pub price_feed_contract: Addr,
+    /// Pool info
     pub pool_info: Option<PoolInfo>,
-    ///  Astroport Generator contract with which ASTRO-UST LP Tokens are staked
-    pub generator_contract: Option<Addr>,
-    /// Total ASTRO token rewards to be used to incentivize bootstrap auction participants
-    pub astro_incentive_amount: Option<Uint128>,
-    ///  Number of seconds over which LP Tokens are vested
-    pub lp_tokens_vesting_duration: u64,
-    /// Timestamp since which ASTRO / UST deposits will be allowed
+    /// Timestamp since which USDC / ATOM deposits will be allowed
     pub init_timestamp: u64,
     /// Number of seconds post init_timestamp during which deposits / withdrawals will be allowed
     pub deposit_window: u64,
     /// Number of seconds post deposit_window completion during which only withdrawals are allowed
     pub withdrawal_window: u64,
+    /// Lock window for LP tokens
+    pub lp_tokens_lock_window: u64,
+    /// Base denom
+    pub ntrn_denom: String,
+    /// USDC denom
+    pub usdc_denom: Option<String>,
+    /// ATOM denom
+    pub atom_denom: Option<String>,
+    /// Min NTRN amount to be distributed as pool liquidity
+    pub min_ntrn_amount: Uint128,
+    /// min exchange freshness rate (seconds)
+    pub max_exchange_rate_age: u64,
+    /// vesting migration users pack size
+    pub vesting_migration_pack_size: u16,
+    /// vesting for lp duration
+    pub vesting_lp_duration: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct State {
-    /// Total ASTRO tokens delegated to the contract by lockdrop participants / airdrop recipients
-    pub total_astro_delegated: Uint128,
-    /// Total UST delegated to the contract
-    pub total_ust_delegated: Uint128,
-    /// ASTRO--UST LP Shares currently staked with the Staking contract
-    pub is_lp_staked: bool,
-    /// Total LP shares minted post liquidity addition to the ASTRO-UST Pool
-    pub lp_shares_minted: Option<Uint128>,
-    /// Timestamp at which liquidity was added to the ASTRO-UST LP Pool
+    /// Total USDC deposited to the contract
+    pub total_usdc_deposited: Uint128,
+    /// Total ATOM deposited to the contract
+    pub total_atom_deposited: Uint128,
+    pub is_rest_lp_vested: bool,
+    /// Total LP shares minted post liquidity addition to the NTRN-USDC Pool
+    pub lp_usdc_shares_minted: Option<Uint128>,
+    /// Total LP shares minted post liquidity addition to the NTRN-ATOM Pool
+    pub lp_atom_shares_minted: Option<Uint128>,
+    /// Timestamp at which liquidity was added to the NTRN-ATOM and NTRN-USDC LP Pool
     pub pool_init_timestamp: u64,
-    /// Ratio of ASTRO rewards accrued to weighted_amount. Used to calculate ASTRO incentives accrued by each user
-    pub generator_astro_per_share: Decimal,
+    /// USDC NTRN amount
+    pub usdc_ntrn_size: Uint128,
+    /// ATOM NTRN amount
+    pub atom_ntrn_size: Uint128,
+    /// LP count for USDC amount
+    pub usdc_lp_size: Uint128,
+    /// LP count for ATOM amount
+    pub atom_lp_size: Uint128,
+    /// locked USDC LP shares
+    pub usdc_lp_locked: Uint128,
+    /// locked ATOM LP shares
+    pub atom_lp_locked: Uint128,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct UserInfo {
-    /// Total ASTRO Tokens delegated by the user
-    pub astro_delegated: Uint128,
-    /// Total UST delegated by the user
-    pub ust_delegated: Uint128,
-    /// Withdrawal counter to capture if the user already withdrew UST during the "only withdrawals" window
-    pub ust_withdrawn: bool,
-    /// User's LP share balance
-    pub lp_shares: Option<Uint128>,
-    /// LP shares withdrawn by the user
-    pub claimed_lp_shares: Uint128,
-    /// User's ASTRO rewards for participating in the auction
-    pub auction_incentive_amount: Option<Uint128>,
-    /// ASTRO tokens were transferred to user
-    pub astro_incentive_transferred: bool,
-    /// ASTRO staking incentives (LP token staking) withdrawn by the user
-    pub generator_astro_debt: Uint128,
-    /// Ratio of ASTRO rewards claimed to amount. Used to calculate ASTRO incentives claimable by each user
-    pub user_gen_astro_per_share: Decimal,
+    pub address: String,
+    /// Total USDC delegated by the user
+    pub usdc_deposited: Uint128,
+    /// Total ATOM delegated by the user
+    pub atom_deposited: Uint128,
+    /// Withdrawal counter to capture if the user already withdrew tokens during the "only withdrawals" window
+    pub withdrawn: bool,
+    /// LP shares locked for the user
+    pub usdc_lp_locked: Uint128,
+    /// LP shares locked for the user
+    pub atom_lp_locked: Uint128,
+    /// Vested?
+    pub is_vested: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct UserInfoResponse {
-    /// Total ASTRO Tokens delegated by the user
-    pub astro_delegated: Uint128,
-    /// Total UST delegated by the user
-    pub ust_delegated: Uint128,
+    /// Total stable delegated by the user
+    pub usdc_deposited: Uint128,
+    /// Total stable delegated by the user
+    pub atom_deposited: Uint128,
     /// Withdrawal counter to capture if the user already withdrew UST during the "only withdrawals" window
-    pub ust_withdrawn: bool,
-    /// User's LP share balance
-    pub lp_shares: Option<Uint128>,
-    /// LP shares withdrawn by the user
-    pub claimed_lp_shares: Uint128,
-    /// LP shares that are available to withdraw
-    pub withdrawable_lp_shares: Option<Uint128>,
-    /// User's ASTRO rewards for participating in the auction
-    pub auction_incentive_amount: Option<Uint128>,
-    /// ASTRO tokens were transferred to user
-    pub astro_incentive_transferred: bool,
-    /// Claimable ASTRO staking rewards
-    pub claimable_generator_astro: Uint128,
-    /// ASTRO staking incentives (LP token staking) withdrawn by the user
-    pub generator_astro_debt: Uint128,
-    /// Ratio of ASTRO rewards claimed to amount. Used to calculate ASTRO incentives claimable by each user
-    pub user_gen_astro_per_share: Decimal,
+    pub withdrawn: bool,
+    pub atom_lp_amount: Uint128,
+    pub usdc_lp_amount: Uint128,
+    pub atom_lp_locked: Uint128,
+    pub usdc_lp_locked: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PriceFeedQuery {
+    GetPrice { symbols: Vec<String> },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct PriceFeedResponse {
+    pub prices: Vec<u64>,
+    pub timestamp: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct UserLpInfo {
+    pub atom_lp_amount: Uint128,
+    pub usdc_lp_amount: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct PoolBalance {
+    pub atom: Uint128,
+    pub usdc: Uint128,
 }
