@@ -504,32 +504,6 @@ pub fn get_lp_size(token1: Uint128, token2: Uint128) -> StdResult<Uint128> {
     .map_err(|_| StdError::generic_err("LP size is too big"))
 }
 
-pub fn get_contract_balances(
-    deps: Deps,
-    address: &Addr,
-    usdc_denom: &String,
-    atom_denom: &String,
-    ntrn_denom: &String,
-) -> Result<(Uint128, Uint128, Uint128), StdError> {
-    let balances = deps.querier.query_all_balances(address)?;
-
-    let mut usdc_amount = Uint128::zero();
-    let mut atom_amount = Uint128::zero();
-    let mut ntrn_amount = Uint128::zero();
-
-    for balance in balances {
-        if balance.denom == *usdc_denom {
-            usdc_amount = balance.amount;
-        } else if balance.denom == *atom_denom {
-            atom_amount = balance.amount;
-        } else if balance.denom == *ntrn_denom {
-            ntrn_amount = balance.amount;
-        }
-    }
-
-    Ok((usdc_amount, atom_amount, ntrn_amount))
-}
-
 pub fn get_lp_balances(
     deps: Deps,
     owner_address: &Addr,
@@ -549,8 +523,7 @@ pub fn execute_set_pool_size(
     _info: MessageInfo,
 ) -> Result<Response, StdError> {
     let config = CONFIG.load(deps.storage)?;
-    let (usdc_denom, atom_denom) = get_denoms(&config)?;
-    let mut state = STATE.load(deps.storage)?;
+    let mut state: State = STATE.load(deps.storage)?;
     // CHECK :: Can be executed once
     if state.lp_usdc_shares_minted.is_some() || state.lp_atom_shares_minted.is_some() {
         return Err(StdError::generic_err("Liquidity already added"));
@@ -567,13 +540,12 @@ pub fn execute_set_pool_size(
         return Err(StdError::generic_err("Pool size has already been set"));
     }
 
-    let (usdc_amount, atom_amount, ntrn_amount) = get_contract_balances(
-        deps.as_ref(),
-        &env.contract.address,
-        &usdc_denom,
-        &atom_denom,
-        &config.ntrn_denom,
-    )?;
+    let ntrn_amount = deps
+        .querier
+        .query_balance(&env.contract.address, config.ntrn_denom)?
+        .amount;
+    let usdc_amount = state.total_usdc_deposited;
+    let atom_amount = state.total_atom_deposited;
 
     let exchange_data: Vec<PriceFeedRate> = deps
         .querier
@@ -620,18 +592,10 @@ pub fn execute_set_pool_size(
         attr("usdc_to_atom_rate", usdc_to_atom_rate.to_string()),
         attr("usdc_ntrn_size", usdc_ntrn_size),
         attr("atom_ntrn_size", atom_ntrn_size),
-        attr("usdc_lp_size", usdc_ntrn_size),
-        attr("atom_lp_size", atom_ntrn_size),
+        attr("usdc_lp_size", usdc_lp_size),
+        attr("atom_lp_size", atom_lp_size),
     ]))
 }
-
-// #[test]
-// fn test_get_lp_size() {
-//     let x = Uint64::from(10000000u64);
-//     let y = Uint64::from(1000000u64);
-//     let z = Decimal::from_ratio(y, x);
-//     println!("{}", z);
-// }
 
 /// Facilitates Liquidity addtion to the Astroport NTRN-NATIVE Pool. Returns a default object of type [`Response`].
 /// ## Params
