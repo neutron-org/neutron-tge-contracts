@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Timestamp, Uint128};
+use cosmwasm_std::{Addr, Uint128};
 use cw_storage_plus::{Item, Map};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ pub struct Config {
     /// Lockdrop contract address
     pub lockdrop_address: Option<Addr>,
     /// When can start withdrawing untrn tokens
-    pub when_withdrawable: Option<Timestamp>,
+    pub when_withdrawable: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
