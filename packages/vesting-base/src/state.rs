@@ -22,13 +22,13 @@ pub struct BaseVesting {
 impl BaseVesting {
     pub fn new(snapshot_strategy: Strategy) -> Self {
         BaseVesting {
-            vesting_state: SnapshotItem::new(
+            vesting_state: SnapshotItem::<'static, VestingState>::new(
                 "vesting_state",
                 "vesting_state__checkpoints",
                 "vesting_state__changelog",
                 snapshot_strategy,
             ),
-            vesting_info: SnapshotMap::new(
+            vesting_info: SnapshotMap::<'static, &'static Addr, VestingInfo>::new(
                 "vesting_info",
                 "vesting_info__checkpoints",
                 "vesting_info__changelog",
