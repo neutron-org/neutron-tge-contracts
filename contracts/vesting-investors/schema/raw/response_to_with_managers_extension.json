@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QueryMsgWithManagers",
+  "description": "This structure describes the query messages available in a with_managers vesting contract.",
+  "oneOf": [
+    {
+      "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",
+      "type": "object",
+      "required": [
+        "vesting_managers"
+      ],
+      "properties": {
+        "vesting_managers": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}
