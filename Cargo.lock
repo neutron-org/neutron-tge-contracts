@@ -2154,7 +2154,24 @@ dependencies = [
  "cw-utils 0.15.1",
  "cw2 0.15.1",
  "cw20 0.15.1",
+ "serde",
  "thiserror",
+]
+
+[[package]]
+name = "vesting-investors"
+version = "1.1.0"
+dependencies = [
+ "astroport 2.0.0",
+ "astroport-token",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-multi-test 0.15.1",
+ "cw-storage-plus 0.15.1",
+ "cw-utils 0.15.1",
+ "cw2 0.15.1",
+ "cw20 0.15.1",
+ "vesting-base",
 ]
 
 [[package]]
@@ -2168,6 +2185,7 @@ dependencies = [
  "cw-multi-test 0.15.1",
  "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
+ "cw2 0.15.1",
  "cw20 0.15.1",
  "vesting-base",
 ]
@@ -2183,6 +2201,7 @@ dependencies = [
  "cw-multi-test 0.15.1",
  "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
+ "cw2 0.15.1",
  "cw20 0.15.1",
  "vesting-base",
 ]
