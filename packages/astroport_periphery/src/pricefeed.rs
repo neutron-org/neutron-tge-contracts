@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Coin, Uint64};
+use cosmwasm_std::{Addr, Coin, Uint64};
 
 #[cw_serde]
 pub struct PriceFeedRate {
@@ -42,9 +42,44 @@ pub struct InstantiateMsg {
     pub multiplier: Uint64,
     // The list of symbols to query
     pub symbols: Vec<String>,
+    // The owner of the contract
+    pub owner: Option<String>,
+    // The maximum time interval between updates
+    pub max_update_interval: Option<u64>,
+}
+
+#[cw_serde]
+pub struct Config {
+    pub client_id: String,
+    pub oracle_script_id: Uint64,
+    pub ask_count: Uint64,
+    pub min_count: Uint64,
+    pub fee_limit: Vec<Coin>,
+    pub prepare_gas: Uint64,
+    pub execute_gas: Uint64,
+    pub multiplier: Uint64,
+    pub symbols: Vec<String>,
+    pub max_update_interval: u64,
+    pub owner: Addr,
+}
+
+#[cw_serde]
+pub struct UpdateConfigMsg {
+    pub client_id: Option<String>,
+    pub oracle_script_id: Option<Uint64>,
+    pub ask_count: Option<Uint64>,
+    pub min_count: Option<Uint64>,
+    pub fee_limit: Option<Vec<Coin>>,
+    pub prepare_gas: Option<Uint64>,
+    pub execute_gas: Option<Uint64>,
+    pub multiplier: Option<Uint64>,
+    pub symbols: Option<Vec<String>>,
+    pub max_update_interval: Option<u64>,
 }
 
 #[cw_serde]
 pub enum ExecuteMsg {
     Request {},
+    UpdateConfig { new_config: UpdateConfigMsg },
+    UpdateOwner { new_owner: String },
 }
