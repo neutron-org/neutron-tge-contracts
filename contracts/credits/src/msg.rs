@@ -1,4 +1,4 @@
-use cosmwasm_std::{Timestamp, Uint128};
+use cosmwasm_std::Uint128;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ pub struct UpdateConfigMsg {
     /// Lockdrop contract address,
     pub lockdrop_address: Option<String>,
     /// When can start withdrawing untrn tokens
-    pub when_withdrawable: Option<Timestamp>,
+    pub when_withdrawable: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

@@ -567,13 +567,6 @@ pub fn handle_initialize_pool(
         return Err(StdError::generic_err("Unauthorized"));
     }
 
-    // CHECK :: Is lockdrop deposit window closed
-    if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
-        return Err(StdError::generic_err(
-            "Pools cannot be staked post deposit window closure",
-        ));
-    }
-
     // CHECK ::: Is LP Token Pool initialized
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
@@ -675,6 +668,10 @@ pub fn handle_increase_lockup(
         return Err(StdError::generic_err("Unauthorized"));
     }
 
+    if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
+        return Err(StdError::generic_err("Lock window is closed"));
+    };
+
     let user_address = deps.api.addr_validate(&user_address_raw)?;
 
     if !config
@@ -724,7 +721,10 @@ pub fn handle_increase_lockup(
                     lp_units_locked: amount,
                     astroport_lp_transferred: None,
                     ntrn_rewards: Uint128::zero(),
-                    unlock_timestamp: config.init_timestamp + config.lock_window + duration,
+                    unlock_timestamp: config.init_timestamp
+                        + config.lock_window
+                        + duration
+                        + config.withdrawal_window,
                     generator_ntrn_debt: Uint128::zero(),
                     generator_proxy_debt: Default::default(),
                     withdrawal_flag: false,
@@ -787,6 +787,12 @@ pub fn handle_withdraw_from_lockup(
     if info.sender != config.auction_contract {
         return Err(StdError::generic_err("Unauthorized"));
     }
+
+    if env.block.time.seconds()
+        >= config.init_timestamp + config.lock_window + config.withdrawal_window
+    {
+        return Err(StdError::generic_err("Withdrawal window is closed"));
+    };
 
     // CHECK :: Valid Withdraw Amount
     if amount.is_zero() {
@@ -927,8 +933,12 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     let config = CONFIG.load(deps.storage)?;
     let state = STATE.load(deps.storage)?;
 
-    if env.block.time.seconds() < config.init_timestamp + config.lock_window {
-        return Err(StdError::generic_err("Lock window is still open"));
+    if env.block.time.seconds()
+        < config.init_timestamp + config.lock_window + config.withdrawal_window
+    {
+        return Err(StdError::generic_err(
+            "Lock/withdrawal window is still open",
+        ));
     }
 
     let user_address = info.sender;
@@ -1029,9 +1039,8 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: generator.to_string(),
                 funds: vec![],
-                msg: to_binary(&GenExecuteMsg::Withdraw {
-                    lp_token: astroport_lp_token.to_string(),
-                    amount: Uint128::zero(),
+                msg: to_binary(&GenExecuteMsg::ClaimRewards {
+                    lp_tokens: vec![astroport_lp_token.to_string()],
                 })?,
             }));
 

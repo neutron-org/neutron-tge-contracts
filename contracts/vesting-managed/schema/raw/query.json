@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "QueryMsg",
-  "description": "This structure describes the query messages available in the contract.",
+  "description": "This structure describes the query messages available in a vesting contract.",
   "oneOf": [
     {
       "description": "Returns the configuration for the contract using a [`ConfigResponse`] object.",
@@ -130,14 +130,66 @@
       "additionalProperties": false
     },
     {
-      "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",
+      "description": "Contains messages associated with the managed extension for vesting contracts.",
       "type": "object",
       "required": [
-        "vesting_managers"
+        "managed_extension"
       ],
       "properties": {
-        "vesting_managers": {
+        "managed_extension": {
           "type": "object",
+          "required": [
+            "msg"
+          ],
+          "properties": {
+            "msg": {
+              "$ref": "#/definitions/QueryMsgManaged"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Contains messages associated with the with_managers extension for vesting contracts.",
+      "type": "object",
+      "required": [
+        "with_managers_extension"
+      ],
+      "properties": {
+        "with_managers_extension": {
+          "type": "object",
+          "required": [
+            "msg"
+          ],
+          "properties": {
+            "msg": {
+              "$ref": "#/definitions/QueryMsgWithManagers"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Contains messages associated with the historical extension for vesting contracts.",
+      "type": "object",
+      "required": [
+        "historical_extension"
+      ],
+      "properties": {
+        "historical_extension": {
+          "type": "object",
+          "required": [
+            "msg"
+          ],
+          "properties": {
+            "msg": {
+              "$ref": "#/definitions/QueryMsgHistorical"
+            }
+          },
           "additionalProperties": false
         }
       },
@@ -151,6 +203,87 @@
       "enum": [
         "asc",
         "desc"
+      ]
+    },
+    "QueryMsgHistorical": {
+      "description": "This structure describes the query messages available in a historical vesting contract.",
+      "oneOf": [
+        {
+          "description": "Returns the total unclaimed amount of tokens for a specific address at certain height.",
+          "type": "object",
+          "required": [
+            "unclaimed_amount_at_height"
+          ],
+          "properties": {
+            "unclaimed_amount_at_height": {
+              "type": "object",
+              "required": [
+                "address",
+                "height"
+              ],
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "height": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Returns the total unclaimed amount of tokens for all the users at certain height.",
+          "type": "object",
+          "required": [
+            "unclaimed_total_amount_at_height"
+          ],
+          "properties": {
+            "unclaimed_total_amount_at_height": {
+              "type": "object",
+              "required": [
+                "height"
+              ],
+              "properties": {
+                "height": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "QueryMsgManaged": {
+      "description": "This structure describes the query messages available in a managed vesting contract.",
+      "type": "string",
+      "enum": []
+    },
+    "QueryMsgWithManagers": {
+      "description": "This structure describes the query messages available in a with_managers vesting contract.",
+      "oneOf": [
+        {
+          "description": "Returns list of vesting managers (the persons who are able to add/remove vesting schedules)",
+          "type": "object",
+          "required": [
+            "vesting_managers"
+          ],
+          "properties": {
+            "vesting_managers": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
       ]
     }
   }

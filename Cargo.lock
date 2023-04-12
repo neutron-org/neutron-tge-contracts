@@ -327,7 +327,7 @@ dependencies = [
  "hex",
  "schemars",
  "serde",
- "serde-json-wasm 0.5.0",
+ "serde-json-wasm 0.5.1",
  "sha2 0.10.6",
  "thiserror",
  "uint",
@@ -462,9 +462,9 @@ dependencies = [
 
 [[package]]
 name = "cw-multi-test"
-version = "0.16.3"
+version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d09dcedf6e747839af86de6eec7678ea9d41e8b5675391e19b2eace9b3e87da1"
+checksum = "2a18afd2e201221c6d72a57f0886ef2a22151bbc9e6db7af276fde8a91081042"
 dependencies = [
  "anyhow",
  "cosmwasm-std",
@@ -732,7 +732,7 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "credits",
- "cw-multi-test 0.16.3",
+ "cw-multi-test 0.16.4",
  "cw-storage-plus 1.0.1",
  "cw-utils 1.0.1",
  "cw2 1.0.1",
@@ -991,7 +991,7 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-storage",
- "cw-multi-test 0.16.3",
+ "cw-multi-test 0.16.4",
  "cw-storage-plus 1.0.1",
  "cw2 1.0.1",
  "cw20 1.0.1",
@@ -1029,7 +1029,7 @@ dependencies = [
  "cosmwasm-std",
  "cosmwasm-storage",
  "cw-band",
- "cw-multi-test 0.16.3",
+ "cw-multi-test 0.16.4",
  "cw-storage-plus 1.0.1",
  "cw2 1.0.1",
  "neutron-sdk",
@@ -1047,8 +1047,9 @@ dependencies = [
 
 [[package]]
 name = "neutron-sdk"
-version = "0.1.0"
-source = "git+https://github.com/neutron-org/neutron-sdk#f8ca35a900f4cbf2a7cdbcc40498fd79d741e2f2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48a57cb451a16a676ecbbb1bb1e0e2e9bc9989834d82c6b16eebc24d9ed97cf"
 dependencies = [
  "base64 0.20.0",
  "bech32",
@@ -1422,9 +1423,9 @@ checksum = "bebd363326d05ec3e2f532ab7660680f3b02130d780c299bca73469d521bc0ed"
 
 [[package]]
 name = "serde"
-version = "1.0.159"
+version = "1.0.160"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c04e8343c3daeec41f58990b9d77068df31209f2af111e059e9fe9646693065"
+checksum = "bb2f3770c8bce3bcda7e149193a069a0f4365bda1fa5cd88e03bca26afc1216c"
 dependencies = [
  "serde_derive",
 ]
@@ -1440,9 +1441,9 @@ dependencies = [
 
 [[package]]
 name = "serde-json-wasm"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a15bee9b04dd165c3f4e142628982ddde884c2022a89e8ddf99c4829bf2c3a58"
+checksum = "16a62a1fad1e1828b24acac8f2b468971dade7b8c3c2e672bcadefefb1f8c137"
 dependencies = [
  "serde",
 ]
@@ -1458,13 +1459,13 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.159"
+version = "1.0.160"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c614d17805b093df4b147b51339e7e44bf05ef59fba1e45d83500bcfb4d8585"
+checksum = "291a097c63d8497e00160b166a967a4a79c64f3facdd01cbd7502231688d77df"
 dependencies = [
  "proc-macro2",
  "quote 1.0.26",
- "syn 2.0.13",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -1607,9 +1608,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.13"
+version = "2.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c9da457c5285ac1f936ebd076af6dac17a61cfe7826f2076b4d015cf47bc8ec"
+checksum = "fcf316d5356ed6847742d036f8a39c3b8435cac10bd528a4bd461928a6ab34d5"
 dependencies = [
  "proc-macro2",
  "quote 1.0.26",
@@ -1665,7 +1666,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote 1.0.26",
- "syn 2.0.13",
+ "syn 2.0.14",
 ]
 
 [[package]]
@@ -1734,7 +1735,24 @@ dependencies = [
  "cw-utils 0.15.1",
  "cw2 0.15.1",
  "cw20 0.15.1",
+ "serde",
  "thiserror",
+]
+
+[[package]]
+name = "vesting-investors"
+version = "1.1.0"
+dependencies = [
+ "astroport 2.0.0",
+ "astroport-token",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-multi-test 0.15.1",
+ "cw-storage-plus 0.15.1",
+ "cw-utils 0.15.1",
+ "cw2 0.15.1",
+ "cw20 0.15.1",
+ "vesting-base",
 ]
 
 [[package]]
@@ -1748,6 +1766,7 @@ dependencies = [
  "cw-multi-test 0.15.1",
  "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
+ "cw2 0.15.1",
  "cw20 0.15.1",
  "vesting-base",
 ]
@@ -1763,6 +1782,7 @@ dependencies = [
  "cw-multi-test 0.15.1",
  "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
+ "cw2 0.15.1",
  "cw20 0.15.1",
  "vesting-base",
 ]
