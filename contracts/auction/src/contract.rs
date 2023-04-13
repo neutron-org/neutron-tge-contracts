@@ -302,12 +302,14 @@ pub fn execute_update_config(
         ));
     }
     if let Some(pool_info) = new_config.pool_info {
-        deps.api.addr_validate(&pool_info.ntrn_usdc_pool_address)?;
-        deps.api.addr_validate(&pool_info.ntrn_atom_pool_address)?;
         deps.api
-            .addr_validate(&pool_info.ntrn_usdc_lp_token_address)?;
+            .addr_validate(pool_info.ntrn_usdc_pool_address.as_str())?;
         deps.api
-            .addr_validate(&pool_info.ntrn_atom_lp_token_address)?;
+            .addr_validate(pool_info.ntrn_atom_pool_address.as_str())?;
+        deps.api
+            .addr_validate(pool_info.ntrn_usdc_lp_token_address.as_str())?;
+        deps.api
+            .addr_validate(pool_info.ntrn_atom_lp_token_address.as_str())?;
         config.pool_info = Some(pool_info);
         attributes.push(attr("pool_info", format!("{:?}", config.pool_info)));
     }
@@ -677,9 +679,13 @@ pub fn execute_init_pool(
 pub fn execute_finalize_init_pool(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     prev_lp_balance: PoolBalance,
 ) -> Result<Response, StdError> {
+    if info.sender != env.contract.address {
+        return Err(StdError::generic_err("Unauthorized"));
+    }
+
     let config = CONFIG.load(deps.storage)?;
     let mut state = STATE.load(deps.storage)?;
     let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {

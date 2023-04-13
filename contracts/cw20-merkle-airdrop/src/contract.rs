@@ -2,22 +2,18 @@ use crate::enumerable::query_all_address_map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, coin, from_binary, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, Response, StdResult, Uint128, WasmMsg,
+    attr, coin, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
+    StdResult, Uint128, WasmMsg,
 };
-use cw2::{get_contract_version, set_contract_version};
+use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
-use semver::Version;
 use sha2::Digest;
 use std::convert::TryInto;
 
 use crate::error::ContractError;
-use crate::helpers::CosmosSignature;
-use crate::migrations::v0_12_1;
 use crate::msg::{
     AccountMapResponse, ConfigResponse, ExecuteMsg, InstantiateMsg, IsClaimedResponse,
-    IsPausedResponse, MerkleRootResponse, MigrateMsg, QueryMsg, SignatureInfo,
-    TotalClaimedResponse,
+    IsPausedResponse, MerkleRootResponse, MigrateMsg, QueryMsg, TotalClaimedResponse,
 };
 use crate::state::{
     Config, ACCOUNT_MAP, AIRDROP_START, AMOUNT, AMOUNT_CLAIMED, CLAIM, CONFIG, HRP, MERKLE_ROOT,
@@ -92,11 +88,7 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Claim {
-            amount,
-            proof,
-            sig_info,
-        } => execute_claim(deps, env, info, amount, proof, sig_info),
+        ExecuteMsg::Claim { amount, proof } => execute_claim(deps, env, info, amount, proof),
         ExecuteMsg::WithdrawAll {} => execute_withdraw_all(deps, env, info),
         ExecuteMsg::Pause {} => execute_pause(deps, env, info),
         ExecuteMsg::Resume {} => execute_resume(deps, env, info),
@@ -109,7 +101,6 @@ pub fn execute_claim(
     info: MessageInfo,
     amount: Uint128,
     proof: Vec<String>,
-    sig_info: Option<SignatureInfo>,
 ) -> Result<Response, ContractError> {
     // airdrop begun
     let start = AIRDROP_START.load(deps.storage)?;
@@ -131,26 +122,7 @@ pub fn execute_claim(
 
     // if present verify signature and extract external address or use info.sender as proof
     // if signature is not present in the message, verification will fail since info.sender is not present in the merkle root
-    let proof_addr = match sig_info {
-        None => info.sender.to_string(),
-        Some(sig) => {
-            // verify signature
-            let cosmos_signature: CosmosSignature = from_binary(&sig.signature)?;
-            cosmos_signature.verify(deps.as_ref(), &sig.claim_msg)?;
-            // get airdrop bech32 prefix and derive proof address from public key
-            let hrp = HRP.load(deps.storage)?;
-            let proof_addr = cosmos_signature.derive_addr_from_pubkey(hrp.as_str())?;
-
-            if sig.extract_addr()? != info.sender {
-                return Err(ContractError::VerificationFailed {});
-            }
-
-            // Save external address index
-            ACCOUNT_MAP.save(deps.storage, proof_addr.clone(), &info.sender.to_string())?;
-
-            proof_addr
-        }
-    };
+    let proof_addr = info.sender.to_string();
 
     // verify not claimed
     let claimed = CLAIM.may_load(deps.storage, proof_addr.clone())?;
@@ -231,20 +203,23 @@ pub fn execute_withdraw_all(
         return Err(ContractError::Unauthorized {});
     }
 
-    if !PAUSED.load(deps.storage)? {
-        let vesting_start = VESTING_START.load(deps.storage)?;
-        let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-        let expiration = vesting_start + vesting_duration;
-        deps.api.debug(&format!(
-            "now: {} then {}",
-            env.block.time.seconds(),
-            expiration
-        ));
-        if env.block.time.seconds() <= expiration {
-            return Err(ContractError::WithdrawAllUnavailable {
-                available_at: expiration,
-            });
-        }
+    let vesting_start = VESTING_START.load(deps.storage)?;
+    let vesting_duration = VESTING_DURATION.load(deps.storage)?;
+    let expiration = vesting_start + vesting_duration;
+    deps.api.debug(&format!(
+        "now: {} then {}",
+        env.block.time.seconds(),
+        expiration
+    ));
+    if env.block.time.seconds() <= expiration {
+        return Err(ContractError::WithdrawAllUnavailable {
+            available_at: expiration,
+        });
+    }
+
+    let is_paused = PAUSED.load(deps.storage)?;
+    if is_paused {
+        return Err(ContractError::Paused {});
     }
 
     // Get the current total balance for the contract and burn it all.
@@ -415,22 +390,6 @@ pub fn query_address_map(deps: Deps, external_address: String) -> StdResult<Acco
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
-    let contract_info = get_contract_version(deps.storage)?;
-    if contract_info.contract != CONTRACT_NAME {
-        return Err(ContractError::CannotMigrate {
-            previous_contract: contract_info.contract,
-        });
-    }
-    let contract_version: Version = contract_info.version.parse()?;
-    let current_version: Version = CONTRACT_VERSION.parse()?;
-    if contract_version < current_version {
-        set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-        v0_12_1::set_initial_pause_status(deps)?;
-        Ok(Response::default())
-    } else {
-        Err(ContractError::CannotMigrate {
-            previous_contract: contract_info.version,
-        })
-    }
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+    Ok(Response::default())
 }
