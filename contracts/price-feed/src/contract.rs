@@ -168,11 +168,16 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetRate {} => to_binary(&query_rate(deps)?),
         QueryMsg::GetError {} => to_binary(&query_error(deps)?),
+        QueryMsg::GetConfig {} => to_binary(&query_config(deps)?),
     }
 }
 
 fn query_error(deps: Deps) -> StdResult<String> {
     ERROR.load(deps.storage)
+}
+
+fn query_config(deps: Deps) -> StdResult<Config> {
+    CONFIG.load(deps.storage)
 }
 
 fn query_rate(deps: Deps) -> StdResult<Vec<PriceFeedRate>> {

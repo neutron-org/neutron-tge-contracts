@@ -19,6 +19,9 @@ pub enum QueryMsg {
     #[returns(Vec<PriceFeedRate>)]
     // Returns the RefData of a given symbol
     GetRate {},
+    #[returns(Config)]
+    // Returns Config
+    GetConfig {},
 }
 
 #[cw_serde]
