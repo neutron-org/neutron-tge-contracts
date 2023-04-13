@@ -19,6 +19,9 @@ pub enum ContractError {
     #[error("Only supports unordered channel")]
     OnlyUnorderedChannel {},
 
+    #[error("Too early to update price")]
+    TooEarly {},
+
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
     // Add any other custom errors you like here.

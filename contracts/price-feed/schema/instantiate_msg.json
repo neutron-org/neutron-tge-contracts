@@ -29,6 +29,14 @@
         "$ref": "#/definitions/Coin"
       }
     },
+    "max_update_interval": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0.0
+    },
     "min_count": {
       "$ref": "#/definitions/Uint64"
     },
@@ -37,6 +45,12 @@
     },
     "oracle_script_id": {
       "$ref": "#/definitions/Uint64"
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "prepare_gas": {
       "$ref": "#/definitions/Uint64"

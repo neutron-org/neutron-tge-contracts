@@ -9,7 +9,7 @@ use cosmwasm_std::{
 use obi::dec::OBIDecode;
 
 use crate::error::{ContractError, Never};
-use crate::state::{PriceFeedRate, BAND_CONFIG, ENDPOINT, ERROR, RATES};
+use crate::state::{PriceFeedRate, CONFIG, ENDPOINT, ERROR, RATES};
 
 use cw_band::{ack_fail, ack_success, OracleResponsePacketData, ResolveStatus, IBC_APP_VERSION};
 
@@ -96,7 +96,7 @@ fn do_ibc_packet_receive(
     packet: &IbcPacket,
 ) -> Result<IbcReceiveResponse, ContractError> {
     let resp: OracleResponsePacketData = from_slice(&packet.data)?;
-    let config = BAND_CONFIG.load(deps.storage)?;
+    let config = CONFIG.load(deps.storage)?;
     let symbols = config.symbols;
     deps.api
         .debug(&format!("WASMDEBUG symbols: {:?} {:?}", symbols, resp));
