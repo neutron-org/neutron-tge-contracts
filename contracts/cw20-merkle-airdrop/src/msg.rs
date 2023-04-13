@@ -1,5 +1,5 @@
 use crate::ContractError;
-use cosmwasm_std::{from_slice, Binary, Timestamp, Uint128};
+use cosmwasm_std::{from_slice, Binary, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -11,10 +11,10 @@ pub struct InstantiateMsg {
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
     /// A point in time from which it is possible to claim airdrops
-    pub airdrop_start: Timestamp,
+    pub airdrop_start: u64,
     /// A point in time from which a vesting is configured for cNTRNs. At this point, it is still
     /// possible for users to claim their airdrops.
-    pub vesting_start: Timestamp,
+    pub vesting_start: u64,
     /// Total duration of vesting. At `vesting_start.seconds() + vesting_duration_seconds`
     /// point of time it is no longer possible to claim airdrops. At the very same point of time,
     /// it is possible to withdraw all remaining cNTRNs, exchange them for NTRNs and send to
@@ -76,8 +76,8 @@ pub struct ConfigResponse {
 pub struct MerkleRootResponse {
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
-    pub airdrop_start: Timestamp,
-    pub vesting_start: Timestamp,
+    pub airdrop_start: u64,
+    pub vesting_start: u64,
     pub vesting_duration_seconds: u64,
     pub total_amount: Uint128,
 }

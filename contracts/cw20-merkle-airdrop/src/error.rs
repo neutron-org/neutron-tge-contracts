@@ -1,4 +1,4 @@
-use cosmwasm_std::{StdError, Timestamp};
+use cosmwasm_std::StdError;
 use hex::FromHexError;
 use thiserror::Error;
 
@@ -26,13 +26,13 @@ pub enum ContractError {
     CannotMigrate { previous_contract: String },
 
     #[error("Airdrop expired at {expiration}")]
-    Expired { expiration: Timestamp },
+    Expired { expiration: u64 },
 
     #[error("withdraw_all is unavailable, it will become available at {available_at}")]
-    WithdrawAllUnavailable { available_at: Timestamp },
+    WithdrawAllUnavailable { available_at: u64 },
 
     #[error("Airdrop begins at {start}")]
-    NotBegun { start: Timestamp },
+    NotBegun { start: u64 },
 
     #[error("Airdrop is paused")]
     Paused {},
@@ -51,8 +51,8 @@ pub enum ContractError {
 
     #[error("Vesting (at {vesting_start}) cannot start before airdrop (at {airdrop_start})")]
     VestingBeforeAirdrop {
-        airdrop_start: Timestamp,
-        vesting_start: Timestamp,
+        airdrop_start: u64,
+        vesting_start: u64,
     },
 }
 

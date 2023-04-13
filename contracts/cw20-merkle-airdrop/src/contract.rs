@@ -7,7 +7,6 @@ use cosmwasm_std::{
 };
 use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
-use cw_utils::{Expiration, Scheduled};
 use sha2::Digest;
 use std::convert::TryInto;
 
@@ -105,14 +104,14 @@ pub fn execute_claim(
 ) -> Result<Response, ContractError> {
     // airdrop begun
     let start = AIRDROP_START.load(deps.storage)?;
-    if !Scheduled::AtTime(start).is_triggered(&env.block) {
+    if env.block.time.seconds() < start {
         return Err(ContractError::NotBegun { start });
     }
     // not expired
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-    let expiration = vesting_start.plus_seconds(vesting_duration);
-    if Expiration::AtTime(expiration).is_expired(&env.block) {
+    let expiration = vesting_start + vesting_duration;
+    if env.block.time.seconds() > expiration {
         return Err(ContractError::Expired { expiration });
     }
 
@@ -177,7 +176,7 @@ pub fn execute_claim(
         msg: to_binary(&AddVesting {
             address: info.sender.to_string(),
             amount,
-            start_time: vesting_start.seconds(),
+            start_time: vesting_start,
             duration: vesting_duration,
         })?,
         funds: vec![],
@@ -206,8 +205,13 @@ pub fn execute_withdraw_all(
 
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-    let expiration = vesting_start.plus_seconds(vesting_duration);
-    if env.block.time <= expiration {
+    let expiration = vesting_start + vesting_duration;
+    deps.api.debug(&format!(
+        "now: {} then {}",
+        env.block.time.seconds(),
+        expiration
+    ));
+    if env.block.time.seconds() <= expiration {
         return Err(ContractError::WithdrawAllUnavailable {
             available_at: expiration,
         });
@@ -265,14 +269,14 @@ pub fn execute_pause(
     }
 
     let start = AIRDROP_START.load(deps.storage)?;
-    if !Scheduled::AtTime(start).is_triggered(&env.block) {
+    if env.block.time.seconds() < start {
         return Err(ContractError::NotBegun { start });
     }
 
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-    let expiration = vesting_start.plus_seconds(vesting_duration);
-    if Expiration::AtTime(expiration).is_expired(&env.block) {
+    let expiration = vesting_start + vesting_duration;
+    if env.block.time.seconds() > expiration {
         return Err(ContractError::Expired { expiration });
     }
 
@@ -292,14 +296,14 @@ pub fn execute_resume(
     }
 
     let start = AIRDROP_START.load(deps.storage)?;
-    if !Scheduled::AtTime(start).is_triggered(&env.block) {
+    if env.block.time.seconds() < start {
         return Err(ContractError::NotBegun { start });
     }
 
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
-    let expiration = vesting_start.plus_seconds(vesting_duration);
-    if Expiration::AtTime(expiration).is_expired(&env.block) {
+    let expiration = vesting_start + vesting_duration;
+    if env.block.time.seconds() > expiration {
         return Err(ContractError::Expired { expiration });
     }
 

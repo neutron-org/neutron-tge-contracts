@@ -38,8 +38,8 @@ pub fn contract_credits() -> Box<dyn Contract<Empty>> {
 fn proper_instantiation() {
     let mut deps = mock_dependencies();
     let env = mock_env();
-    let airdrop_start = env.block.time.plus_seconds(5_000);
-    let vesting_start = env.block.time.plus_seconds(10_000);
+    let airdrop_start = env.block.time.plus_seconds(5_000).seconds();
+    let vesting_start = env.block.time.plus_seconds(10_000).seconds();
     let vesting_duration_seconds = 20_000;
 
     let msg = InstantiateMsg {
@@ -110,8 +110,8 @@ struct Encoded {
 fn claim() {
     let mut deps = mock_dependencies();
     let env = mock_env();
-    let airdrop_start = env.block.time.minus_seconds(5_000);
-    let vesting_start = env.block.time.plus_seconds(10_000);
+    let airdrop_start = env.block.time.minus_seconds(5_000).seconds();
+    let vesting_start = env.block.time.plus_seconds(10_000).seconds();
     let vesting_duration_seconds = 20_000;
     let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
 
@@ -152,7 +152,7 @@ fn claim() {
             msg: to_binary(&AddVesting {
                 address: test_data.account.clone(),
                 amount: test_data.amount,
-                start_time: vesting_start.seconds(),
+                start_time: vesting_start,
                 duration: vesting_duration_seconds,
             })
             .unwrap(),
@@ -222,8 +222,8 @@ struct MultipleData {
 fn multiple_claim() {
     let mut deps = mock_dependencies();
     let env = mock_env();
-    let airdrop_start = env.block.time.minus_seconds(5_000);
-    let vesting_start = env.block.time.plus_seconds(10_000);
+    let airdrop_start = env.block.time.minus_seconds(5_000).seconds();
+    let vesting_start = env.block.time.plus_seconds(10_000).seconds();
     let vesting_duration_seconds = 20_000;
     let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
 
@@ -266,7 +266,7 @@ fn multiple_claim() {
                 msg: to_binary(&AddVesting {
                     address: account.account.clone(),
                     amount: account.amount,
-                    start_time: vesting_start.seconds(),
+                    start_time: vesting_start,
                     duration: vesting_duration_seconds,
                 })
                 .unwrap(),
@@ -302,8 +302,8 @@ fn multiple_claim() {
 fn expiration() {
     let mut deps = mock_dependencies();
     let mut env = mock_env();
-    let airdrop_start = env.block.time.minus_seconds(5_000);
-    let vesting_start = env.block.time.plus_seconds(10_000);
+    let airdrop_start = env.block.time.minus_seconds(5_000).seconds();
+    let vesting_start = env.block.time.plus_seconds(10_000).seconds();
     let vesting_duration_seconds = 20_000;
     let info = mock_info("owner0000", &[]);
 
@@ -332,7 +332,7 @@ fn expiration() {
     assert_eq!(
         res,
         ContractError::Expired {
-            expiration: vesting_start.plus_seconds(vesting_duration_seconds)
+            expiration: vesting_start + vesting_duration_seconds
         }
     )
 }
@@ -393,8 +393,8 @@ fn withdraw_all() {
         credits_address: credits_addr.to_string(),
         reserve_address: "reserve0000".to_string(),
         merkle_root: test_data.root,
-        airdrop_start: router.block_info().time.plus_seconds(5),
-        vesting_start: router.block_info().time.plus_seconds(10),
+        airdrop_start: router.block_info().time.plus_seconds(5).seconds(),
+        vesting_start: router.block_info().time.plus_seconds(10).seconds(),
         vesting_duration_seconds: 10,
         total_amount: Some(Uint128::new(10000)),
         hrp: None,
@@ -464,7 +464,7 @@ fn withdraw_all() {
     assert_eq!(
         err,
         ContractError::WithdrawAllUnavailable {
-            available_at: router.block_info().time.plus_seconds(20)
+            available_at: router.block_info().time.plus_seconds(20).seconds()
         }
     );
 
@@ -516,8 +516,8 @@ fn withdraw_all() {
 fn starts() {
     let mut deps = mock_dependencies();
     let env = mock_env();
-    let airdrop_start = env.block.time.plus_seconds(5_000);
-    let vesting_start = env.block.time.plus_seconds(10_000);
+    let airdrop_start = env.block.time.plus_seconds(5_000).seconds();
+    let vesting_start = env.block.time.plus_seconds(10_000).seconds();
     let vesting_duration_seconds = 20_000;
 
     let msg = InstantiateMsg {

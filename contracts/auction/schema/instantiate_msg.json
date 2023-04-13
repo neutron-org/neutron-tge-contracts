@@ -3,7 +3,6 @@
   "title": "InstantiateMsg",
   "type": "object",
   "required": [
-    "denom_manager",
     "deposit_window",
     "init_timestamp",
     "lp_tokens_lock_window",
@@ -11,6 +10,7 @@
     "min_ntrn_amount",
     "price_feed_contract",
     "reserve_contract_address",
+    "token_info_manager",
     "vesting_atom_contract_address",
     "vesting_lp_duration",
     "vesting_migration_pack_size",
@@ -18,9 +18,6 @@
     "withdrawal_window"
   ],
   "properties": {
-    "denom_manager": {
-      "type": "string"
-    },
     "deposit_window": {
       "type": "integer",
       "format": "uint64",
@@ -60,6 +57,9 @@
       "type": "string"
     },
     "reserve_contract_address": {
+      "type": "string"
+    },
+    "token_info_manager": {
       "type": "string"
     },
     "vesting_atom_contract_address": {

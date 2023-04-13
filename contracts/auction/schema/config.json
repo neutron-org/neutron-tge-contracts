@@ -3,7 +3,6 @@
   "title": "Config",
   "type": "object",
   "required": [
-    "denom_manager",
     "deposit_window",
     "init_timestamp",
     "lp_tokens_lock_window",
@@ -13,6 +12,7 @@
     "owner",
     "price_feed_contract",
     "reserve_contract_address",
+    "token_info_manager",
     "vesting_atom_contract_address",
     "vesting_lp_duration",
     "vesting_migration_pack_size",
@@ -25,14 +25,6 @@
       "type": [
         "string",
         "null"
-      ]
-    },
-    "denom_manager": {
-      "description": "Account who can update denoms",
-      "allOf": [
-        {
-          "$ref": "#/definitions/Addr"
-        }
       ]
     },
     "deposit_window": {
@@ -117,6 +109,14 @@
         }
       ]
     },
+    "token_info_manager": {
+      "description": "Account who can update denoms",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
+    },
     "usdc_denom": {
       "description": "USDC denom",
       "type": [
@@ -175,35 +175,19 @@
       "properties": {
         "ntrn_atom_lp_token_address": {
           "description": "NTRN-ATOM LP Token address",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            }
-          ]
+          "type": "string"
         },
         "ntrn_atom_pool_address": {
           "description": "NTRN-ATOM LP Pool address",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            }
-          ]
+          "type": "string"
         },
         "ntrn_usdc_lp_token_address": {
           "description": "NTRN-USDC LP Token address",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            }
-          ]
+          "type": "string"
         },
         "ntrn_usdc_pool_address": {
           "description": "NTRN-USDC LP Pool address",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Addr"
-            }
-          ]
+          "type": "string"
         }
       }
     },

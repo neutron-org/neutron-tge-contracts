@@ -3,7 +3,6 @@
   "title": "UserInfo",
   "type": "object",
   "required": [
-    "address",
     "atom_deposited",
     "atom_lp_locked",
     "is_vested",
@@ -12,9 +11,6 @@
     "withdrawn"
   ],
   "properties": {
-    "address": {
-      "type": "string"
-    },
     "atom_deposited": {
       "description": "Total ATOM delegated by the user",
       "allOf": [
