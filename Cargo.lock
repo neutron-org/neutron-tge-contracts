@@ -262,7 +262,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4776e787b24d9568dd61d3237eeb4eb321d622fb881b858c7b82806420e87d4"
 dependencies = [
- "prost 0.11.8",
+ "prost 0.11.9",
  "prost-types",
  "tendermint-proto",
 ]
@@ -1035,7 +1035,7 @@ dependencies = [
  "neutron-sdk",
  "obi",
  "owasm-kit",
- "prost 0.11.8",
+ "prost 0.11.9",
  "prost-types",
  "protobuf 3.2.0",
  "schemars",
@@ -1057,7 +1057,7 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus 1.0.1",
- "prost 0.11.8",
+ "prost 0.11.9",
  "protobuf 3.2.0",
  "schemars",
  "serde",
@@ -1242,12 +1242,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.11.8"
+version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e48e50df39172a3e7eb17e14642445da64996989bc212b583015435d39a58537"
+checksum = "0b82eaa1d779e9a4bc1c3217db8ffbeabaae1dca241bf70183242128d48681cd"
 dependencies = [
  "bytes",
- "prost-derive 0.11.8",
+ "prost-derive 0.11.9",
 ]
 
 [[package]]
@@ -1265,9 +1265,9 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.11.8"
+version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ea9b0f8cbe5e15a8a042d030bd96668db28ecb567ec37d691971ff5731d2b1b"
+checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
 dependencies = [
  "anyhow",
  "itertools",
@@ -1278,11 +1278,11 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.11.8"
+version = "0.11.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "379119666929a1afd7a043aa6cf96fa67a6dce9af60c88095a4686dbce4c9c88"
+checksum = "213622a1460818959ac1181aaeb2dc9c7f63df720db7d788b3e24eacd1983e13"
 dependencies = [
- "prost 0.11.8",
+ "prost 0.11.9",
 ]
 
 [[package]]
@@ -1465,7 +1465,7 @@ checksum = "291a097c63d8497e00160b166a967a4a79c64f3facdd01cbd7502231688d77df"
 dependencies = [
  "proc-macro2",
  "quote 1.0.26",
- "syn 2.0.14",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -1481,9 +1481,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.95"
+version = "1.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d721eca97ac802aa7777b701877c8004d950fc142651367300d21c1cc0194744"
+checksum = "057d394a50403bcac12672b2b18fb387ab6d289d957dab67dd201875391e52f1"
 dependencies = [
  "itoa",
  "ryu",
@@ -1608,9 +1608,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.14"
+version = "2.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcf316d5356ed6847742d036f8a39c3b8435cac10bd528a4bd461928a6ab34d5"
+checksum = "a34fcf3e8b60f57e6a14301a2e916d323af98b0ea63c599441eec8558660c822"
 dependencies = [
  "proc-macro2",
  "quote 1.0.26",
@@ -1627,7 +1627,7 @@ dependencies = [
  "flex-error",
  "num-derive",
  "num-traits",
- "prost 0.11.8",
+ "prost 0.11.9",
  "prost-types",
  "serde",
  "serde_bytes",
@@ -1666,7 +1666,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote 1.0.26",
- "syn 2.0.14",
+ "syn 2.0.15",
 ]
 
 [[package]]

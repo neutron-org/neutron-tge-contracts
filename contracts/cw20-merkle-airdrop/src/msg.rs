@@ -34,10 +34,6 @@ pub enum ExecuteMsg {
         amount: Uint128,
         /// Proof is hex-encoded merkle proof.
         proof: Vec<String>,
-        /// Enables cross chain airdrops.
-        /// Target wallet proves identity by sending a signed [SignedClaimMsg](SignedClaimMsg)
-        /// containing the recipient address.
-        sig_info: Option<SignatureInfo>,
     },
     /// Permissionless, activated after vesting is over (consult to `[InstantiateMsg]`
     /// documentation for more info). Withdraws all remaining cNTRN tokens, burns them,
