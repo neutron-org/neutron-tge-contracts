@@ -197,12 +197,6 @@ pub fn execute_withdraw_all(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, ContractError> {
-    // authorize owner
-    let cfg = CONFIG.load(deps.storage)?;
-    if info.sender != cfg.owner {
-        return Err(ContractError::Unauthorized {});
-    }
-
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
     let expiration = vesting_start + vesting_duration;
@@ -224,6 +218,7 @@ pub fn execute_withdraw_all(
 
     // Get the current total balance for the contract and burn it all.
     // By burning, we exchange them for NTRN tokens
+    let cfg = CONFIG.load(deps.storage)?;
     let amount_to_withdraw = deps
         .querier
         .query_wasm_smart::<BalanceResponse>(
