@@ -9,7 +9,8 @@
       ],
       "properties": {
         "config": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -21,7 +22,8 @@
       ],
       "properties": {
         "merkle_root": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -41,7 +43,8 @@
             "address": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -53,7 +56,8 @@
       ],
       "properties": {
         "total_claimed": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -73,7 +77,8 @@
             "external_address": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -101,7 +106,8 @@
                 "null"
               ]
             }
-          }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -113,7 +119,8 @@
       ],
       "properties": {
         "is_paused": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

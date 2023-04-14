@@ -1,20 +1,8 @@
+use astroport_periphery::pricefeed::Config;
 use cosmwasm_schema::cw_serde;
 use cosmwasm_std::IbcEndpoint;
-use cosmwasm_std::{Coin, Uint256, Uint64};
+use cosmwasm_std::{Uint256, Uint64};
 use cw_storage_plus::{Item, Map};
-
-#[cw_serde]
-pub struct Config {
-    pub client_id: String,
-    pub oracle_script_id: Uint64,
-    pub ask_count: Uint64,
-    pub min_count: Uint64,
-    pub fee_limit: Vec<Coin>,
-    pub prepare_gas: Uint64,
-    pub execute_gas: Uint64,
-    pub multiplier: Uint64,
-    pub symbols: Vec<String>,
-}
 
 #[cw_serde]
 pub struct PriceFeedRate {
@@ -39,7 +27,8 @@ impl PriceFeedRate {
 pub const RATES: Map<&str, PriceFeedRate> = Map::new("rates");
 pub const ERROR: Item<String> = Item::new("error");
 pub const ENDPOINT: Item<IbcEndpoint> = Item::new("endpoint");
-pub const BAND_CONFIG: Item<Config> = Item::new("config");
+pub const CONFIG: Item<Config> = Item::new("config");
+pub const LAST_UPDATE: Item<u64> = Item::new("last_update");
 
 #[cw_serde]
 pub struct ReferenceData {
