@@ -1,41 +1,34 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "CallbackMsg",
-  "oneOf": [
+  "title": "Nullable_MinterResponse",
+  "anyOf": [
     {
-      "type": "object",
-      "required": [
-        "finalize_pool_initialization"
-      ],
-      "properties": {
-        "finalize_pool_initialization": {
-          "type": "object",
-          "required": [
-            "prev_lp_balance"
-          ],
-          "properties": {
-            "prev_lp_balance": {
-              "$ref": "#/definitions/PoolBalance"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
+      "$ref": "#/definitions/MinterResponse"
+    },
+    {
+      "type": "null"
     }
   ],
   "definitions": {
-    "PoolBalance": {
+    "MinterResponse": {
       "type": "object",
       "required": [
-        "atom",
-        "usdc"
+        "minter"
       ],
       "properties": {
-        "atom": {
-          "$ref": "#/definitions/Uint128"
+        "cap": {
+          "description": "cap is a hard cap on total supply that can be achieved by minting. Note that this refers to total_supply. If None, there is unlimited cap.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "usdc": {
-          "$ref": "#/definitions/Uint128"
+        "minter": {
+          "type": "string"
         }
       }
     },
