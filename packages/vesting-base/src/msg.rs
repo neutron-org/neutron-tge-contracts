@@ -3,7 +3,7 @@ use crate::types::{
 };
 use astroport::asset::AssetInfo;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Addr, Binary, Uint128};
 use cw20::Cw20ReceiveMsg;
 
 /// This structure describes the execute messages available in a vesting contract.
@@ -108,7 +108,7 @@ pub enum QueryMsg {
     #[returns(VestingState)]
     VestingState {},
     /// Contains messages associated with the managed extension for vesting contracts.
-    #[returns(QueryMsgManaged)]
+    #[returns(Binary)]
     ManagedExtension { msg: QueryMsgManaged },
     /// Contains messages associated with the with_managers extension for vesting contracts.
     #[returns(QueryMsgWithManagers)]
