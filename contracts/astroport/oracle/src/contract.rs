@@ -102,42 +102,21 @@ pub fn update_manager(
 
 pub fn set_asset_infos(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     asset_infos: Vec<AssetInfo>,
 ) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
+    let mut config = CONFIG.load(deps.storage)?;
     if info.sender != config.manager {
         return Err(ContractError::Unauthorized {});
     }
 
     asset_infos[0].check(deps.api)?;
     asset_infos[1].check(deps.api)?;
-
     let pair_info = query_pair_info(&deps.querier, &config.factory, &asset_infos)?;
 
-    let prices = query_cumulative_prices(deps.querier, &pair_info.contract_addr)?;
-    let average_prices = prices
-        .cumulative_prices
-        .iter()
-        .cloned()
-        .map(|(from, to, _)| (from, to, Decimal256::zero()))
-        .collect();
-    let price = PriceCumulativeLast {
-        cumulative_prices: prices.cumulative_prices,
-        average_prices,
-        block_timestamp_last: env.block.time.seconds(),
-    };
-    PRICE_LAST.save(deps.storage, &price, env.block.height)?;
-
-    let config = Config {
-        owner: config.owner,
-        factory: config.factory,
-        asset_infos: Some(asset_infos),
-        pair: Some(pair_info),
-        period: config.period,
-        manager: config.manager,
-    };
+    config.asset_infos = Some(asset_infos);
+    config.pair = Some(pair_info);
     CONFIG.save(deps.storage, &config)?;
 
     Ok(Response::default())
@@ -147,31 +126,38 @@ pub fn set_asset_infos(
 pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let pair = config.pair.ok_or(ContractError::AssetInfosNotSet {})?;
-    let price_last = PRICE_LAST.load(deps.storage)?;
-
     let prices = query_cumulative_prices(deps.querier, pair.contract_addr)?;
-    let time_elapsed = env.block.time.seconds() - price_last.block_timestamp_last;
-
-    // Ensure that at least one full period has passed since the last update
-    if time_elapsed < config.period {
-        return Err(ContractError::WrongPeriod {});
-    }
 
     let mut average_prices = vec![];
-    for (asset1_last, asset2_last, price_last) in price_last.cumulative_prices.iter() {
-        for (asset1, asset2, price) in prices.cumulative_prices.iter() {
-            if asset1.equal(asset1_last) && asset2.equal(asset2_last) {
-                average_prices.push((
-                    asset1.clone(),
-                    asset2.clone(),
-                    Decimal256::from_ratio(
-                        Uint256::from(price.wrapping_sub(*price_last)),
-                        time_elapsed,
-                    ),
-                ));
+    if let Some(price_last) = PRICE_LAST.may_load(deps.storage)? {
+        let time_elapsed = env.block.time.seconds() - price_last.block_timestamp_last;
+        // Ensure that at least one full period has passed since the last update
+        if time_elapsed < config.period {
+            return Err(ContractError::WrongPeriod {});
+        }
+
+        for (asset1_last, asset2_last, price_last) in price_last.cumulative_prices.iter() {
+            for (asset1, asset2, price) in prices.cumulative_prices.iter() {
+                if asset1.equal(asset1_last) && asset2.equal(asset2_last) {
+                    average_prices.push((
+                        asset1.clone(),
+                        asset2.clone(),
+                        Decimal256::from_ratio(
+                            Uint256::from(price.wrapping_sub(*price_last)),
+                            time_elapsed,
+                        ),
+                    ));
+                }
             }
         }
-    }
+    } else {
+        average_prices = prices
+            .cumulative_prices
+            .iter()
+            .cloned()
+            .map(|(from, to, _)| (from, to, Decimal256::zero()))
+            .collect();
+    };
 
     let prices = PriceCumulativeLast {
         cumulative_prices: prices.cumulative_prices,

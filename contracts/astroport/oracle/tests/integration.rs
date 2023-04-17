@@ -570,6 +570,14 @@ fn consult() {
             &[],
         )
         .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap();
 
     let e = router
         .execute_contract(
@@ -708,6 +716,14 @@ fn twap_at_height() {
             Addr::unchecked("manager"),
             oracle_instance.clone(),
             &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
             &[],
         )
         .unwrap();
@@ -861,6 +877,14 @@ fn consult_pair_stable() {
             &[],
         )
         .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap();
 
     let e = router
         .execute_contract(
@@ -1006,6 +1030,14 @@ fn twap_at_height_pair_stable() {
             Addr::unchecked("manager"),
             oracle_instance.clone(),
             &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
             &[],
         )
         .unwrap();
@@ -1205,6 +1237,14 @@ fn consult2() {
             Addr::unchecked("manager"),
             oracle_instance.clone(),
             &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
             &[],
         )
         .unwrap();
@@ -1432,6 +1472,14 @@ fn consult_zero_price() {
             &[],
         )
         .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap();
 
     let e = router
         .execute_contract(
@@ -1543,7 +1591,7 @@ fn consult_zero_price() {
     let oracle_instance = router
         .instantiate_contract(
             oracle_code_id,
-            owner,
+            owner.clone(),
             &InstantiateMsg {
                 factory_contract: factory_instance.to_string(),
                 period: 86400,
@@ -1562,6 +1610,9 @@ fn consult_zero_price() {
             &ExecuteMsg::SetAssetInfos(asset_infos.clone()),
             &[],
         )
+        .unwrap();
+    router
+        .execute_contract(owner, oracle_instance.clone(), &ExecuteMsg::Update {}, &[])
         .unwrap();
 
     let res: Vec<(AssetInfo, Uint128)> = router
@@ -1686,6 +1737,14 @@ fn consult_multiple_assets() {
             Addr::unchecked("manager"),
             oracle_instance.clone(),
             &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
             &[],
         )
         .unwrap();
@@ -2037,6 +2096,14 @@ fn twap_at_height_multiple_assets() {
             Addr::unchecked("manager"),
             oracle_instance.clone(),
             &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
             &[],
         )
         .unwrap();
@@ -2460,6 +2527,14 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
             &[],
         )
         .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
+            &[],
+        )
+        .unwrap();
 
     let e = router
         .execute_contract(
@@ -2857,6 +2932,14 @@ fn contract_works_after_pair_info_is_set() {
             Addr::unchecked("manager"),
             oracle_instance.clone(),
             &ExecuteMsg::SetAssetInfos(asset_infos),
+            &[],
+        )
+        .unwrap();
+    router
+        .execute_contract(
+            owner.clone(),
+            oracle_instance.clone(),
+            &ExecuteMsg::Update {},
             &[],
         )
         .unwrap();
