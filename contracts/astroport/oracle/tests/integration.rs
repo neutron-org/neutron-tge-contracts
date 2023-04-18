@@ -1,5 +1,8 @@
 use anyhow::Result;
-use cosmwasm_std::{attr, to_binary, Addr, BlockInfo, Coin, Decimal, Decimal256, QueryRequest, StdResult, Uint128, Uint64, WasmQuery};
+use cosmwasm_std::{
+    attr, to_binary, Addr, BlockInfo, Coin, Decimal, Decimal256, QueryRequest, StdResult, Uint128,
+    Uint64, WasmQuery,
+};
 use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, AppResponse, ContractWrapper, Executor};
 use itertools::Itertools;
@@ -80,8 +83,11 @@ fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
 
     let pair_stable_code_id = router.store_code(pair_stable_contract);
 
-
-    let native_coin_registry_addr = instantiate_coin_registry(router, &owner.to_string(), Some(vec![("cny".to_string(), 6u8), ("uluna".to_string(), 6u8)]));
+    let native_coin_registry_addr = instantiate_coin_registry(
+        router,
+        owner.as_ref(),
+        Some(vec![("cny".to_string(), 6u8), ("uluna".to_string(), 6u8)]),
+    );
 
     let factory_contract = Box::new(
         ContractWrapper::new_with_empty(
@@ -176,8 +182,8 @@ fn store_coin_registry_code(app: &mut App) -> u64 {
     app.store_code(coin_registry_contract)
 }
 
-fn instantiate_coin_registry(mut app: &mut App, owner: &str, coins: Option<Vec<(String, u8)>>) -> Addr {
-    let coin_registry_id = store_coin_registry_code(&mut app);
+fn instantiate_coin_registry(app: &mut App, owner: &str, coins: Option<Vec<(String, u8)>>) -> Addr {
+    let coin_registry_id = store_coin_registry_code(app);
     let coin_registry_address = app
         .instantiate_contract(
             coin_registry_id,
@@ -200,7 +206,7 @@ fn instantiate_coin_registry(mut app: &mut App, owner: &str, coins: Option<Vec<(
             },
             &[],
         )
-            .unwrap();
+        .unwrap();
     }
 
     coin_registry_address

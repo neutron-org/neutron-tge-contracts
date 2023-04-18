@@ -132,7 +132,7 @@ fn check_update_owner() {
     assert_eq!(err.root_cause().to_string(), "Generic error: Unauthorized");
 
     app.execute_contract(
-        owner.clone(),
+        owner,
         native_registry_instance.clone(),
         &ExecuteMsg::DropOwnershipProposal {},
         &[],
@@ -193,7 +193,7 @@ fn try_add_and_remove_native_tokens() {
     let native_registry_instance = app
         .instantiate_contract(
             native_registry_code_id,
-            Addr::unchecked(owner.clone()),
+            Addr::unchecked(owner),
             &msg,
             &[],
             "Precision registry contract",

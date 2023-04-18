@@ -125,6 +125,7 @@ dependencies = [
  "anyhow",
  "astroport 2.0.0",
  "astroport-factory",
+ "astroport-native-coin-registry",
  "astroport-token",
  "cosmwasm-schema",
  "cosmwasm-std",

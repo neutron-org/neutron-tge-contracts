@@ -92,11 +92,13 @@ fn update_config() {
         .update_config(
             &mut app,
             &owner,
-            Some(200u64),
-            Some("fee".to_string()),
-            Some("generator".to_string()),
-            None,
-            Some(Addr::unchecked("new_coin_registry_address")),
+            ExecuteMsg::UpdateConfig {
+                token_code_id: Some(200u64),
+                fee_address: Some("fee".to_string()),
+                generator_address: Some("generator".to_string()),
+                whitelist_code_id: None,
+                coin_registry_address: Some(Addr::unchecked("new_coin_registry_address")),
+            },
         )
         .unwrap();
 
@@ -121,11 +123,13 @@ fn update_config() {
         .update_config(
             &mut app,
             &Addr::unchecked("not_owner"),
-            None,
-            None,
-            None,
-            None,
-            None,
+            ExecuteMsg::UpdateConfig {
+                token_code_id: None,
+                fee_address: None,
+                generator_address: None,
+                whitelist_code_id: None,
+                coin_registry_address: None,
+            },
         )
         .unwrap_err();
     assert_eq!(res.root_cause().to_string(), "Unauthorized");

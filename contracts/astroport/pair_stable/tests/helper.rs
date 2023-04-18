@@ -54,6 +54,46 @@ impl TestCoin {
     }
 }
 
+fn store_coin_registry_code(app: &mut App) -> u64 {
+    let coin_registry_contract = Box::new(ContractWrapper::new_with_empty(
+        astroport_native_coin_registry::contract::execute,
+        astroport_native_coin_registry::contract::instantiate,
+        astroport_native_coin_registry::contract::query,
+    ));
+
+    app.store_code(coin_registry_contract)
+}
+
+fn instantiate_coin_registry(app: &mut App, owner: &str, coins: Option<Vec<(String, u8)>>) -> Addr {
+    let coin_registry_id = store_coin_registry_code(app);
+    let coin_registry_address = app
+        .instantiate_contract(
+            coin_registry_id,
+            Addr::unchecked(owner),
+            &astroport::native_coin_registry::InstantiateMsg {
+                owner: owner.to_string(),
+            },
+            &[],
+            "Coin registry",
+            None,
+        )
+        .unwrap();
+
+    if let Some(coins) = coins {
+        app.execute_contract(
+            Addr::unchecked(owner),
+            coin_registry_address.clone(),
+            &astroport::native_coin_registry::ExecuteMsg::Add {
+                native_coins: coins,
+            },
+            &[],
+        )
+        .unwrap();
+    }
+
+    coin_registry_address
+}
+
 pub fn init_native_coins(test_coins: &[TestCoin]) -> Vec<Coin> {
     test_coins
         .iter()
@@ -135,6 +175,20 @@ impl Helper {
         let pair_code_id = app.store_code(pair_contract());
         let factory_code_id = app.store_code(factory_contract());
 
+        // TODO: use test_coins to initialize precisions instead of fixed ones
+        let coin_registry_address = instantiate_coin_registry(
+            &mut app,
+            owner.as_ref(),
+            Some(vec![
+                ("uluna".to_string(), 6u8),
+                ("ibc/usd".to_string(), 6u8),
+                ("uusd".to_string(), 6u8),
+                ("one".to_string(), 6u8),
+                ("three".to_string(), 6u8),
+                ("five".to_string(), 6u8),
+            ]),
+        );
+
         let init_msg = astroport::factory::InstantiateMsg {
             fee_address: None,
             pair_configs: vec![PairConfig {
@@ -149,7 +203,7 @@ impl Helper {
             generator_address: None,
             owner: owner.to_string(),
             whitelist_code_id: 234u64,
-            coin_registry_address: Addr::unchecked("coin_registry_address"),
+            coin_registry_address,
         };
 
         let factory = app.instantiate_contract(

@@ -107,20 +107,8 @@ impl FactoryHelper {
         &mut self,
         router: &mut App,
         sender: &Addr,
-        token_code_id: Option<u64>,
-        fee_address: Option<String>,
-        generator_address: Option<String>,
-        whitelist_code_id: Option<u64>,
-        coin_registry_address: Option<Addr>,
+        msg: astroport::factory::ExecuteMsg,
     ) -> AnyResult<AppResponse> {
-        let msg = astroport::factory::ExecuteMsg::UpdateConfig {
-            token_code_id,
-            fee_address,
-            generator_address,
-            whitelist_code_id,
-            coin_registry_address,
-        };
-
         router.execute_contract(sender.clone(), self.factory.clone(), &msg, &[])
     }
 
