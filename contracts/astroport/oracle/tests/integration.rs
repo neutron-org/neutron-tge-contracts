@@ -654,11 +654,11 @@ fn twap_at_height() {
     let assets = vec![
         Asset {
             info: asset_infos[0].clone(),
-            amount: Uint128::from(100_000_u128),
+            amount: Uint128::from(500_000_000_u128),
         },
         Asset {
             info: asset_infos[1].clone(),
-            amount: Uint128::from(100_000_u128),
+            amount: Uint128::from(500_000_000_u128),
         },
     ];
 
@@ -758,12 +758,12 @@ fn twap_at_height() {
     for (addr, price, block) in [
         (
             astro_token_instance,
-            Decimal256::from_str("0.137931").unwrap(),
+            Decimal256::from_str("0.998004").unwrap(), // not exactly 1 because of simulation slippage
             router.block_info().height,
         ),
         (
             usdc_token_instance,
-            Decimal256::from_str("0.137931").unwrap(),
+            Decimal256::from_str("0.998004").unwrap(), // not exactly 1 because of simulation slippage
             router.block_info().height,
         ),
     ] {
@@ -2461,11 +2461,11 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
             },
             Asset {
                 info: asset_infos[1].clone(),
-                amount: Uint128::from(400_000_000_000u128),
+                amount: Uint128::from(500_000_000_000u128),
             },
             Asset {
                 info: asset_infos[2].clone(),
-                amount: Uint128::from(300_000_000_000u128),
+                amount: Uint128::from(500_000_000_000u128),
             },
         ],
     );
@@ -2493,11 +2493,11 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
             ),
             (
                 astro_token_instance.clone(),
-                Uint128::from(400_000_000_000u128),
+                Uint128::from(500_000_000_000u128),
             ),
             (
                 usdt_token_instance.clone(),
-                Uint128::from(300_000_000_000u128),
+                Uint128::from(500_000_000_000u128),
             ),
         ],
     );
@@ -2558,16 +2558,16 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
         .unwrap();
     assert_eq!(router.block_info().height, first_tracked_block);
 
-    // Change pair liquidity
+    // excess of the first token (usdc)
     for (amount1, amount2, amount3) in [
         (
-            Uint128::from(500_000_000_000u128),
             Uint128::from(400_000_000_000u128),
+            Uint128::from(300_000_000_000u128),
             Uint128::from(300_000_000_000u128),
         ),
         (
-            Uint128::from(500_000_000_000u128),
             Uint128::from(400_000_000_000u128),
+            Uint128::from(300_000_000_000u128),
             Uint128::from(300_000_000_000u128),
         ),
     ] {
@@ -2592,24 +2592,25 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                 &[],
             )
             .unwrap();
+        assert_eq!(router.block_info().height, second_tracked_block);
     }
 
-    // Change pair liquidity
+    // lack of the first token (usdc)
     for (amount1, amount2, amount3) in [
         (
-            Uint128::from(100_000_000_000_u128),
-            Uint128::from(95_000_000_000_u128),
-            Uint128::from(100_000_000_000_u128),
+            Uint128::from(300_000_000_000u128),
+            Uint128::from(500_000_000_000u128),
+            Uint128::from(500_000_000_000u128),
         ),
         (
-            Uint128::from(100_000_000_000_u128),
-            Uint128::from(95_000_000_000_u128),
-            Uint128::from(100_000_000_000_u128),
+            Uint128::from(300_000_000_000u128),
+            Uint128::from(500_000_000_000u128),
+            Uint128::from(500_000_000_000u128),
         ),
         (
-            Uint128::from(100_000_000_000_u128),
-            Uint128::from(95_000_000_000_u128),
-            Uint128::from(100_000_000_000_u128),
+            Uint128::from(300_000_000_000u128),
+            Uint128::from(500_000_000_000u128),
+            Uint128::from(500_000_000_000u128),
         ),
     ] {
         change_provide_liquidity(
@@ -2624,6 +2625,7 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
             ],
         );
         router.update_block(next_day);
+        third_tracked_block = router.block_info().height;
         router
             .execute_contract(
                 owner.clone(),
@@ -2632,8 +2634,10 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                 &[],
             )
             .unwrap();
-        third_tracked_block = router.block_info().height;
+        assert_eq!(router.block_info().height, third_tracked_block);
     }
+
+    // at the first tracking point we expect all tokens to be of equal prices
     for (addr, amount_exp) in [
         (
             usdc_token_instance.clone(),
@@ -2642,13 +2646,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: astro_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.998123").unwrap(),
+                    Decimal256::from_str("1").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: usdt_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.995465").unwrap(),
+                    Decimal256::from_str("1").unwrap(),
                 ),
             ],
         ),
@@ -2659,13 +2663,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: usdc_token_instance.clone(),
                     },
-                    Decimal256::from_str("1.001881").unwrap(),
+                    Decimal256::from_str("1").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: usdt_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.997337").unwrap(),
+                    Decimal256::from_str("1").unwrap(),
                 ),
             ],
         ),
@@ -2676,13 +2680,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: usdc_token_instance.clone(),
                     },
-                    Decimal256::from_str("1.004556").unwrap(),
+                    Decimal256::from_str("1").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: astro_token_instance.clone(),
                     },
-                    Decimal256::from_str("1.002671").unwrap(),
+                    Decimal256::from_str("1").unwrap(),
                 ),
             ],
         ),
@@ -2692,7 +2696,7 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                 contract_addr: addr.clone(),
             },
             // first_tracked_block is a staring point for snapshot
-            height: Uint64::from(first_tracked_block),
+            height: Uint64::from(first_tracked_block + 1), // snapshot becomes available at the next block
         };
         let res: Vec<(AssetInfo, Decimal256)> = router
             .wrap()
@@ -2704,6 +2708,7 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
         assert_eq!(res, amount_exp);
     }
 
+    // at the second tracking point we expect USDC to have lowest price (TWAP <1)
     for (addr, amount_exp) in [
         (
             usdc_token_instance.clone(),
@@ -2712,13 +2717,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: astro_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.997892").unwrap(),
+                    Decimal256::from_str("0.999274").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: usdt_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.994397").unwrap(),
+                    Decimal256::from_str("0.999274").unwrap(),
                 ),
             ],
         ),
@@ -2729,13 +2734,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: usdc_token_instance.clone(),
                     },
-                    Decimal256::from_str("1.002114").unwrap(),
+                    Decimal256::from_str("1.000727").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: usdt_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.996498").unwrap(),
+                    Decimal256::from_str("1").unwrap(),
                 ),
             ],
         ),
@@ -2746,13 +2751,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: usdc_token_instance.clone(),
                     },
-                    Decimal256::from_str("1.005637").unwrap(),
+                    Decimal256::from_str("1.000727").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: astro_token_instance.clone(),
                     },
-                    Decimal256::from_str("1.003516").unwrap(),
+                    Decimal256::from_str("1").unwrap(),
                 ),
             ],
         ),
@@ -2773,6 +2778,7 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
         assert_eq!(res, amount_exp);
     }
 
+    // at the third tracking point we expect USDC to have greatest price (TWAP >1)
     for (addr, amount_exp) in [
         (
             usdc_token_instance.clone(),
@@ -2781,13 +2787,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: astro_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.998055").unwrap(),
+                    Decimal256::from_str("1.001414").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: usdt_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.995160").unwrap(),
+                    Decimal256::from_str("1.001414").unwrap(),
                 ),
             ],
         ),
@@ -2798,13 +2804,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: usdc_token_instance.clone(),
                     },
-                    Decimal256::from_str("1.001950").unwrap(),
+                    Decimal256::from_str("0.99859").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: usdt_token_instance.clone(),
                     },
-                    Decimal256::from_str("0.997100").unwrap(),
+                    Decimal256::from_str("1.000001").unwrap(),
                 ),
             ],
         ),
@@ -2815,13 +2821,13 @@ fn twap_at_height_multiple_assets_non_accurate_heights() {
                     AssetInfo::Token {
                         contract_addr: usdc_token_instance,
                     },
-                    Decimal256::from_str("1.004864").unwrap(),
+                    Decimal256::from_str("0.99859").unwrap(),
                 ),
                 (
                     AssetInfo::Token {
                         contract_addr: astro_token_instance,
                     },
-                    Decimal256::from_str("1.002909").unwrap(),
+                    Decimal256::from_str("1.000001").unwrap(),
                 ),
             ],
         ),

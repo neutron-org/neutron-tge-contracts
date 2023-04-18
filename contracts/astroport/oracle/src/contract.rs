@@ -1,6 +1,6 @@
 use crate::error::ContractError;
 use crate::querier::{query_cumulative_prices, query_prices};
-use crate::state::{Config, PriceCumulativeLast, CONFIG, LAST_UPDATE_HEIGHT, PRICE_LAST};
+use crate::state::{Config, PriceCumulativeLast, CONFIG, PRICE_LAST};
 use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext};
 use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::oracle::{ExecuteMsg, InstantiateMsg, QueryMsg};
@@ -39,7 +39,6 @@ pub fn instantiate(
     };
     CONFIG.save(deps.storage, &config)?;
 
-    LAST_UPDATE_HEIGHT.save(deps.storage, &Uint64::zero())?;
     Ok(Response::default())
 }
 
@@ -110,6 +109,9 @@ pub fn set_asset_infos(
     if info.sender != config.manager {
         return Err(ContractError::Unauthorized {});
     }
+    if config.asset_infos.is_some() {
+        return Err(ContractError::AssetInfosSet {});
+    }
 
     asset_infos[0].check(deps.api)?;
     asset_infos[1].check(deps.api)?;
@@ -164,7 +166,6 @@ pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
         average_prices,
         block_timestamp_last: env.block.time.seconds(),
     };
-    LAST_UPDATE_HEIGHT.save(deps.storage, &Uint64::from(env.block.height))?;
     PRICE_LAST.save(deps.storage, &prices, env.block.height)?;
     Ok(Response::default())
 }
@@ -195,7 +196,9 @@ fn consult(
 ) -> Result<Vec<(AssetInfo, Uint256)>, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let pair = config.pair.ok_or(ContractError::AssetInfosNotSet {})?;
-    let price_last = PRICE_LAST.load(deps.storage)?;
+    let price_last = PRICE_LAST
+        .may_load(deps.storage)?
+        .ok_or(ContractError::OracleIsOutdated {})?;
 
     let mut average_prices = vec![];
     for (from, to, value) in price_last.average_prices {
@@ -252,17 +255,9 @@ fn twap_at_height(
 ) -> Result<Vec<(AssetInfo, Decimal256)>, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let pair = config.pair.ok_or(ContractError::AssetInfosNotSet {})?;
-    let last_height = LAST_UPDATE_HEIGHT.load(deps.storage)?;
-    let mut query_height = height;
-    // if requested height > last snapshoted time, SnapshotItem.may_load_at_height() will return primary (default) value
-    // which is very first stored data. To avoid that, in such cases we just query TWAP for last known height.
-    if height > last_height {
-        query_height = last_height
-    }
     let price_last = PRICE_LAST
-        .may_load_at_height(deps.storage, u64::from(query_height))
-        .unwrap()
-        .unwrap();
+        .may_load_at_height(deps.storage, u64::from(height))?
+        .ok_or(ContractError::OracleIsOutdated {})?;
     let mut average_prices = vec![];
     for (from, to, value) in price_last.average_prices {
         if from.equal(&token) {

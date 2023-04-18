@@ -19,6 +19,12 @@ pub enum ContractError {
     #[error("Asset infos are not set")]
     AssetInfosNotSet {},
 
+    #[error("Asset infos are set")]
+    AssetInfosSet {},
+
+    #[error("Oracle is outdated, need to call Update")]
+    OracleIsOutdated {},
+
     #[error("Invalid token")]
     InvalidToken {},
 }

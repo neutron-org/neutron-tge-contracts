@@ -1,7 +1,7 @@
 use cosmwasm_schema::cw_serde;
 
 use astroport::asset::{AssetInfo, PairInfo};
-use cosmwasm_std::{Addr, Decimal256, Uint128, Uint64};
+use cosmwasm_std::{Addr, Decimal256, Uint128};
 use cw_storage_plus::{Item, SnapshotItem, Strategy};
 
 /// Stores the contract config at the given key
@@ -13,9 +13,6 @@ pub const PRICE_LAST: SnapshotItem<PriceCumulativeLast> = SnapshotItem::new(
     "price_last_changelog",
     Strategy::EveryBlock,
 );
-
-/// Stores the height of last prices update
-pub const LAST_UPDATE_HEIGHT: Item<Uint64> = Item::new("last_update_height");
 
 /// This structure stores the latest cumulative and average token prices for the target pool
 #[cw_serde]
