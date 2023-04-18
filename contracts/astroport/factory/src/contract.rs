@@ -8,16 +8,16 @@ use crate::migration;
 use crate::querier::query_pair_info;
 
 use crate::state::{
-    check_asset_infos, pair_key, read_pairs, Config, TmpPairInfo, CONFIG, OWNERSHIP_PROPOSAL,
-    PAIRS, PAIRS_TO_MIGRATE, PAIR_CONFIGS, TMP_PAIR_INFO,
+    check_asset_infos, pair_key, read_pairs, TmpPairInfo, CONFIG, OWNERSHIP_PROPOSAL, PAIRS,
+    PAIRS_TO_MIGRATE, PAIR_CONFIGS, TMP_PAIR_INFO,
 };
 
 use crate::response::MsgInstantiateContractResponse;
 
 use astroport::asset::{addr_opt_validate, addr_validate_to_lower, AssetInfo, PairInfo};
 use astroport::factory::{
-    ConfigResponse, ExecuteMsg, FeeInfoResponse, InstantiateMsg, MigrateMsg, PairConfig, PairType,
-    PairsResponse, QueryMsg, ROUTE,
+    Config, ConfigResponse, ExecuteMsg, FeeInfoResponse, InstantiateMsg, MigrateMsg, PairConfig,
+    PairType, PairsResponse, QueryMsg, ROUTE,
 };
 
 use crate::migration::{migrate_pair_configs_to_v120, save_routes};
@@ -56,6 +56,7 @@ pub fn instantiate(
         fee_address: None,
         generator_address: None,
         whitelist_code_id: msg.whitelist_code_id,
+        coin_registry_address: msg.coin_registry_address,
     };
 
     config.generator_address = addr_opt_validate(deps.api, &msg.generator_address)?;
@@ -94,6 +95,8 @@ pub struct UpdateConfig {
     generator_address: Option<String>,
     /// CW1 whitelist contract code id used to store 3rd party staking rewards
     whitelist_code_id: Option<u64>,
+    /// The address of the contract that contains the coins with their precision
+    coin_registry_address: Option<Addr>,
 }
 
 /// Exposes all the execute functions available in the contract.
@@ -138,6 +141,7 @@ pub fn execute(
             fee_address,
             generator_address,
             whitelist_code_id,
+            coin_registry_address,
         } => execute_update_config(
             deps,
             info,
@@ -146,6 +150,7 @@ pub fn execute(
                 fee_address,
                 generator_address,
                 whitelist_code_id,
+                coin_registry_address,
             },
         ),
         ExecuteMsg::UpdatePairConfig { config } => execute_update_pair_config(deps, info, config),
@@ -231,6 +236,10 @@ pub fn execute_update_config(
 
     if let Some(code_id) = param.whitelist_code_id {
         config.whitelist_code_id = code_id;
+    }
+
+    if let Some(coin_registry_address) = param.coin_registry_address {
+        config.coin_registry_address = coin_registry_address;
     }
 
     CONFIG.save(deps.storage, &config)?;
@@ -531,6 +540,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
         fee_address: config.fee_address,
         generator_address: config.generator_address,
         whitelist_code_id: config.whitelist_code_id,
+        coin_registry_address: config.coin_registry_address,
     };
 
     Ok(resp)
@@ -592,6 +602,9 @@ pub fn migrate(mut deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response
                     generator_address: config_v100.generator_address,
                     owner: config_v100.owner,
                     token_code_id: config_v100.token_code_id,
+                    coin_registry_address: deps
+                        .api
+                        .addr_validate(msg.coin_registry_address.as_str())?,
                 };
 
                 CONFIG.save(deps.storage, &new_config)?;

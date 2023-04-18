@@ -10,6 +10,8 @@ use cw_storage_plus::{Item, Map};
 pub struct MigrationMsgV100 {
     /// CW1 whitelist contract code ID used to store 3rd party staking rewards
     pub whitelist_code_id: u64,
+    /// The address of the contract that contains native coins with their precisions
+    pub coin_registry_address: String,
 }
 
 /// This structure holds the main parameters for the factory contract.

@@ -117,6 +117,7 @@ fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
         generator_address: Some(String::from("generator")),
         owner: owner.to_string(),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let factory_instance = router

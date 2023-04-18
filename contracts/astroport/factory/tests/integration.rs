@@ -52,6 +52,7 @@ fn proper_initialization() {
         owner: owner.to_string(),
         generator_address: Some(String::from("generator")),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let factory_instance = app
@@ -74,6 +75,10 @@ fn proper_initialization() {
     assert_eq!(123, config_res.token_code_id);
     assert_eq!(pair_configs, config_res.pair_configs);
     assert_eq!(owner, config_res.owner);
+    assert_eq!(
+        Addr::unchecked("coin_registry_address"),
+        config_res.coin_registry_address
+    );
 }
 
 #[test]
@@ -91,6 +96,7 @@ fn update_config() {
             Some("fee".to_string()),
             Some("generator".to_string()),
             None,
+            Some(Addr::unchecked("new_coin_registry_address")),
         )
         .unwrap();
 
@@ -105,12 +111,17 @@ fn update_config() {
         "generator",
         config_res.generator_address.unwrap().to_string()
     );
+    assert_eq!(
+        Addr::unchecked("new_coin_registry_address"),
+        config_res.coin_registry_address
+    );
 
     // Unauthorized err
     let res = helper
         .update_config(
             &mut app,
             &Addr::unchecked("not_owner"),
+            None,
             None,
             None,
             None,

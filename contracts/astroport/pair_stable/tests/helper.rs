@@ -149,6 +149,7 @@ impl Helper {
             generator_address: None,
             owner: owner.to_string(),
             whitelist_code_id: 234u64,
+            coin_registry_address: Addr::unchecked("coin_registry_address"),
         };
 
         let factory = app.instantiate_contract(

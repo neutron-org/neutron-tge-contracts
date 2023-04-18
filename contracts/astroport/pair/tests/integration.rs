@@ -464,6 +464,7 @@ fn test_compatibility_of_tokens_with_different_precision() {
         generator_address: Some(String::from("generator")),
         owner: owner.to_string(),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let factory_instance = app

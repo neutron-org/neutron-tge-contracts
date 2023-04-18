@@ -80,6 +80,7 @@ fn instantiate_pair(router: &mut App, owner: &Addr) -> Addr {
         generator_address: None,
         owner: owner.to_string(),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let factory_addr = router
@@ -437,6 +438,7 @@ fn provide_lp_for_single_token() {
         generator_address: Some(String::from("generator")),
         owner: String::from("owner0000"),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let factory_instance = app
@@ -770,6 +772,7 @@ fn test_compatibility_of_tokens_with_different_precision() {
         generator_address: Some(String::from("generator")),
         owner: String::from("owner0000"),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let factory_instance = app
@@ -1076,6 +1079,7 @@ fn update_pair_config() {
         generator_address: Some(String::from("generator")),
         owner: owner.to_string(),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let factory_instance = router

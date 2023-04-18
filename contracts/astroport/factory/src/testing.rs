@@ -57,6 +57,7 @@ fn proper_initialization() {
         generator_address: Some(String::from("generator")),
         owner: owner.clone(),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let env = mock_env();
@@ -79,6 +80,7 @@ fn proper_initialization() {
         generator_address: Some(String::from("generator")),
         owner: owner.clone(),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let env = mock_env();
@@ -113,6 +115,7 @@ fn proper_initialization() {
         generator_address: Some(String::from("generator")),
         owner: owner.clone(),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let env = mock_env();
@@ -125,6 +128,10 @@ fn proper_initialization() {
     assert_eq!(123u64, config_res.token_code_id);
     assert_eq!(msg.pair_configs, config_res.pair_configs);
     assert_eq!(Addr::unchecked(owner), config_res.owner);
+    assert_eq!(
+        Addr::unchecked("coin_registry_address"),
+        config_res.coin_registry_address
+    );
 }
 
 #[test]
@@ -148,6 +155,7 @@ fn update_config() {
         owner: owner.to_string(),
         generator_address: Some(String::from("generator")),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let env = mock_env();
@@ -164,6 +172,7 @@ fn update_config() {
         fee_address: Some(String::from("new_fee_addr")),
         generator_address: Some(String::from("new_generator_addr")),
         whitelist_code_id: None,
+        coin_registry_address: Some(Addr::unchecked("new_coin_registry_address")),
     };
 
     let res = execute(deps.as_mut(), env.clone(), info, msg).unwrap();
@@ -182,6 +191,10 @@ fn update_config() {
         String::from("new_generator_addr"),
         config_res.generator_address.unwrap()
     );
+    assert_eq!(
+        Addr::unchecked("new_coin_registry_address"),
+        config_res.coin_registry_address
+    );
 
     // Unauthorized err
     let env = mock_env();
@@ -191,6 +204,7 @@ fn update_config() {
         fee_address: None,
         generator_address: None,
         whitelist_code_id: None,
+        coin_registry_address: None,
     };
 
     let res = execute(deps.as_mut(), env, info, msg).unwrap_err();
@@ -209,6 +223,7 @@ fn update_owner() {
         owner: owner.to_string(),
         generator_address: Some(String::from("generator")),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let env = mock_env();
@@ -295,6 +310,7 @@ fn update_pair_config() {
         owner: owner.to_string(),
         generator_address: Some(String::from("generator")),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let env = mock_env();
@@ -404,6 +420,7 @@ fn create_pair() {
         owner: "owner0000".to_string(),
         generator_address: Some(String::from("generator")),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let env = mock_env();
@@ -501,6 +518,7 @@ fn register() {
         generator_address: Some(String::from("generator")),
         owner: owner.to_string(),
         whitelist_code_id: 234u64,
+        coin_registry_address: Addr::unchecked("coin_registry_address"),
     };
 
     let env = mock_env();
