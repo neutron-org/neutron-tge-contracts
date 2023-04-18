@@ -1,6 +1,6 @@
 use astroport::asset::{Asset, AssetInfo, PairInfo};
-use astroport::factory::PairType;
-use astroport::factory::QueryMsg::Pair;
+use astroport::factory::{ConfigResponse, PairType};
+use astroport::factory::QueryMsg::{Config, Pair};
 use astroport::pair::CumulativePricesResponse;
 use astroport::pair::QueryMsg::CumulativePrices;
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
@@ -9,6 +9,7 @@ use cosmwasm_std::{
     QueryRequest, SystemError, SystemResult, Uint128, WasmQuery,
 };
 use std::collections::HashMap;
+use cw20::{Cw20QueryMsg, TokenInfoResponse};
 
 pub fn mock_dependencies(
     contract_balance: &[Coin],
@@ -84,11 +85,34 @@ impl WasmMockQuerier {
                                 liquidity_token: Addr::unchecked("lp_token"),
                                 pair_type: PairType::Xyk {},
                             })
-                            .into(),
+                                .into(),
                         ),
+                        // Config {} => SystemResult::Ok(
+                        //     to_binary(&ConfigResponse {
+                        //         owner: Addr::unchecked("owner"),
+                        //         pair_configs: vec![],
+                        //         token_code_id: 1,
+                        //         fee_address: None,
+                        //         generator_address: None,
+                        //         whitelist_code_id: 1,
+                        //         coin_registry_address: Addr::unchecked("coin_registry_address"),
+                        //     })
+                        //         .into()
+                        // ),
+                        _ => panic!("DO NOT ENTER HERE"),
+                    }
+                } else if contract_addr == "astro-token" || contract_addr == "usdc-token" {
+                    match from_binary(msg).unwrap() {
+                        Cw20QueryMsg::TokenInfo { } => SystemResult::Ok(to_binary(&TokenInfoResponse{
+                            name: "testtoken".to_string(),
+                            symbol: "utest".to_string(),
+                            decimals: 6u8,
+                            total_supply: Uint128::new(1000000),
+                        }).into()),
                         _ => panic!("DO NOT ENTER HERE"),
                     }
                 } else {
+                    // println!("contractADDR: {}\n", contract_addr.clone());
                     match from_binary(msg).unwrap() {
                         CumulativePrices { .. } => {
                             let balance = match self.token_querier.pairs.get(contract_addr) {

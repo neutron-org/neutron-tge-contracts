@@ -65,12 +65,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "astroport-native-coin-registry"
+version = "1.0.1"
+dependencies = [
+ "astroport 2.0.0",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cosmwasm-storage",
+ "cw-multi-test 0.15.1",
+ "cw-storage-plus 0.15.1",
+ "cw2 0.15.1",
+ "thiserror",
+]
+
+[[package]]
 name = "astroport-oracle"
 version = "2.0.0"
 dependencies = [
  "anyhow",
  "astroport 2.0.0",
  "astroport-factory",
+ "astroport-native-coin-registry",
  "astroport-pair",
  "astroport-pair-stable",
  "astroport-token",

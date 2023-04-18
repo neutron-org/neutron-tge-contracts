@@ -1,8 +1,5 @@
 use anyhow::Result;
-use cosmwasm_std::{
-    attr, to_binary, Addr, BlockInfo, Coin, Decimal, Decimal256, QueryRequest, StdResult, Uint128,
-    Uint64, WasmQuery,
-};
+use cosmwasm_std::{attr, to_binary, Addr, BlockInfo, Coin, Decimal, Decimal256, QueryRequest, StdResult, Uint128, Uint64, WasmQuery};
 use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, AppResponse, ContractWrapper, Executor};
 use itertools::Itertools;
@@ -83,6 +80,9 @@ fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
 
     let pair_stable_code_id = router.store_code(pair_stable_contract);
 
+
+    let native_coin_registry_addr = instantiate_coin_registry(router, &owner.to_string(), Some(vec![("cny".to_string(), 6u8), ("uluna".to_string(), 6u8)]));
+
     let factory_contract = Box::new(
         ContractWrapper::new_with_empty(
             astroport_factory::contract::execute,
@@ -117,7 +117,7 @@ fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
         generator_address: Some(String::from("generator")),
         owner: owner.to_string(),
         whitelist_code_id: 234u64,
-        coin_registry_address: Addr::unchecked("coin_registry_address"),
+        coin_registry_address: native_coin_registry_addr,
     };
 
     let factory_instance = router
@@ -164,6 +164,46 @@ fn instantiate_token(router: &mut App, owner: Addr, name: String, symbol: String
     router
         .instantiate_contract(token_code_id, owner, &msg, &[], symbol, None)
         .unwrap()
+}
+
+fn store_coin_registry_code(app: &mut App) -> u64 {
+    let coin_registry_contract = Box::new(ContractWrapper::new_with_empty(
+        astroport_native_coin_registry::contract::execute,
+        astroport_native_coin_registry::contract::instantiate,
+        astroport_native_coin_registry::contract::query,
+    ));
+
+    app.store_code(coin_registry_contract)
+}
+
+fn instantiate_coin_registry(mut app: &mut App, owner: &str, coins: Option<Vec<(String, u8)>>) -> Addr {
+    let coin_registry_id = store_coin_registry_code(&mut app);
+    let coin_registry_address = app
+        .instantiate_contract(
+            coin_registry_id,
+            Addr::unchecked(owner),
+            &astroport::native_coin_registry::InstantiateMsg {
+                owner: owner.to_string(),
+            },
+            &[],
+            "Coin registry",
+            None,
+        )
+        .unwrap();
+
+    if let Some(coins) = coins {
+        app.execute_contract(
+            Addr::unchecked(owner),
+            coin_registry_address.clone(),
+            &astroport::native_coin_registry::ExecuteMsg::Add {
+                native_coins: coins,
+            },
+            &[],
+        )
+            .unwrap();
+    }
+
+    coin_registry_address
 }
 
 fn mint_some_token(router: &mut App, owner: Addr, token_instance: Addr, to: Addr, amount: Uint128) {
