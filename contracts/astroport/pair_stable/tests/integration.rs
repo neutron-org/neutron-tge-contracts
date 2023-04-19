@@ -469,6 +469,7 @@ fn provide_lp_for_single_token() {
 
     let pair_code_id = store_pair_code(&mut app);
     let factory_code_id = store_factory_code(&mut app);
+    let coin_registry_address = instantiate_coin_registry(&mut app, OWNER, None);
 
     let init_msg = FactoryInstantiateMsg {
         fee_address: None,
@@ -484,7 +485,7 @@ fn provide_lp_for_single_token() {
         generator_address: Some(String::from("generator")),
         owner: String::from("owner0000"),
         whitelist_code_id: 234u64,
-        coin_registry_address: Addr::unchecked("coin_registry_address"),
+        coin_registry_address,
     };
 
     let factory_instance = app
@@ -803,6 +804,7 @@ fn test_compatibility_of_tokens_with_different_precision() {
 
     let pair_code_id = store_pair_code(&mut app);
     let factory_code_id = store_factory_code(&mut app);
+    let coin_registry_address = instantiate_coin_registry(&mut app, OWNER, None);
 
     let init_msg = FactoryInstantiateMsg {
         fee_address: None,
@@ -818,7 +820,7 @@ fn test_compatibility_of_tokens_with_different_precision() {
         generator_address: Some(String::from("generator")),
         owner: String::from("owner0000"),
         whitelist_code_id: 234u64,
-        coin_registry_address: Addr::unchecked("coin_registry_address"),
+        coin_registry_address,
     };
 
     let factory_instance = app

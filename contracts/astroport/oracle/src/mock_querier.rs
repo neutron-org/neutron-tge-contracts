@@ -89,13 +89,12 @@ impl WasmMockQuerier {
                         ),
                         _ => panic!("DO NOT ENTER HERE"),
                     }
-                //     TODO: customize?
                 } else if contract_addr == "astro-token" || contract_addr == "usdc-token" {
                     match from_binary(msg).unwrap() {
                         Cw20QueryMsg::TokenInfo {} => SystemResult::Ok(
                             to_binary(&TokenInfoResponse {
-                                name: "testtoken".to_string(),
-                                symbol: "utest".to_string(),
+                                name: contract_addr.to_string(),
+                                symbol: contract_addr.to_string(),
                                 decimals: 6u8,
                                 total_supply: Uint128::new(1000000),
                             })

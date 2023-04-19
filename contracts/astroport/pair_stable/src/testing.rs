@@ -1214,7 +1214,6 @@ fn test_accumulate_prices() {
         let asset_x = native_asset_info("uusd".to_string());
         let asset_y = native_asset_info("uluna".to_string());
         let mut deps = mock_dependencies(&[]);
-        // TODO: fails?
         store_precisions(
             deps.as_mut(),
             &[asset_x.clone(), asset_y.clone()],
