@@ -165,29 +165,26 @@ impl Helper {
 
         let token_code_id = app.store_code(token_contract());
 
+        let mut coin_registry_precisions = vec![];
+
         test_coins.into_iter().for_each(|coin| {
+            let coin_denom = coin.denom();
+            if let Some(denom) = coin_denom {
+                coin_registry_precisions.push((denom, 6u8));
+            }
+
             if let Some((name, decimals)) = coin.cw20_init_data() {
                 let token_addr = Self::init_token(&mut app, token_code_id, name, decimals, owner);
-                asset_infos_vec.push((coin, token_asset_info(token_addr)))
+                asset_infos_vec.push((coin, token_asset_info(token_addr)));
             }
         });
 
         let pair_code_id = app.store_code(pair_contract());
         let factory_code_id = app.store_code(factory_contract());
 
-        // TODO: use test_coins to initialize precisions instead of fixed ones
-        let coin_registry_address = instantiate_coin_registry(
-            &mut app,
-            owner.as_ref(),
-            Some(vec![
-                ("uluna".to_string(), 6u8),
-                ("ibc/usd".to_string(), 6u8),
-                ("uusd".to_string(), 6u8),
-                ("one".to_string(), 6u8),
-                ("three".to_string(), 6u8),
-                ("five".to_string(), 6u8),
-            ]),
-        );
+        coin_registry_precisions.dedup();
+        let coin_registry_address =
+            instantiate_coin_registry(&mut app, owner.as_ref(), Some(coin_registry_precisions));
 
         let init_msg = astroport::factory::InstantiateMsg {
             fee_address: None,

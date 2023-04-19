@@ -87,20 +87,9 @@ impl WasmMockQuerier {
                             })
                             .into(),
                         ),
-                        // Config {} => SystemResult::Ok(
-                        //     to_binary(&ConfigResponse {
-                        //         owner: Addr::unchecked("owner"),
-                        //         pair_configs: vec![],
-                        //         token_code_id: 1,
-                        //         fee_address: None,
-                        //         generator_address: None,
-                        //         whitelist_code_id: 1,
-                        //         coin_registry_address: Addr::unchecked("coin_registry_address"),
-                        //     })
-                        //         .into()
-                        // ),
                         _ => panic!("DO NOT ENTER HERE"),
                     }
+                //     TODO: customize?
                 } else if contract_addr == "astro-token" || contract_addr == "usdc-token" {
                     match from_binary(msg).unwrap() {
                         Cw20QueryMsg::TokenInfo {} => SystemResult::Ok(
@@ -115,7 +104,6 @@ impl WasmMockQuerier {
                         _ => panic!("DO NOT ENTER HERE"),
                     }
                 } else {
-                    // println!("contractADDR: {}\n", contract_addr.clone());
                     match from_binary(msg).unwrap() {
                         CumulativePrices { .. } => {
                             let balance = match self.token_querier.pairs.get(contract_addr) {
