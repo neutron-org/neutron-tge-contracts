@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InstantiateMsg",
+  "description": "This structure stores general parameters for the contract. Modified by us",
+  "type": "object",
+  "required": [
+    "factory_contract",
+    "manager",
+    "period"
+  ],
+  "properties": {
+    "factory_contract": {
+      "description": "The factory contract address",
+      "type": "string"
+    },
+    "manager": {
+      "description": "Manager is the only one who can set pair info, if not set already",
+      "type": "string"
+    },
+    "period": {
+      "description": "Minimal interval between Update{}'s",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    }
+  },
+  "additionalProperties": false
+}

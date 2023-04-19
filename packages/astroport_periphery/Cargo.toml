@@ -17,7 +17,7 @@ cw-storage-plus = "0.15.1"
 cosmwasm-std = { version = "1.0" }
 cosmwasm-schema = "1.2.1"
 terraswap = "2.6"
-astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v2.5.0" }
+astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v2.7.1" }
 
 schemars = "0.8"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
