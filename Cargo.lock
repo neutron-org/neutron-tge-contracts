@@ -33,8 +33,8 @@ dependencies = [
 
 [[package]]
 name = "astroport"
-version = "2.7.1"
-source = "git+https://github.com/astroport-fi/astroport-core.git?tag=v2.7.1#c73a2db3c0b4f069e906d90970e1b72a5cf71bbf"
+version = "2.5.0"
+source = "git+https://github.com/astroport-fi/astroport-core.git?tag=v2.5.0#65ce7d1879cc5d95b09fa14202f0423bba52ae0e"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -67,9 +67,9 @@ dependencies = [
 [[package]]
 name = "astroport-native-coin-registry"
 version = "1.0.1"
-source = "git+https://github.com/astroport-fi/astroport-core.git?tag=v2.7.1#c73a2db3c0b4f069e906d90970e1b72a5cf71bbf"
+source = "git+https://github.com/astroport-fi/astroport-core.git?tag=v2.5.0#65ce7d1879cc5d95b09fa14202f0423bba52ae0e"
 dependencies = [
- "astroport 2.7.1",
+ "astroport 2.5.0",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cosmwasm-storage",
@@ -145,7 +145,7 @@ dependencies = [
 name = "astroport-periphery"
 version = "1.1.0"
 dependencies = [
- "astroport 2.7.1",
+ "astroport 2.5.0",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus 0.15.1",
@@ -1168,7 +1168,7 @@ dependencies = [
 name = "neutron-auction"
 version = "1.0.0"
 dependencies = [
- "astroport 2.7.1",
+ "astroport 2.5.0",
  "astroport-periphery",
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -1185,7 +1185,7 @@ dependencies = [
 name = "neutron-lockdrop"
 version = "1.2.0"
 dependencies = [
- "astroport 2.7.1",
+ "astroport 2.5.0",
  "astroport-periphery",
  "cosmwasm-schema",
  "cosmwasm-std",
