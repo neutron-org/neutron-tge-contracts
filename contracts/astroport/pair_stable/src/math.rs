@@ -132,9 +132,10 @@ pub(crate) fn calc_y(
 mod tests {
     use super::*;
     use astroport::asset::native_asset;
-    use astroport::querier::NATIVE_TOKEN_PRECISION;
     use cosmwasm_std::{Uint128, Uint256};
     use sim::StableSwapModel;
+
+    const NATIVE_TOKEN_PRECISION: u8 = 6;
 
     #[test]
     fn test_compute_d() {

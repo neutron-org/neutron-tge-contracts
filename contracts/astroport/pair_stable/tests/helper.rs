@@ -13,10 +13,10 @@ use astroport::pair::{
     CumulativePricesResponse, Cw20HookMsg, ExecuteMsg, QueryMsg, ReverseSimulationResponse,
     SimulationResponse, StablePoolParams,
 };
-use astroport::querier::NATIVE_TOKEN_PRECISION;
 use astroport_pair_stable::contract::{execute, instantiate, query, reply};
 
 const INIT_BALANCE: u128 = 1_000_000_000_000;
+const NATIVE_TOKEN_PRECISION: u8 = 6;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TestCoin {

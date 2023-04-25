@@ -4,12 +4,21 @@
   "description": "A custom struct for each query response that returns general contract settings/configs.",
   "type": "object",
   "required": [
+    "coin_registry_address",
     "owner",
     "pair_configs",
     "token_code_id",
     "whitelist_code_id"
   ],
   "properties": {
+    "coin_registry_address": {
+      "description": "The address of the contract that contains the coins with their precision",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Addr"
+        }
+      ]
+    },
     "fee_address": {
       "description": "Address of contract to send governance fees to (the Maker)",
       "anyOf": [
@@ -33,7 +42,7 @@
       ]
     },
     "owner": {
-      "description": "Addres of owner that is allowed to change contract parameters",
+      "description": "Address of owner that is allowed to change contract parameters",
       "allOf": [
         {
           "$ref": "#/definitions/Addr"

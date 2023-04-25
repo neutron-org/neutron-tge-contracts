@@ -13,6 +13,17 @@
         "update_config": {
           "type": "object",
           "properties": {
+            "coin_registry_address": {
+              "description": "The address of the contract that contains the coins with their precision",
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Addr"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "fee_address": {
               "description": "Contract address to send governance fees to (the Maker)",
               "type": [

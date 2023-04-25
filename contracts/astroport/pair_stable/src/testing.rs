@@ -24,6 +24,8 @@ use cw20::{Cw20ExecuteMsg, Cw20ReceiveMsg, MinterResponse};
 use itertools::Itertools;
 use protobuf::Message;
 
+const NATIVE_TOKEN_PRECISION: u8 = 6;
+
 fn store_liquidity_token(deps: DepsMut, msg_id: u64, contract_addr: String) {
     let data = MsgInstantiateContractResponse {
         contract_address: contract_addr,
@@ -1281,7 +1283,6 @@ fn mock_env_with_block_time(time: u64) -> Env {
 
 use crate::utils::{accumulate_prices, compute_swap, select_pools};
 use astroport::factory::PairType;
-use astroport::querier::NATIVE_TOKEN_PRECISION;
 use proptest::prelude::*;
 use sim::StableSwapModel;
 
