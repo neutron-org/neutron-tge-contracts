@@ -1401,13 +1401,21 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             }))
         }
 
-        // claim airdrop rewards
-        cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(
-            deps.as_ref(),
-            config.credits_contract,
-            user_address.clone(),
-            total_claimable_ntrn_rewards,
-        )?);
+        // claim airdrop rewards for airdrop participants
+        let res: BalanceResponse = deps.querier.query_wasm_smart(
+            astroport_lp_token,
+            &Cw20QueryMsg::Balance {
+                address: env.contract.address.to_string(),
+            },
+        )?;
+        if res.balance > Uint128::zero() {
+            cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(
+                deps.as_ref(),
+                config.credits_contract,
+                user_address.clone(),
+                total_claimable_ntrn_rewards,
+            )?);
+        }
 
         user_info.ntrn_transferred = true;
         attributes.push(attr(
