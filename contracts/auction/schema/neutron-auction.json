@@ -1,0 +1,858 @@
+{
+  "contract_name": "neutron-auction",
+  "contract_version": "1.0.0",
+  "idl_version": "1.0.0",
+  "instantiate": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "InstantiateMsg",
+    "type": "object",
+    "required": [
+      "deposit_window",
+      "init_timestamp",
+      "lp_tokens_lock_window",
+      "max_exchange_rate_age",
+      "min_ntrn_amount",
+      "price_feed_contract",
+      "reserve_contract_address",
+      "token_info_manager",
+      "vesting_atom_contract_address",
+      "vesting_lp_duration",
+      "vesting_migration_pack_size",
+      "vesting_usdc_contract_address",
+      "withdrawal_window"
+    ],
+    "properties": {
+      "deposit_window": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      },
+      "init_timestamp": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      },
+      "lockdrop_contract_address": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "lp_tokens_lock_window": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      },
+      "max_exchange_rate_age": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      },
+      "min_ntrn_amount": {
+        "$ref": "#/definitions/Uint128"
+      },
+      "owner": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "price_feed_contract": {
+        "type": "string"
+      },
+      "reserve_contract_address": {
+        "type": "string"
+      },
+      "token_info_manager": {
+        "type": "string"
+      },
+      "vesting_atom_contract_address": {
+        "type": "string"
+      },
+      "vesting_lp_duration": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      },
+      "vesting_migration_pack_size": {
+        "type": "integer",
+        "format": "uint16",
+        "minimum": 0.0
+      },
+      "vesting_usdc_contract_address": {
+        "type": "string"
+      },
+      "withdrawal_window": {
+        "type": "integer",
+        "format": "uint64",
+        "minimum": 0.0
+      }
+    },
+    "definitions": {
+      "Uint128": {
+        "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+        "type": "string"
+      }
+    }
+  },
+  "execute": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ExecuteMsg",
+    "oneOf": [
+      {
+        "type": "object",
+        "required": [
+          "update_config"
+        ],
+        "properties": {
+          "update_config": {
+            "type": "object",
+            "required": [
+              "new_config"
+            ],
+            "properties": {
+              "new_config": {
+                "$ref": "#/definitions/UpdateConfigMsg"
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "set_token_info"
+        ],
+        "properties": {
+          "set_token_info": {
+            "type": "object",
+            "properties": {
+              "atom_denom": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "pool_info": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/PoolInfo"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "usdc_denom": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "deposit"
+        ],
+        "properties": {
+          "deposit": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "withdraw"
+        ],
+        "properties": {
+          "withdraw": {
+            "type": "object",
+            "required": [
+              "amount_atom",
+              "amount_usdc"
+            ],
+            "properties": {
+              "amount_atom": {
+                "$ref": "#/definitions/Uint128"
+              },
+              "amount_usdc": {
+                "$ref": "#/definitions/Uint128"
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "init_pool"
+        ],
+        "properties": {
+          "init_pool": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "set_pool_size"
+        ],
+        "properties": {
+          "set_pool_size": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "lock_lp"
+        ],
+        "properties": {
+          "lock_lp": {
+            "type": "object",
+            "required": [
+              "amount",
+              "asset",
+              "duration"
+            ],
+            "properties": {
+              "amount": {
+                "$ref": "#/definitions/Uint128"
+              },
+              "asset": {
+                "$ref": "#/definitions/PoolType"
+              },
+              "duration": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "withdraw_lp"
+        ],
+        "properties": {
+          "withdraw_lp": {
+            "type": "object",
+            "required": [
+              "amount",
+              "asset",
+              "duration"
+            ],
+            "properties": {
+              "amount": {
+                "$ref": "#/definitions/Uint128"
+              },
+              "asset": {
+                "$ref": "#/definitions/PoolType"
+              },
+              "duration": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "migrate_to_vesting"
+        ],
+        "properties": {
+          "migrate_to_vesting": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "callback"
+        ],
+        "properties": {
+          "callback": {
+            "$ref": "#/definitions/CallbackMsg"
+          }
+        },
+        "additionalProperties": false
+      }
+    ],
+    "definitions": {
+      "CallbackMsg": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "finalize_pool_initialization"
+            ],
+            "properties": {
+              "finalize_pool_initialization": {
+                "type": "object",
+                "required": [
+                  "prev_lp_balance"
+                ],
+                "properties": {
+                  "prev_lp_balance": {
+                    "$ref": "#/definitions/PoolBalance"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "PoolBalance": {
+        "type": "object",
+        "required": [
+          "atom",
+          "usdc"
+        ],
+        "properties": {
+          "atom": {
+            "$ref": "#/definitions/Uint128"
+          },
+          "usdc": {
+            "$ref": "#/definitions/Uint128"
+          }
+        }
+      },
+      "PoolInfo": {
+        "type": "object",
+        "required": [
+          "ntrn_atom_lp_token_address",
+          "ntrn_atom_pool_address",
+          "ntrn_usdc_lp_token_address",
+          "ntrn_usdc_pool_address"
+        ],
+        "properties": {
+          "ntrn_atom_lp_token_address": {
+            "description": "NTRN-ATOM LP Token address",
+            "type": "string"
+          },
+          "ntrn_atom_pool_address": {
+            "description": "NTRN-ATOM LP Pool address",
+            "type": "string"
+          },
+          "ntrn_usdc_lp_token_address": {
+            "description": "NTRN-USDC LP Token address",
+            "type": "string"
+          },
+          "ntrn_usdc_pool_address": {
+            "description": "NTRN-USDC LP Pool address",
+            "type": "string"
+          }
+        }
+      },
+      "PoolType": {
+        "type": "string",
+        "enum": [
+          "USDC",
+          "ATOM"
+        ]
+      },
+      "Uint128": {
+        "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+        "type": "string"
+      },
+      "UpdateConfigMsg": {
+        "type": "object",
+        "properties": {
+          "lockdrop_contract_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pool_info": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/PoolInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price_feed_contract": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vesting_migration_pack_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0.0
+          }
+        }
+      }
+    }
+  },
+  "query": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "QueryMsg",
+    "oneOf": [
+      {
+        "type": "object",
+        "required": [
+          "config"
+        ],
+        "properties": {
+          "config": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "object",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "user_info"
+        ],
+        "properties": {
+          "user_info": {
+            "type": "object",
+            "required": [
+              "address"
+            ],
+            "properties": {
+              "address": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    ]
+  },
+  "migrate": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "MigrateMsg",
+    "type": "object"
+  },
+  "sudo": null,
+  "responses": {
+    "config": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Config",
+      "type": "object",
+      "required": [
+        "deposit_window",
+        "init_timestamp",
+        "lp_tokens_lock_window",
+        "max_exchange_rate_age",
+        "min_ntrn_amount",
+        "ntrn_denom",
+        "owner",
+        "price_feed_contract",
+        "reserve_contract_address",
+        "token_info_manager",
+        "vesting_atom_contract_address",
+        "vesting_lp_duration",
+        "vesting_migration_pack_size",
+        "vesting_usdc_contract_address",
+        "withdrawal_window"
+      ],
+      "properties": {
+        "atom_denom": {
+          "description": "ATOM denom",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deposit_window": {
+          "description": "Number of seconds post init_timestamp during which deposits / withdrawals will be allowed",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "init_timestamp": {
+          "description": "Timestamp since which USDC / ATOM deposits will be allowed",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "lockdrop_contract_address": {
+          "description": "Lockdrop Contract address",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lp_tokens_lock_window": {
+          "description": "Lock window for LP tokens",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_exchange_rate_age": {
+          "description": "min exchange freshness rate (seconds)",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "min_ntrn_amount": {
+          "description": "Min NTRN amount to be distributed as pool liquidity",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "ntrn_denom": {
+          "description": "Base denom",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Account who can update config",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "pool_info": {
+          "description": "Pool info",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PoolInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "price_feed_contract": {
+          "description": "Price feed contract address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "reserve_contract_address": {
+          "description": "Reserve Contract address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "token_info_manager": {
+          "description": "Account who can update denoms",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "usdc_denom": {
+          "description": "USDC denom",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vesting_atom_contract_address": {
+          "description": "Vesting LP-ATOM Contract address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "vesting_lp_duration": {
+          "description": "vesting for lp duration",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "vesting_migration_pack_size": {
+          "description": "vesting migration users pack size",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "vesting_usdc_contract_address": {
+          "description": "Vesting LP-USDC Contract address",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "withdrawal_window": {
+          "description": "Number of seconds post deposit_window completion during which only withdrawals are allowed",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "definitions": {
+        "Addr": {
+          "description": "A human readable address.\n\nIn Cosmos, this is typically bech32 encoded. But for multi-chain smart contracts no assumptions should be made other than being UTF-8 encoded and of reasonable length.\n\nThis type represents a validated address. It can be created in the following ways 1. Use `Addr::unchecked(input)` 2. Use `let checked: Addr = deps.api.addr_validate(input)?` 3. Use `let checked: Addr = deps.api.addr_humanize(canonical_addr)?` 4. Deserialize from JSON. This must only be done from JSON that was validated before such as a contract's state. `Addr` must not be used in messages sent by the user because this would result in unvalidated instances.\n\nThis type is immutable. If you really need to mutate it (Really? Are you sure?), create a mutable copy using `let mut mutable = Addr::to_string()` and operate on that `String` instance.",
+          "type": "string"
+        },
+        "PoolInfo": {
+          "type": "object",
+          "required": [
+            "ntrn_atom_lp_token_address",
+            "ntrn_atom_pool_address",
+            "ntrn_usdc_lp_token_address",
+            "ntrn_usdc_pool_address"
+          ],
+          "properties": {
+            "ntrn_atom_lp_token_address": {
+              "description": "NTRN-ATOM LP Token address",
+              "type": "string"
+            },
+            "ntrn_atom_pool_address": {
+              "description": "NTRN-ATOM LP Pool address",
+              "type": "string"
+            },
+            "ntrn_usdc_lp_token_address": {
+              "description": "NTRN-USDC LP Token address",
+              "type": "string"
+            },
+            "ntrn_usdc_pool_address": {
+              "description": "NTRN-USDC LP Pool address",
+              "type": "string"
+            }
+          }
+        },
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        }
+      }
+    },
+    "state": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "State",
+      "type": "object",
+      "required": [
+        "atom_lp_locked",
+        "atom_lp_size",
+        "atom_ntrn_size",
+        "is_rest_lp_vested",
+        "pool_init_timestamp",
+        "total_atom_deposited",
+        "total_usdc_deposited",
+        "usdc_lp_locked",
+        "usdc_lp_size",
+        "usdc_ntrn_size"
+      ],
+      "properties": {
+        "atom_lp_locked": {
+          "description": "locked ATOM LP shares",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "atom_lp_size": {
+          "description": "LP count for ATOM amount",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "atom_ntrn_size": {
+          "description": "ATOM NTRN amount",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "is_rest_lp_vested": {
+          "type": "boolean"
+        },
+        "lp_atom_shares_minted": {
+          "description": "Total LP shares minted post liquidity addition to the NTRN-ATOM Pool",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lp_usdc_shares_minted": {
+          "description": "Total LP shares minted post liquidity addition to the NTRN-USDC Pool",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pool_init_timestamp": {
+          "description": "Timestamp at which liquidity was added to the NTRN-ATOM and NTRN-USDC LP Pool",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "total_atom_deposited": {
+          "description": "Total ATOM deposited to the contract",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "total_usdc_deposited": {
+          "description": "Total USDC deposited to the contract",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "usdc_lp_locked": {
+          "description": "locked USDC LP shares",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "usdc_lp_size": {
+          "description": "LP count for USDC amount",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "usdc_ntrn_size": {
+          "description": "USDC NTRN amount",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        }
+      },
+      "definitions": {
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        }
+      }
+    },
+    "user_info": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserInfoResponse",
+      "type": "object",
+      "required": [
+        "atom_deposited",
+        "atom_lp_amount",
+        "atom_lp_locked",
+        "usdc_deposited",
+        "usdc_lp_amount",
+        "usdc_lp_locked",
+        "withdrawn"
+      ],
+      "properties": {
+        "atom_deposited": {
+          "description": "Total stable delegated by the user",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "atom_lp_amount": {
+          "$ref": "#/definitions/Uint128"
+        },
+        "atom_lp_locked": {
+          "$ref": "#/definitions/Uint128"
+        },
+        "usdc_deposited": {
+          "description": "Total stable delegated by the user",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "usdc_lp_amount": {
+          "$ref": "#/definitions/Uint128"
+        },
+        "usdc_lp_locked": {
+          "$ref": "#/definitions/Uint128"
+        },
+        "withdrawn": {
+          "description": "Withdrawal counter to capture if the user already withdrew UST during the \"only withdrawals\" window",
+          "type": "boolean"
+        }
+      },
+      "definitions": {
+        "Uint128": {
+          "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

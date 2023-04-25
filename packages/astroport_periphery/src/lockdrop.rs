@@ -1,5 +1,6 @@
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{
     to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
     WasmMsg,
@@ -211,34 +212,33 @@ impl CallbackMsg {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(Config)]
     Config {},
+    #[returns(StateResponse)]
     State {},
-    Pool {
-        pool_type: PoolType,
-    },
-    UserInfo {
-        address: String,
-    },
-    UserInfoWithLockupsList {
-        address: String,
-    },
+    #[returns(PoolInfo)]
+    Pool { pool_type: PoolType },
+    #[returns(UserInfoResponse)]
+    UserInfo { address: String },
+    #[returns(UserInfoWithListResponse)]
+    UserInfoWithLockupsList { address: String },
+    #[returns(LockUpInfoResponse)]
     LockUpInfo {
         user_address: String,
         pool_type: PoolType,
         duration: u64,
     },
+    #[returns(Option<Uint128>)]
     QueryUserLockupTotalAtHeight {
         pool_type: PoolType,
         user_address: String,
         height: u64,
     },
-    QueryLockupTotalAtHeight {
-        pool_type: PoolType,
-        height: u64,
-    },
+    #[returns(Option<Uint128>)]
+    QueryLockupTotalAtHeight { pool_type: PoolType, height: u64 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
