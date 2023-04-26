@@ -83,7 +83,7 @@ fn _do_simple_update_config(deps: DepsMut) -> (MessageInfo, Env) {
     let update_config_msg = UpdateConfigMsg {
         airdrop_address: Some("airdrop_address".to_string()),
         lockdrop_address: Some("lockdrop_address".to_string()),
-        when_withdrawable: Some(Timestamp::from_seconds(0)),
+        when_withdrawable: Some(Timestamp::from_seconds(0).seconds()),
     };
     let info = mock_info("dao_address", &[]);
     let env = mock_env();
@@ -195,7 +195,7 @@ mod instantiate {
             UpdateConfigMsg {
                 airdrop_address: Some("airdrop_address".to_string()),
                 lockdrop_address: Some("lockdrop_address".to_string()),
-                when_withdrawable: Some(Timestamp::from_seconds(0)),
+                when_withdrawable: Some(Timestamp::from_seconds(0).seconds()),
             },
         );
         let config = query_config(deps.as_ref()).unwrap();
@@ -233,14 +233,14 @@ mod instantiate {
 }
 
 mod add_vesting {
-    use crate::contract::{execute_add_vesting, VESTING_CLIFF};
+    use crate::contract::{execute_add_vesting, execute_mint, execute_transfer, VESTING_CLIFF};
     use crate::error::ContractError;
     use crate::error::ContractError::Unauthorized;
     use crate::state::{Schedule, ALLOCATIONS};
     use crate::testing::tests::_do_instantiate;
     use crate::testing::tests::_do_simple_update_config;
     use cosmwasm_std::testing::{mock_dependencies, mock_info};
-    use cosmwasm_std::{Addr, Uint128};
+    use cosmwasm_std::{Addr, Coin, Uint128};
 
     #[test]
     fn adds_vesting_for_account_with_correct_settings() {
@@ -248,6 +248,18 @@ mod add_vesting {
         let (_info, _env) = _do_instantiate(deps.as_mut(), None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
         let airdrop_info = mock_info("airdrop_address", &[]);
+        let dao_info = mock_info("dao_address", &[Coin::new(1000, "untrn")]);
+
+        execute_mint(deps.as_mut(), env.clone(), dao_info).unwrap();
+
+        execute_transfer(
+            deps.as_mut(),
+            env.clone(),
+            airdrop_info.clone(),
+            "address".to_string(),
+            Uint128::new(100),
+        )
+        .unwrap();
 
         let res = execute_add_vesting(
             deps.as_mut(),
@@ -300,6 +312,19 @@ mod add_vesting {
         let (_info, _env) = _do_instantiate(deps.as_mut(), None);
         let (_info, env) = _do_simple_update_config(deps.as_mut());
         let airdrop_info = mock_info("airdrop_address", &[]);
+
+        let dao_info = mock_info("dao_address", &[Coin::new(1000, "untrn")]);
+
+        execute_mint(deps.as_mut(), env.clone(), dao_info).unwrap();
+
+        execute_transfer(
+            deps.as_mut(),
+            env.clone(),
+            airdrop_info.clone(),
+            "address".to_string(),
+            Uint128::new(100),
+        )
+        .unwrap();
 
         let res = execute_add_vesting(
             deps.as_mut(),
@@ -519,7 +544,7 @@ mod withdraw {
             UpdateConfigMsg {
                 airdrop_address: Some("airdrop_address".to_string()),
                 lockdrop_address: Some("lockdrop_address".to_string()),
-                when_withdrawable: Some(mock_env().block.time.plus_seconds(1_000_000)),
+                when_withdrawable: Some(mock_env().block.time.plus_seconds(1_000_000).seconds()),
             },
         );
 

@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ConfigResponse",
+  "type": "object",
+  "required": [
+    "credits_address",
+    "owner",
+    "reserve_address"
+  ],
+  "properties": {
+    "credits_address": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "reserve_address": {
+      "type": "string"
+    }
+  }
+}

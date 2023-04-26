@@ -1,4 +1,10 @@
-use cosmwasm_std::{Timestamp, Uint128};
+use crate::state::{Allocation, Config};
+use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::Uint128;
+use cw20::{
+    AllAccountsResponse, AllAllowancesResponse, AllowanceResponse, BalanceResponse, MinterResponse,
+    TokenInfoResponse,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +22,7 @@ pub struct UpdateConfigMsg {
     /// Lockdrop contract address,
     pub lockdrop_address: Option<String>,
     /// When can start withdrawing untrn tokens
-    pub when_withdrawable: Option<Timestamp>,
+    pub when_withdrawable: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -53,43 +59,55 @@ pub enum ExecuteMsg {
     Mint {},
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
     /// Returns the current vestings of the given address.
+    #[returns(WithdrawableAmountResponse)]
     WithdrawableAmount { address: String },
     /// Returns the amount that is left vested of the given address.
+    #[returns(VestedAmountResponse)]
     VestedAmount { address: String },
     /// Returns the current allocation of the given address.
+    #[returns(Allocation)]
     Allocation { address: String },
     /// Returns the current balance of the given address, 0 if unset.
+    #[returns(BalanceResponse)]
     Balance { address: String },
     /// Returns the total supply at provided height, or current total supply if `height` is unset.
+    #[returns(TotalSupplyResponse)]
     TotalSupplyAtHeight { height: Option<u64> },
     /// Returns the balance of the given address at a given block height or current balance if `height` is unset.
     /// Returns 0 if no balance found.
+    #[returns(BalanceResponse)]
     BalanceAtHeight {
         address: String,
         height: Option<u64>,
     },
     /// Returns metadata on the contract - name, decimals, supply, etc.
+    #[returns(TokenInfoResponse)]
     TokenInfo {},
     /// Returns who can mint and the hard cap on maximum tokens after minting.
+    #[returns(Option<MinterResponse>)]
     Minter {},
     /// Returns how much spender can use from owner account, 0 if unset.
+    #[returns(AllowanceResponse)]
     Allowance { owner: String, spender: String },
     /// Returns all allowances this owner has approved. Supports pagination.
+    #[returns(AllAllowancesResponse)]
     AllAllowances {
         owner: String,
         start_after: Option<String>,
         limit: Option<u32>,
     },
     /// Returns all accounts that have balances. Supports pagination.
+    #[returns(AllAccountsResponse)]
     AllAccounts {
         start_after: Option<String>,
         limit: Option<u32>,
     },
     /// Returns current config of Credits contract
+    #[returns(Config)]
     Config {},
 }
 

@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "InstantiateMsg",
+  "description": "This structure describes the parameters used for creating a contract.",
+  "type": "object",
+  "required": [
+    "owner",
+    "token_info_manager"
+  ],
+  "properties": {
+    "owner": {
+      "description": "Address allowed to change contract parameters",
+      "type": "string"
+    },
+    "token_info_manager": {
+      "description": "Token info manager address",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

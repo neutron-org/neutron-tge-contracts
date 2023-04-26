@@ -1,3 +1,4 @@
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{to_binary, Addr, CosmosMsg, Env, StdResult, Uint128, WasmMsg};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -7,7 +8,7 @@ use crate::lockdrop::PoolType;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct InstantiateMsg {
     pub owner: Option<String>,
-    pub denom_manager: String,
+    pub token_info_manager: String,
     pub price_feed_contract: String,
     pub lockdrop_contract_address: Option<String>,
     pub reserve_contract_address: String,
@@ -36,13 +37,13 @@ pub struct UpdateConfigMsg {
 #[serde(rename_all = "snake_case")]
 pub struct PoolInfo {
     ///  NTRN-USDC LP Pool address
-    pub ntrn_usdc_pool_address: Addr,
+    pub ntrn_usdc_pool_address: String,
     ///  NTRN-ATOM LP Pool address
-    pub ntrn_atom_pool_address: Addr,
+    pub ntrn_atom_pool_address: String,
     ///  NTRN-USDC LP Token address
-    pub ntrn_usdc_lp_token_address: Addr,
+    pub ntrn_usdc_lp_token_address: String,
     ///  NTRN-ATOM LP Token address
-    pub ntrn_atom_lp_token_address: Addr,
+    pub ntrn_atom_lp_token_address: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -51,9 +52,10 @@ pub enum ExecuteMsg {
     UpdateConfig {
         new_config: UpdateConfigMsg,
     },
-    SetDenoms {
-        usdc_denom: String,
-        atom_denom: String,
+    SetTokenInfo {
+        usdc_denom: Option<String>,
+        atom_denom: Option<String>,
+        pool_info: Option<PoolInfo>,
     },
     Deposit {},
     Withdraw {
@@ -94,11 +96,14 @@ impl CallbackMsg {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(Config)]
     Config {},
+    #[returns(State)]
     State {},
+    #[returns(UserInfoResponse)]
     UserInfo { address: String },
 }
 
@@ -111,7 +116,7 @@ pub struct Config {
     /// Account who can update config
     pub owner: Addr,
     /// Account who can update denoms
-    pub denom_manager: Addr,
+    pub token_info_manager: Addr,
     /// Reserve Contract address
     pub reserve_contract_address: Addr,
     /// Vesting LP-USDC Contract address
@@ -179,7 +184,6 @@ pub struct State {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct UserInfo {
-    pub address: String,
     /// Total USDC delegated by the user
     pub usdc_deposited: Uint128,
     /// Total ATOM delegated by the user
