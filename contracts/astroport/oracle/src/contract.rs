@@ -110,7 +110,7 @@ pub fn set_asset_infos(
         return Err(ContractError::Unauthorized {});
     }
     if config.asset_infos.is_some() {
-        return Err(ContractError::AssetInfosSet {});
+        return Err(ContractError::AssetInfosAlreadySet {});
     }
 
     asset_infos[0].check(deps.api)?;
@@ -198,7 +198,7 @@ fn consult(
     let pair = config.pair.ok_or(ContractError::AssetInfosNotSet {})?;
     let price_last = PRICE_LAST
         .may_load(deps.storage)?
-        .ok_or(ContractError::OracleIsOutdated {})?;
+        .ok_or(ContractError::PricesNotFound {})?;
 
     let mut average_prices = vec![];
     for (from, to, value) in price_last.average_prices {
@@ -257,7 +257,7 @@ fn twap_at_height(
     let pair = config.pair.ok_or(ContractError::AssetInfosNotSet {})?;
     let price_last = PRICE_LAST
         .may_load_at_height(deps.storage, u64::from(height))?
-        .ok_or(ContractError::OracleIsOutdated {})?;
+        .ok_or(ContractError::PricesNotFound {})?;
     let mut average_prices = vec![];
     for (from, to, value) in price_last.average_prices {
         if from.equal(&token) {

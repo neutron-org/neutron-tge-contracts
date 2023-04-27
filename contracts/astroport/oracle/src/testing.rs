@@ -237,7 +237,7 @@ fn queries_do_not_work_without_prices_calculated() {
         },
     )
     .unwrap_err();
-    assert_eq!(e, ContractError::OracleIsOutdated {});
+    assert_eq!(e, ContractError::PricesNotFound {});
     let e = query(
         deps.as_ref(),
         env.clone(),
@@ -249,7 +249,7 @@ fn queries_do_not_work_without_prices_calculated() {
         },
     )
     .unwrap_err();
-    assert_eq!(e, ContractError::OracleIsOutdated {});
+    assert_eq!(e, ContractError::PricesNotFound {});
 
     // call update and make sure queries work
     env.block.time = env.block.time.plus_seconds(5);
