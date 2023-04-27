@@ -2,9 +2,6 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Addr;
 use cw_storage_plus::Map;
 
-/// The first key is denom, the second key is a precision.
-pub const COINS_INFO: Map<String, u8> = Map::new("coins_info");
-
 /// This structure stores the main parameters for the native coin registry contract.
 #[cw_serde]
 pub struct Config {
@@ -79,3 +76,6 @@ pub struct CoinResponse {
 /// We currently take no arguments for migrations.
 #[cw_serde]
 pub struct MigrateMsg {}
+
+/// The first key is denom, the second key is a precision.
+pub const COINS_INFO: Map<String, u8> = Map::new("coins_info");

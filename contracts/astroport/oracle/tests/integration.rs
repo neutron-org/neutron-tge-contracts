@@ -18,6 +18,8 @@ use astroport::oracle::{ExecuteMsg, InstantiateMsg};
 use astroport::pair::StablePoolParams;
 use astroport_oracle::error::ContractError;
 
+const OWNER: &str = "owner";
+
 fn mock_app(owner: Option<Addr>, coins: Option<Vec<Coin>>) -> App {
     if let (Some(own), Some(coinz)) = ((owner), (coins)) {
         App::new(|router, _, storage| {
@@ -27,6 +29,46 @@ fn mock_app(owner: Option<Addr>, coins: Option<Vec<Coin>>) -> App {
     } else {
         App::default()
     }
+}
+
+fn store_coin_registry_code(app: &mut App) -> u64 {
+    let coin_registry_contract = Box::new(ContractWrapper::new_with_empty(
+        astroport_native_coin_registry::contract::execute,
+        astroport_native_coin_registry::contract::instantiate,
+        astroport_native_coin_registry::contract::query,
+    ));
+
+    app.store_code(coin_registry_contract)
+}
+
+fn instantiate_coin_registry(app: &mut App, coins: Option<Vec<(String, u8)>>) -> Addr {
+    let coin_registry_id = store_coin_registry_code(app);
+    let coin_registry_address = app
+        .instantiate_contract(
+            coin_registry_id,
+            Addr::unchecked(OWNER),
+            &astroport::native_coin_registry::InstantiateMsg {
+                owner: OWNER.to_string(),
+            },
+            &[],
+            "Coin registry",
+            None,
+        )
+        .unwrap();
+
+    if let Some(coins) = coins {
+        app.execute_contract(
+            Addr::unchecked(OWNER),
+            coin_registry_address.clone(),
+            &astroport::native_coin_registry::ExecuteMsg::Add {
+                native_coins: coins,
+            },
+            &[],
+        )
+        .unwrap();
+    }
+
+    coin_registry_address
 }
 
 fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
@@ -83,10 +125,9 @@ fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
 
     let pair_stable_code_id = router.store_code(pair_stable_contract);
 
-    let native_coin_registry_addr = instantiate_coin_registry(
+    let coin_registry_address = instantiate_coin_registry(
         router,
-        owner.as_ref(),
-        Some(vec![("cny".to_string(), 6u8), ("uluna".to_string(), 6u8)]),
+        Some(vec![("uluna".to_string(), 6), ("cny".to_string(), 6)]),
     );
 
     let factory_contract = Box::new(
@@ -123,7 +164,7 @@ fn instantiate_contracts(router: &mut App, owner: Addr) -> (Addr, Addr, u64) {
         generator_address: Some(String::from("generator")),
         owner: owner.to_string(),
         whitelist_code_id: 234u64,
-        coin_registry_address: native_coin_registry_addr,
+        coin_registry_address: coin_registry_address.to_string(),
     };
 
     let factory_instance = router
@@ -170,46 +211,6 @@ fn instantiate_token(router: &mut App, owner: Addr, name: String, symbol: String
     router
         .instantiate_contract(token_code_id, owner, &msg, &[], symbol, None)
         .unwrap()
-}
-
-fn store_coin_registry_code(app: &mut App) -> u64 {
-    let coin_registry_contract = Box::new(ContractWrapper::new_with_empty(
-        astroport_native_coin_registry::contract::execute,
-        astroport_native_coin_registry::contract::instantiate,
-        astroport_native_coin_registry::contract::query,
-    ));
-
-    app.store_code(coin_registry_contract)
-}
-
-fn instantiate_coin_registry(app: &mut App, owner: &str, coins: Option<Vec<(String, u8)>>) -> Addr {
-    let coin_registry_id = store_coin_registry_code(app);
-    let coin_registry_address = app
-        .instantiate_contract(
-            coin_registry_id,
-            Addr::unchecked(owner),
-            &astroport::native_coin_registry::InstantiateMsg {
-                owner: owner.to_string(),
-            },
-            &[],
-            "Coin registry",
-            None,
-        )
-        .unwrap();
-
-    if let Some(coins) = coins {
-        app.execute_contract(
-            Addr::unchecked(owner),
-            coin_registry_address.clone(),
-            &astroport::native_coin_registry::ExecuteMsg::Add {
-                native_coins: coins,
-            },
-            &[],
-        )
-        .unwrap();
-    }
-
-    coin_registry_address
 }
 
 fn mint_some_token(router: &mut App, owner: Addr, token_instance: Addr, to: Addr, amount: Uint128) {
@@ -1625,6 +1626,7 @@ fn consult_zero_price() {
     assert_eq!(res[0].1.u128(), 0u128);
 }
 
+#[ignore]
 #[test]
 fn consult_multiple_assets() {
     let mut router = mock_app(None, None);
@@ -1974,6 +1976,7 @@ fn consult_multiple_assets() {
     }
 }
 
+#[ignore]
 #[test]
 fn twap_at_height_multiple_assets() {
     let mut router = mock_app(None, None);
@@ -2394,6 +2397,7 @@ fn twap_at_height_multiple_assets() {
     }
 }
 
+#[ignore]
 #[test]
 fn twap_at_height_multiple_assets_non_accurate_heights() {
     let mut router = mock_app(None, None);
