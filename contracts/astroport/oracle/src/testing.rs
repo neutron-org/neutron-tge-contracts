@@ -292,10 +292,10 @@ fn set_asset_infos_works_only_once() {
     let usdc_token_contract = Addr::unchecked("usdc-token");
 
     let astro_asset_info = AssetInfo::Token {
-        contract_addr: astro_token_contract.clone(),
+        contract_addr: astro_token_contract,
     };
     let usdc_asset_info = AssetInfo::Token {
-        contract_addr: usdc_token_contract.clone(),
+        contract_addr: usdc_token_contract,
     };
 
     let instantiate_msg = InstantiateMsg {
@@ -304,7 +304,7 @@ fn set_asset_infos_works_only_once() {
         manager: String::from("manager"),
     };
 
-    let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
+    let res = instantiate(deps.as_mut(), env.clone(), info, instantiate_msg).unwrap();
     assert_eq!(0, res.messages.len());
     execute(
         deps.as_mut(),
