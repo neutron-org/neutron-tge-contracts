@@ -280,3 +280,46 @@ fn queries_do_not_work_without_prices_calculated() {
     )
     .unwrap();
 }
+
+#[test]
+fn set_asset_infos_works_only_once() {
+    let mut deps = mock_dependencies(&[]);
+    let info = mock_info("addr0000", &[]);
+
+    let env = mock_env();
+    let factory = Addr::unchecked("factory");
+    let astro_token_contract = Addr::unchecked("astro-token");
+    let usdc_token_contract = Addr::unchecked("usdc-token");
+
+    let astro_asset_info = AssetInfo::Token {
+        contract_addr: astro_token_contract.clone(),
+    };
+    let usdc_asset_info = AssetInfo::Token {
+        contract_addr: usdc_token_contract.clone(),
+    };
+
+    let instantiate_msg = InstantiateMsg {
+        factory_contract: factory.to_string(),
+        period: 1,
+        manager: String::from("manager"),
+    };
+
+    let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
+    assert_eq!(0, res.messages.len());
+    execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("manager", &[]),
+        ExecuteMsg::SetAssetInfos(vec![astro_asset_info.clone(), usdc_asset_info.clone()]),
+    )
+    .unwrap();
+
+    let err = execute(
+        deps.as_mut(),
+        env,
+        mock_info("manager", &[]),
+        ExecuteMsg::SetAssetInfos(vec![astro_asset_info, usdc_asset_info]),
+    )
+    .unwrap_err();
+    assert_eq!(err, ContractError::AssetInfosAlreadySet {});
+}
