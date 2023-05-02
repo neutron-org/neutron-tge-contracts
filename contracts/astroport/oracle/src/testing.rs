@@ -3,8 +3,10 @@ use crate::error::ContractError;
 use crate::mock_querier::mock_dependencies;
 use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::oracle::{Config, ExecuteMsg, InstantiateMsg, QueryMsg};
-use cosmwasm_std::testing::{mock_env, mock_info};
-use cosmwasm_std::{from_binary, Addr, Decimal256, DepsMut, Env, MessageInfo, Uint128, Uint256};
+use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
+use cosmwasm_std::{
+    from_binary, Addr, Decimal256, DepsMut, Env, MessageInfo, Uint128, Uint256, Uint64,
+};
 use std::ops::{Add, Mul};
 
 #[test]
@@ -190,7 +192,6 @@ fn cfg_and_last_update_ts() {
             ),
         ],
     );
-    let inst_ts = env.block.time.seconds();
     let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
     assert_eq!(0, res.messages.len());
     execute(
@@ -237,10 +238,18 @@ fn cfg_and_last_update_ts() {
     );
 
     // make first update and check how last update height works
+    let first_update_ts = env.block.time.seconds();
+    execute(
+        deps.as_mut(),
+        env.clone(),
+        info.clone(),
+        ExecuteMsg::Update {},
+    )
+    .unwrap();
     let last_update_ts: u64 =
         from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
-    assert_eq!(last_update_ts, inst_ts);
+    assert_eq!(last_update_ts, first_update_ts);
     env.block.time = env.block.time.plus_seconds(100);
     execute(
         deps.as_mut(),
@@ -252,7 +261,7 @@ fn cfg_and_last_update_ts() {
     let last_update_ts: u64 =
         from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
-    assert_eq!(last_update_ts, inst_ts.add(100));
+    assert_eq!(last_update_ts, first_update_ts.add(100));
 
     // increase update period
     execute(
@@ -270,7 +279,7 @@ fn cfg_and_last_update_ts() {
     let last_update_ts: u64 =
         from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
-    assert_eq!(last_update_ts, inst_ts.add(100));
+    assert_eq!(last_update_ts, first_update_ts.add(100));
     env.block.time = env.block.time.plus_seconds(100);
     execute(
         deps.as_mut(),
@@ -285,7 +294,7 @@ fn cfg_and_last_update_ts() {
     execute(deps.as_mut(), env.clone(), info, ExecuteMsg::Update {}).unwrap();
     let last_update_ts: u64 =
         from_binary(&query(deps.as_ref(), env, QueryMsg::LastUpdateTimestamp {}).unwrap()).unwrap();
-    assert_eq!(last_update_ts, inst_ts.add(700));
+    assert_eq!(last_update_ts, first_update_ts.add(700));
 }
 
 fn setup(deps: DepsMut, env: Env, info: MessageInfo) {
@@ -300,4 +309,175 @@ fn setup(deps: DepsMut, env: Env, info: MessageInfo) {
         },
     )
     .unwrap();
+}
+
+#[test]
+fn queries_do_not_work_without_prices_calculated() {
+    let mut deps = mock_dependencies(&[]);
+    let info = mock_info("addr0000", &[]);
+
+    let mut env = mock_env();
+    let factory = Addr::unchecked("factory");
+    let astro_token_contract = Addr::unchecked("astro-token");
+    let usdc_token_contract = Addr::unchecked("usdc-token");
+
+    deps.querier.with_token_balances(&[
+        (
+            &astro_token_contract.to_string(),
+            &[(&String::from(MOCK_CONTRACT_ADDR), &Uint128::new(10000))],
+        ),
+        (
+            &usdc_token_contract.to_string(),
+            &[(&String::from(MOCK_CONTRACT_ADDR), &Uint128::new(10000))],
+        ),
+    ]);
+
+    let astro_asset_info = AssetInfo::Token {
+        contract_addr: astro_token_contract.clone(),
+    };
+    let usdc_asset_info = AssetInfo::Token {
+        contract_addr: usdc_token_contract.clone(),
+    };
+    let astro_asset = Asset {
+        info: astro_asset_info.clone(),
+        amount: Uint128::zero(),
+    };
+    let usdc_asset = Asset {
+        info: usdc_asset_info.clone(),
+        amount: Uint128::zero(),
+    };
+
+    let asset = vec![astro_asset, usdc_asset];
+
+    let instantiate_msg = InstantiateMsg {
+        factory_contract: factory.to_string(),
+        period: 1,
+        manager: String::from("manager"),
+    };
+
+    // Set cumulative price to 192738282u128
+    deps.querier.set_cumulative_price(
+        Addr::unchecked("pair"),
+        asset.clone(),
+        Uint128::from(192738282u128),
+        vec![
+            (
+                asset[0].info.clone(),
+                asset[1].info.clone(),
+                Uint128::from(192738282u128),
+            ),
+            (
+                asset[1].info.clone(),
+                asset[0].info.clone(),
+                Uint128::from(192738282u128),
+            ),
+        ],
+    );
+    let res = instantiate(deps.as_mut(), env.clone(), info.clone(), instantiate_msg).unwrap();
+    assert_eq!(0, res.messages.len());
+    execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("manager", &[]),
+        ExecuteMsg::SetAssetInfos(vec![astro_asset_info, usdc_asset_info]),
+    )
+    .unwrap();
+
+    // no update called — no queries available
+    let e = query(
+        deps.as_ref(),
+        env.clone(),
+        QueryMsg::Consult {
+            token: AssetInfo::Token {
+                contract_addr: usdc_token_contract.clone(),
+            },
+            amount: Uint128::from(100u128),
+        },
+    )
+    .unwrap_err();
+    assert_eq!(e, ContractError::PricesNotFound {});
+    let e = query(
+        deps.as_ref(),
+        env.clone(),
+        QueryMsg::TWAPAtHeight {
+            token: AssetInfo::Token {
+                contract_addr: astro_token_contract.clone(),
+            },
+            height: Uint64::from(env.block.height),
+        },
+    )
+    .unwrap_err();
+    assert_eq!(e, ContractError::PricesNotFound {});
+
+    // call update and make sure queries work
+    env.block.time = env.block.time.plus_seconds(5);
+    env.block.height += 1;
+    execute(deps.as_mut(), env.clone(), info, ExecuteMsg::Update {}).unwrap();
+    env.block.time = env.block.time.plus_seconds(5);
+    env.block.height += 1;
+    query(
+        deps.as_ref(),
+        env.clone(),
+        QueryMsg::Consult {
+            token: AssetInfo::Token {
+                contract_addr: usdc_token_contract,
+            },
+            amount: Uint128::from(100u128),
+        },
+    )
+    .unwrap();
+    query(
+        deps.as_ref(),
+        env.clone(),
+        QueryMsg::TWAPAtHeight {
+            token: AssetInfo::Token {
+                contract_addr: astro_token_contract,
+            },
+            height: Uint64::from(env.block.height),
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn set_asset_infos_works_only_once() {
+    let mut deps = mock_dependencies(&[]);
+    let info = mock_info("addr0000", &[]);
+
+    let env = mock_env();
+    let factory = Addr::unchecked("factory");
+    let astro_token_contract = Addr::unchecked("astro-token");
+    let usdc_token_contract = Addr::unchecked("usdc-token");
+
+    let astro_asset_info = AssetInfo::Token {
+        contract_addr: astro_token_contract,
+    };
+    let usdc_asset_info = AssetInfo::Token {
+        contract_addr: usdc_token_contract,
+    };
+
+    let instantiate_msg = InstantiateMsg {
+        factory_contract: factory.to_string(),
+        period: 1,
+        manager: String::from("manager"),
+    };
+
+    let res = instantiate(deps.as_mut(), env.clone(), info, instantiate_msg).unwrap();
+    assert_eq!(0, res.messages.len());
+    execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("manager", &[]),
+        ExecuteMsg::SetAssetInfos(vec![astro_asset_info.clone(), usdc_asset_info.clone()]),
+    )
+    .unwrap();
+
+    let err = execute(
+        deps.as_mut(),
+        env,
+        mock_info("manager", &[]),
+        ExecuteMsg::SetAssetInfos(vec![astro_asset_info, usdc_asset_info]),
+    )
+    .unwrap_err();
+    assert_eq!(err, ContractError::AssetInfosAlreadySet {});
 }

@@ -1,13 +1,14 @@
 use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::factory::PairType;
 use astroport::factory::QueryMsg::Pair;
-use astroport::pair::CumulativePricesResponse;
-use astroport::pair::QueryMsg::CumulativePrices;
+use astroport::pair::QueryMsg::{self, CumulativePrices};
+use astroport::pair::{CumulativePricesResponse, SimulationResponse};
 use cosmwasm_std::testing::{MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR};
 use cosmwasm_std::{
     from_binary, from_slice, to_binary, Addr, Coin, Empty, OwnedDeps, Querier, QuerierResult,
     QueryRequest, SystemError, SystemResult, Uint128, WasmQuery,
 };
+use cw20::{BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
 use std::collections::HashMap;
 
 pub fn mock_dependencies(
@@ -33,6 +34,7 @@ pub struct WasmMockQuerier {
 pub struct TokenQuerier {
     // this lets us iterate over all pairs that match the first string
     pairs: HashMap<String, CumulativePricesResponse>,
+    balances: HashMap<String, HashMap<String, Uint128>>,
 }
 
 impl TokenQuerier {
@@ -53,6 +55,28 @@ impl TokenQuerier {
             },
         );
     }
+
+    pub fn new(balances: &[(&String, &[(&String, &Uint128)])]) -> Self {
+        TokenQuerier {
+            pairs: Default::default(),
+            balances: balances_to_map(balances),
+        }
+    }
+}
+
+pub(crate) fn balances_to_map(
+    balances: &[(&String, &[(&String, &Uint128)])],
+) -> HashMap<String, HashMap<String, Uint128>> {
+    let mut balances_map: HashMap<String, HashMap<String, Uint128>> = HashMap::new();
+    for (contract_addr, balances) in balances.iter() {
+        let mut contract_balances_map: HashMap<String, Uint128> = HashMap::new();
+        for (addr, balance) in balances.iter() {
+            contract_balances_map.insert(addr.to_string(), **balance);
+        }
+
+        balances_map.insert(contract_addr.to_string(), contract_balances_map);
+    }
+    balances_map
 }
 
 impl Querier for WasmMockQuerier {
@@ -88,7 +112,20 @@ impl WasmMockQuerier {
                         ),
                         _ => panic!("DO NOT ENTER HERE"),
                     }
-                } else {
+                } else if contract_addr == "astro-token" || contract_addr == "usdc-token" {
+                    match from_binary(msg).unwrap() {
+                        Cw20QueryMsg::TokenInfo {} => SystemResult::Ok(
+                            to_binary(&TokenInfoResponse {
+                                name: contract_addr.to_string(),
+                                symbol: contract_addr.to_string(),
+                                decimals: 6u8,
+                                total_supply: Uint128::new(1000000),
+                            })
+                            .into(),
+                        ),
+                        _ => panic!("DO NOT ENTER HERE"),
+                    }
+                } else if contract_addr == "pair" {
                     match from_binary(msg).unwrap() {
                         CumulativePrices { .. } => {
                             let balance = match self.token_querier.pairs.get(contract_addr) {
@@ -98,6 +135,66 @@ impl WasmMockQuerier {
                                 }
                             };
                             SystemResult::Ok(to_binary(&balance).into())
+                        }
+                        QueryMsg::Simulation {
+                            offer_asset,
+                            ask_asset_info: _,
+                        } => SystemResult::Ok(
+                            to_binary(&SimulationResponse {
+                                return_amount: offer_asset.amount,
+                                spread_amount: Uint128::zero(),
+                                commission_amount: Uint128::zero(),
+                            })
+                            .into(),
+                        ),
+                        _ => panic!("DO NOT ENTER HERE"),
+                    }
+                } else {
+                    match from_binary(msg).unwrap() {
+                        Cw20QueryMsg::TokenInfo {} => {
+                            let balances: &HashMap<String, Uint128> =
+                                match self.token_querier.balances.get(contract_addr) {
+                                    Some(balances) => balances,
+                                    None => {
+                                        return SystemResult::Err(SystemError::Unknown {});
+                                    }
+                                };
+
+                            let mut total_supply = Uint128::zero();
+
+                            for balance in balances {
+                                total_supply += *balance.1;
+                            }
+
+                            SystemResult::Ok(
+                                to_binary(&TokenInfoResponse {
+                                    name: "mAPPL".to_string(),
+                                    symbol: "mAPPL".to_string(),
+                                    decimals: 6,
+                                    total_supply,
+                                })
+                                .into(),
+                            )
+                        }
+                        Cw20QueryMsg::Balance { address } => {
+                            let balances: &HashMap<String, Uint128> =
+                                match self.token_querier.balances.get(contract_addr) {
+                                    Some(balances) => balances,
+                                    None => {
+                                        return SystemResult::Err(SystemError::Unknown {});
+                                    }
+                                };
+
+                            let balance = match balances.get(&address) {
+                                Some(v) => v,
+                                None => {
+                                    return SystemResult::Err(SystemError::Unknown {});
+                                }
+                            };
+
+                            SystemResult::Ok(
+                                to_binary(&BalanceResponse { balance: *balance }).into(),
+                            )
                         }
                         _ => panic!("DO NOT ENTER HERE"),
                     }
@@ -124,5 +221,10 @@ impl WasmMockQuerier {
     ) {
         self.token_querier
             .set(pair, assert, total, cumulative_prices)
+    }
+
+    // Configure the mint whitelist mock querier
+    pub fn with_token_balances(&mut self, balances: &[(&String, &[(&String, &Uint128)])]) {
+        self.token_querier = TokenQuerier::new(balances);
     }
 }

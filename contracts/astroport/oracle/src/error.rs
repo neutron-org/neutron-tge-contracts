@@ -19,6 +19,12 @@ pub enum ContractError {
     #[error("Asset infos are not set")]
     AssetInfosNotSet {},
 
+    #[error("Asset infos have already been set")]
+    AssetInfosAlreadySet {},
+
+    #[error("Prices for assets not found")]
+    PricesNotFound {},
+
     #[error("Invalid token")]
     InvalidToken {},
 }
