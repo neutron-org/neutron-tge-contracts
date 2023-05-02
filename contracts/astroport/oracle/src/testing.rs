@@ -236,6 +236,8 @@ fn cfg_and_last_update_ts() {
             manager: Addr::unchecked("manager")
         }
     );
+    let e = query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap_err();
+    assert_eq!(e, ContractError::PricesNotFound {});
 
     // make first update and check how last update height works
     let first_update_ts = env.block.time.seconds();

@@ -312,5 +312,9 @@ fn query_config(deps: Deps) -> Result<Config, ContractError> {
 
 /// Returns the height at which the contract's Update{} handler was called last time.
 fn query_last_update_ts(deps: Deps) -> Result<u64, ContractError> {
-    Ok(PRICE_LAST.load(deps.storage)?.block_timestamp_last)
+    if let Some(price_last) = PRICE_LAST.may_load(deps.storage)? {
+        Ok(price_last.block_timestamp_last)
+    } else {
+        Err(ContractError::PricesNotFound {})
+    }
 }
