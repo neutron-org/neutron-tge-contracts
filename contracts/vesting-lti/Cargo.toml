@@ -23,6 +23,6 @@ cw2 = { version = "0.15" }
 
 [dev-dependencies]
 cw-multi-test = "0.15"
-astroport-token = {path = "../astroport/token"}
+astroport-token = {git = "https://github.com/astroport-fi/astroport-core.git", rev = "65ce7d1879cc5d95b09fa14202f0423bba52ae0e" }
 cw20 = { version = "0.15" }
 cw-utils = "0.15"

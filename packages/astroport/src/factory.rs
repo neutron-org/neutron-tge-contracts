@@ -81,6 +81,7 @@ pub struct InstantiateMsg {
     pub owner: String,
     /// CW1 whitelist contract code id used to store 3rd party rewards for staking Astroport LP tokens
     pub whitelist_code_id: u64,
+    pub coin_registry_address: String,
 }
 
 /// This structure describes the execute messages of the contract.
@@ -170,7 +171,7 @@ pub enum QueryMsg {
 /// A custom struct for each query response that returns general contract settings/configs.
 #[cw_serde]
 pub struct ConfigResponse {
-    /// Addres of owner that is allowed to change contract parameters
+    /// Address of owner that is allowed to change contract parameters
     pub owner: Addr,
     /// IDs of contracts which are allowed to create pairs
     pub pair_configs: Vec<PairConfig>,
@@ -182,6 +183,8 @@ pub struct ConfigResponse {
     pub generator_address: Option<Addr>,
     /// CW1 whitelist contract code id used to store 3rd party rewards for staking Astroport LP tokens
     pub whitelist_code_id: u64,
+    /// The address of the contract that contains the coins with their precision
+    pub coin_registry_address: Addr,
 }
 
 /// This structure stores the parameters used in a migration message.

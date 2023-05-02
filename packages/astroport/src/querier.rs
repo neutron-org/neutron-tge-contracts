@@ -6,14 +6,11 @@ use crate::factory::{
 use crate::pair::{QueryMsg as PairQueryMsg, ReverseSimulationResponse, SimulationResponse};
 
 use cosmwasm_std::{
-    Addr, AllBalanceResponse, BankQuery, Coin, Decimal, QuerierWrapper, QueryRequest, StdResult,
-    Uint128,
+    Addr, AllBalanceResponse, BankQuery, Coin, Decimal, QuerierWrapper, QueryRequest, StdError,
+    StdResult, Uint128,
 };
 
 use cw20::{BalanceResponse as Cw20BalanceResponse, Cw20QueryMsg, TokenInfoResponse};
-
-// It's defined at https://github.com/terra-money/core/blob/d8e277626e74f9d6417dcd598574686882f0274c/types/assets/assets.go#L15
-pub const NATIVE_TOKEN_PRECISION: u8 = 6;
 
 /// Returns a native token's balance for a specific account.
 ///
@@ -64,6 +61,40 @@ pub fn query_token_balance(
     Ok(resp.balance)
 }
 
+/// Returns the number of decimals that a token has.
+///
+/// * **asset_info** is an object of type [`AssetInfo`] and contains the asset details for a specific token.
+pub fn query_token_precision(
+    querier: &QuerierWrapper,
+    asset_info: &AssetInfo,
+    factory_addr: &Addr,
+) -> StdResult<u8> {
+    Ok(match asset_info {
+        AssetInfo::NativeToken { denom } => {
+            let config = query_factory_config(querier, factory_addr)?;
+            let result = crate::native_coin_registry::COINS_INFO.query(
+                querier,
+                config.coin_registry_address,
+                denom.to_string(),
+            )?;
+
+            if let Some(decimals) = result {
+                decimals
+            } else {
+                return Err(StdError::generic_err(format!(
+                    "The {denom} precision was not found"
+                )));
+            }
+        }
+        AssetInfo::Token { contract_addr } => {
+            let res: TokenInfoResponse =
+                querier.query_wasm_smart(contract_addr, &Cw20QueryMsg::TokenInfo {})?;
+
+            res.decimals
+        }
+    })
+}
+
 /// Returns a token's symbol.
 ///
 /// * **contract_addr** token contract address.
@@ -88,23 +119,6 @@ pub fn query_supply(
         querier.query_wasm_smart(contract_addr, &Cw20QueryMsg::TokenInfo {})?;
 
     Ok(res.total_supply)
-}
-
-/// Returns the number of decimals that a token has.
-///
-/// * **asset_info** asset details for a specific token.
-pub fn query_token_precision(querier: &QuerierWrapper, asset_info: &AssetInfo) -> StdResult<u8> {
-    let decimals = match asset_info {
-        AssetInfo::NativeToken { .. } => NATIVE_TOKEN_PRECISION,
-        AssetInfo::Token { contract_addr } => {
-            let res: TokenInfoResponse =
-                querier.query_wasm_smart(contract_addr, &Cw20QueryMsg::TokenInfo {})?;
-
-            res.decimals
-        }
-    };
-
-    Ok(decimals)
 }
 
 /// Returns the configuration for the factory contract.
