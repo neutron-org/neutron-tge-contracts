@@ -1,11 +1,13 @@
 use crate::error::ContractError;
 use crate::querier::{query_cumulative_prices, query_prices};
-use crate::state::{Config, PriceCumulativeLast, CONFIG, PRICE_LAST};
+use crate::state::{
+    get_precision, store_precisions, Config, PriceCumulativeLast, CONFIG, PRICE_LAST,
+};
 use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext};
 use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::oracle::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
-use astroport::querier::{query_pair_info, query_token_precision};
+use astroport::querier::query_pair_info;
 use cosmwasm_std::{
     entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response, Uint128,
     Uint256, Uint64,
@@ -100,7 +102,7 @@ pub fn update_manager(
 }
 
 pub fn set_asset_infos(
-    deps: DepsMut,
+    mut deps: DepsMut,
     _env: Env,
     info: MessageInfo,
     asset_infos: Vec<AssetInfo>,
@@ -113,8 +115,11 @@ pub fn set_asset_infos(
         return Err(ContractError::AssetInfosAlreadySet {});
     }
 
-    asset_infos[0].check(deps.api)?;
-    asset_infos[1].check(deps.api)?;
+    for asset_info in &asset_infos {
+        asset_info.check(deps.api)?;
+        store_precisions(deps.branch(), asset_info, &config.factory)?;
+    }
+
     let pair_info = query_pair_info(&deps.querier, &config.factory, &asset_infos)?;
 
     config.asset_infos = Some(asset_infos);
@@ -212,7 +217,7 @@ fn consult(
     }
 
     // Get the token's precision
-    let p = query_token_precision(&deps.querier, &token)?;
+    let p = get_precision(deps.storage, &token)?;
     let one = Uint128::new(10_u128.pow(p.into()));
 
     average_prices
@@ -270,7 +275,7 @@ fn twap_at_height(
     }
 
     // Get the token's precision
-    let p = query_token_precision(&deps.querier, &token)?;
+    let p = get_precision(deps.storage, &token)?;
     let one = Uint128::new(10_u128.pow(p.into()));
 
     average_prices

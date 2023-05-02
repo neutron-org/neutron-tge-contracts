@@ -112,6 +112,19 @@ impl WasmMockQuerier {
                         ),
                         _ => panic!("DO NOT ENTER HERE"),
                     }
+                } else if contract_addr == "astro-token" || contract_addr == "usdc-token" {
+                    match from_binary(msg).unwrap() {
+                        Cw20QueryMsg::TokenInfo {} => SystemResult::Ok(
+                            to_binary(&TokenInfoResponse {
+                                name: contract_addr.to_string(),
+                                symbol: contract_addr.to_string(),
+                                decimals: 6u8,
+                                total_supply: Uint128::new(1000000),
+                            })
+                            .into(),
+                        ),
+                        _ => panic!("DO NOT ENTER HERE"),
+                    }
                 } else if contract_addr == "pair" {
                     match from_binary(msg).unwrap() {
                         CumulativePrices { .. } => {
