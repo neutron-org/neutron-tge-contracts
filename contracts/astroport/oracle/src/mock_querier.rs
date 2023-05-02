@@ -8,6 +8,7 @@ use cosmwasm_std::{
     from_binary, from_slice, to_binary, Addr, Coin, Empty, OwnedDeps, Querier, QuerierResult,
     QueryRequest, SystemError, SystemResult, Uint128, WasmQuery,
 };
+use cw20::{Cw20QueryMsg, TokenInfoResponse};
 use std::collections::HashMap;
 
 pub fn mock_dependencies(
@@ -83,6 +84,19 @@ impl WasmMockQuerier {
                                 contract_addr: Addr::unchecked("pair"),
                                 liquidity_token: Addr::unchecked("lp_token"),
                                 pair_type: PairType::Xyk {},
+                            })
+                            .into(),
+                        ),
+                        _ => panic!("DO NOT ENTER HERE"),
+                    }
+                } else if contract_addr == "astro-token" || contract_addr == "usdc-token" {
+                    match from_binary(msg).unwrap() {
+                        Cw20QueryMsg::TokenInfo {} => SystemResult::Ok(
+                            to_binary(&TokenInfoResponse {
+                                name: contract_addr.to_string(),
+                                symbol: contract_addr.to_string(),
+                                decimals: 6u8,
+                                total_supply: Uint128::new(1000000),
                             })
                             .into(),
                         ),
