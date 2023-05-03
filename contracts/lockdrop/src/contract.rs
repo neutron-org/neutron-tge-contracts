@@ -1088,23 +1088,28 @@ pub fn claim_airdrop_tokens_with_multiplier_msg(
     ntrn_lockdrop_rewards: Uint128,
 ) -> StdResult<Option<CosmosMsg>> {
     // unvested tokens amount
-    let unvested_tokens_amount: credits::msg::WithdrawableAmountResponse =
-        deps.querier.query_wasm_smart(
+    let unvested_tokens_amount: credits::msg::WithdrawableAmountResponse = deps
+        .querier
+        .query_wasm_smart(
             &credits_contract,
             &credits::msg::QueryMsg::WithdrawableAmount {
                 address: user_addr.to_string(),
             },
-        ).unwrap_or_default();
+        )
+        .unwrap_or_default();
     // vested tokens amount
-    let vested_tokens_amount: credits::msg::VestedAmountResponse = deps.querier.query_wasm_smart(
-        &credits_contract,
-        &credits::msg::QueryMsg::VestedAmount {
-            address: user_addr.to_string(),
-        },
-    ).unwrap_or_default();
+    let vested_tokens_amount: credits::msg::VestedAmountResponse = deps
+        .querier
+        .query_wasm_smart(
+            &credits_contract,
+            &credits::msg::QueryMsg::VestedAmount {
+                address: user_addr.to_string(),
+            },
+        )
+        .unwrap_or_default();
 
     if unvested_tokens_amount.amount.is_zero() && vested_tokens_amount.amount.is_zero() {
-        return Ok(None)
+        return Ok(None);
     }
 
     let airdrop_rewards_multiplier = Decimal::from_str(AIRDROP_REWARDS_MULTIPLIER)?;
