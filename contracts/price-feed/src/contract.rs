@@ -5,10 +5,7 @@ use astroport_periphery::pricefeed::{
 };
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Empty, Env, IbcMsg, IbcTimeout, MessageInfo, Response,
-    StdResult,
-};
+use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Empty, Env, IbcMsg, IbcTimeout, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 use obi::OBIEncode as OBIEncodeEnc;
 
@@ -64,13 +61,13 @@ pub fn instantiate(
 pub fn execute(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Request {} => try_request(deps, env),
-        ExecuteMsg::UpdateConfig { new_config } => try_update_config(deps, new_config),
-        ExecuteMsg::UpdateOwner { new_owner } => try_update_owner(deps, new_owner),
+        ExecuteMsg::UpdateConfig { new_config } => try_update_config(deps, info,new_config),
+        ExecuteMsg::UpdateOwner { new_owner } => try_update_owner(deps, info, new_owner),
     }
 }
 
@@ -114,9 +111,14 @@ pub fn try_request(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
 
 pub fn try_update_config(
     deps: DepsMut,
+    info: MessageInfo,
     new_config: UpdateConfigMsg,
 ) -> Result<Response, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
+
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized)
+    }
 
     if let Some(client_id) = new_config.client_id {
         config.client_id = client_id;
@@ -150,8 +152,13 @@ pub fn try_update_config(
     Ok(Response::default())
 }
 
-pub fn try_update_owner(deps: DepsMut, new_owner: String) -> Result<Response, ContractError> {
+pub fn try_update_owner(deps: DepsMut, info: MessageInfo, new_owner: String) -> Result<Response, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
+
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized)
+    }
+
     config.owner = deps.api.addr_validate(&new_owner)?;
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::default())
