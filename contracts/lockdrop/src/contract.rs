@@ -1086,7 +1086,7 @@ pub fn claim_airdrop_tokens_with_multiplier_msg(
     credits_contract: Addr,
     user_addr: Addr,
     ntrn_lockdrop_rewards: Uint128,
-) -> StdResult<CosmosMsg> {
+) -> StdResult<Option<CosmosMsg>> {
     // unvested tokens amount
     let unvested_tokens_amount: credits::msg::WithdrawableAmountResponse =
         deps.querier.query_wasm_smart(
@@ -1094,14 +1094,18 @@ pub fn claim_airdrop_tokens_with_multiplier_msg(
             &credits::msg::QueryMsg::WithdrawableAmount {
                 address: user_addr.to_string(),
             },
-        )?;
+        ).unwrap_or_default();
     // vested tokens amount
     let vested_tokens_amount: credits::msg::VestedAmountResponse = deps.querier.query_wasm_smart(
         &credits_contract,
         &credits::msg::QueryMsg::VestedAmount {
             address: user_addr.to_string(),
         },
-    )?;
+    ).unwrap_or_default();
+
+    if unvested_tokens_amount.amount.is_zero() && vested_tokens_amount.amount.is_zero() {
+        return Ok(None)
+    }
 
     let airdrop_rewards_multiplier = Decimal::from_str(AIRDROP_REWARDS_MULTIPLIER)?;
 
@@ -1111,14 +1115,14 @@ pub fn claim_airdrop_tokens_with_multiplier_msg(
         ntrn_lockdrop_rewards * airdrop_rewards_multiplier,
     );
 
-    Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+    Ok(Some(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: credits_contract.to_string(),
         msg: to_binary(&Cw20ExecuteMsg::BurnFrom {
             owner: user_addr.to_string(),
             amount: claimable_vested_amount + unvested_tokens_amount.amount,
         })?,
         funds: vec![],
-    }))
+    })))
 }
 
 /// Updates contract state after dual staking rewards are claimed from the generator contract. Returns a default object of type [`Response`].
@@ -1402,12 +1406,14 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         }
 
         // claim airdrop rewards
-        cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(
+        if let Some(msg) = claim_airdrop_tokens_with_multiplier_msg(
             deps.as_ref(),
             config.credits_contract,
             user_address.clone(),
             total_claimable_ntrn_rewards,
-        )?);
+        )? {
+            cosmos_msgs.push(msg);
+        }
 
         user_info.ntrn_transferred = true;
         attributes.push(attr(
