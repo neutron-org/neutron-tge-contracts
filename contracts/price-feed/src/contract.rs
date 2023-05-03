@@ -5,7 +5,10 @@ use astroport_periphery::pricefeed::{
 };
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Empty, Env, IbcMsg, IbcTimeout, MessageInfo, Response, StdResult};
+use cosmwasm_std::{
+    to_binary, Binary, Deps, DepsMut, Empty, Env, IbcMsg, IbcTimeout, MessageInfo, Response,
+    StdResult,
+};
 use cw2::set_contract_version;
 use obi::OBIEncode as OBIEncodeEnc;
 
@@ -66,7 +69,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Request {} => try_request(deps, env),
-        ExecuteMsg::UpdateConfig { new_config } => try_update_config(deps, info,new_config),
+        ExecuteMsg::UpdateConfig { new_config } => try_update_config(deps, info, new_config),
         ExecuteMsg::UpdateOwner { new_owner } => try_update_owner(deps, info, new_owner),
     }
 }
@@ -117,7 +120,7 @@ pub fn try_update_config(
     let mut config = CONFIG.load(deps.storage)?;
 
     if info.sender != config.owner {
-        return Err(ContractError::Unauthorized)
+        return Err(ContractError::Unauthorized);
     }
 
     if let Some(client_id) = new_config.client_id {
@@ -152,11 +155,15 @@ pub fn try_update_config(
     Ok(Response::default())
 }
 
-pub fn try_update_owner(deps: DepsMut, info: MessageInfo, new_owner: String) -> Result<Response, ContractError> {
+pub fn try_update_owner(
+    deps: DepsMut,
+    info: MessageInfo,
+    new_owner: String,
+) -> Result<Response, ContractError> {
     let mut config = CONFIG.load(deps.storage)?;
 
     if info.sender != config.owner {
-        return Err(ContractError::Unauthorized)
+        return Err(ContractError::Unauthorized);
     }
 
     config.owner = deps.api.addr_validate(&new_owner)?;
