@@ -1375,20 +1375,20 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
 
         attributes.push(attr("astroport_lp_unlocked", astroport_lp_amount));
         lockup_info.astroport_lp_transferred = Some(astroport_lp_amount);
+        TOTAL_USER_LOCKUP_AMOUNT.update(
+            deps.storage,
+            (pool_type, &user_address),
+            env.block.height,
+            |lockup_amount| -> StdResult<Uint128> {
+                if let Some(la) = lockup_amount {
+                    Ok(la - lockup_info.lp_units_locked)
+                } else {
+                    Ok(Uint128::zero())
+                }
+            },
+        )?;
     }
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
-    TOTAL_USER_LOCKUP_AMOUNT.update(
-        deps.storage,
-        (pool_type, &user_address),
-        env.block.height,
-        |lockup_amount| -> StdResult<Uint128> {
-            if let Some(la) = lockup_amount {
-                Ok(la - lockup_info.lp_units_locked)
-            } else {
-                Ok(Uint128::zero())
-            }
-        },
-    )?;
 
     // Transfers claimable one time NTRN rewards to the user that the user gets for all his lock
     if !user_info.ntrn_transferred {
