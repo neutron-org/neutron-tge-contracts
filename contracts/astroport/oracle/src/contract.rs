@@ -3,12 +3,12 @@ use crate::querier::{query_cumulative_prices, query_prices};
 use crate::state::{Config, PriceCumulativeLast, CONFIG, PRICE_LAST};
 use astroport::asset::{addr_validate_to_lower, Asset, AssetInfo, Decimal256Ext};
 use astroport::cosmwasm_ext::IntegerToDecimal;
-use astroport::oracle::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use astroport::oracle::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::{query_pair_info, query_token_precision};
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response, Uint128,
-    Uint256, Uint64,
+    entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
+    StdResult, Uint128, Uint256, Uint64,
 };
 use cw2::set_contract_version;
 use std::ops::Div;
@@ -298,4 +298,9 @@ fn twap_at_height(
             }
         })
         .collect::<Result<Vec<(AssetInfo, Decimal256)>, ContractError>>()
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+    Ok(Response::default())
 }
