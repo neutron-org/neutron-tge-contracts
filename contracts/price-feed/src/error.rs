@@ -7,6 +7,9 @@ pub enum Never {}
 
 #[derive(Error, Debug, PartialEq)]
 pub enum ContractError {
+    #[error("Unauthorized")]
+    Unauthorized,
+
     #[error("{0}")]
     Std(#[from] StdError),
 
