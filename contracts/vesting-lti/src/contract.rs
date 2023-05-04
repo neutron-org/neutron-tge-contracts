@@ -39,6 +39,7 @@ pub fn instantiate(
 }
 
 /// Exposes execute functions available in the contract.
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
     env: Env,
@@ -49,6 +50,7 @@ pub fn execute(
 }
 
 /// Exposes all the queries available in the contract.
+#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     base_query(deps, env, msg)
 }
