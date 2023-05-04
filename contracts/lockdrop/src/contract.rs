@@ -1403,9 +1403,9 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
 
         // claim airdrop rewards for airdrop participants
         let res: BalanceResponse = deps.querier.query_wasm_smart(
-            astroport_lp_token,
+            config.credits_contract.clone(),
             &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
+                address: user_address.to_string(),
             },
         )?;
         if res.balance > Uint128::zero() {
