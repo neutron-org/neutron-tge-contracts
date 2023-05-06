@@ -16,8 +16,8 @@ use astroport_periphery::auction::{
     State, UpdateConfigMsg, UserInfoResponse, UserLpInfo,
 };
 use astroport_periphery::lockdrop::{
-    Cw20HookMsg as LockDropCw20HookMsg, ExecuteMsg as LockDropExecuteMsg,
-    PoolType as LockDropPoolType,
+    Config as LockDropConfig, Cw20HookMsg as LockDropCw20HookMsg, ExecuteMsg as LockDropExecuteMsg,
+    PoolType as LockDropPoolType, QueryMsg as LockDropQueryMsg,
 };
 
 use crate::state::{get_users_store, CONFIG, STATE};
@@ -687,10 +687,15 @@ pub fn execute_finalize_init_pool(
     }
 
     let config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
+    let mut state: State = STATE.load(deps.storage)?;
     let lockdrop_address = config.lockdrop_contract_address.ok_or_else(|| {
         StdError::generic_err("Lockdrop address is not set yet. Please set it first.")
     })?;
+
+    let lockdrop_config: LockDropConfig = deps
+        .querier
+        .query_wasm_smart(lockdrop_address.to_string(), &LockDropQueryMsg::Config {})?;
+
     if let Some(PoolInfo {
         ntrn_usdc_pool_address: _,
         ntrn_atom_pool_address: _,
@@ -735,6 +740,17 @@ pub fn execute_finalize_init_pool(
             }),
         ];
 
+        let div_ratio = Decimal::checked_from_ratio(
+            state.usdc_ntrn_size,
+            state.usdc_ntrn_size + state.atom_ntrn_size,
+        )
+        .map_err(|e| StdError::GenericErr {
+            msg: format!("{}", e),
+        })?;
+
+        let usdc_incentives_share = div_ratio * lockdrop_config.lockdrop_incentives;
+        let atom_incentives_share = lockdrop_config.lockdrop_incentives - usdc_incentives_share;
+
         // Send locked tokens to the lockdrop contract
         if !state.atom_lp_locked.is_zero() {
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -745,7 +761,7 @@ pub fn execute_finalize_init_pool(
                     amount: state.atom_lp_locked,
                     msg: to_binary(&LockDropCw20HookMsg::InitializePool {
                         pool_type: LockDropPoolType::ATOM,
-                        incentives_share: state.atom_ntrn_size,
+                        incentives_share: atom_incentives_share,
                     })?,
                 })?,
             }))
@@ -759,7 +775,7 @@ pub fn execute_finalize_init_pool(
                     amount: state.usdc_lp_locked,
                     msg: to_binary(&LockDropCw20HookMsg::InitializePool {
                         pool_type: LockDropPoolType::USDC,
-                        incentives_share: state.usdc_ntrn_size,
+                        incentives_share: usdc_incentives_share,
                     })?,
                 })?,
             }))
