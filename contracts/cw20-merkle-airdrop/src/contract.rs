@@ -324,6 +324,11 @@ pub fn execute_withdraw_all(
                 required_fees: required_fees.u128(),
             });
         }
+    } else {
+        return Err(ContractError::Underfunded {
+            got_fees: 0u128,
+            required_fees: required_fees.u128(),
+        });
     }
     let fee = IbcFee {
         recv_fee: get_fee_item(fee_denom.clone(), recv_fee.u128()),
