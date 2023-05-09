@@ -54,6 +54,9 @@ pub enum ContractError {
         airdrop_start: u64,
         vesting_start: u64,
     },
+
+    #[error("underfunded ibc fees: required {required_fees} got {got_fees}")]
+    Underfunded { got_fees: u128, required_fees: u128 },
 }
 
 impl From<semver::Error> for ContractError {

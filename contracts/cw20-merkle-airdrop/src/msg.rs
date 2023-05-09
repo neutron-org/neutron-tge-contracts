@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub struct InstantiateMsg {
     pub credits_address: String,
-    pub reserve_address: String,
+    pub cosmos_hub_treasury: String,
     /// MerkleRoot is hex-encoded merkle root.
     pub merkle_root: String,
     /// A point in time from which it is possible to claim airdrops
@@ -25,6 +25,8 @@ pub struct InstantiateMsg {
     /// hrp is the bech32 parameter required for building external network address
     /// from signature message during claim action. example "cosmos", "terra", "juno"
     pub hrp: Option<String>,
+    /// transfer_channel is an ibc channel used to transfer unclaimed airdrops to cosmos treasury
+    pub transfer_channel: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -39,7 +41,18 @@ pub enum ExecuteMsg {
     /// Permissionless, activated after vesting is over (consult to `[InstantiateMsg]`
     /// documentation for more info). Withdraws all remaining cNTRN tokens, burns them,
     /// receiving NTRN in exchange, and sends all received NTRN's to reserve.
-    WithdrawAll {},
+    /// IBC fees are required to be payed by the caller.
+    WithdrawAll {
+        recv_fee: Uint128,
+        ack_fee: Uint128,
+        timeout_fee: Uint128,
+        timeout_revision: u64,
+        timeout_height: u64,
+        denom: Option<String>,
+    },
+    UpdateConfig {
+        new_transfer_channel: Option<String>,
+    },
     Pause {},
     Resume {},
 }

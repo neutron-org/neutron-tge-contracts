@@ -739,6 +739,7 @@ dependencies = [
  "cw20 1.0.1",
  "cw20-base 1.0.1",
  "hex",
+ "neutron-sdk",
  "ripemd",
  "schemars",
  "semver",

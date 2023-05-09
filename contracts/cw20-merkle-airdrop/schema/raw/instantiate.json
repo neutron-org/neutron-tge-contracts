@@ -4,9 +4,9 @@
   "type": "object",
   "required": [
     "airdrop_start",
+    "cosmos_hub_treasury",
     "credits_address",
     "merkle_root",
-    "reserve_address",
     "vesting_duration_seconds",
     "vesting_start"
   ],
@@ -16,6 +16,9 @@
       "type": "integer",
       "format": "uint64",
       "minimum": 0.0
+    },
+    "cosmos_hub_treasury": {
+      "type": "string"
     },
     "credits_address": {
       "type": "string"
@@ -31,9 +34,6 @@
       "description": "MerkleRoot is hex-encoded merkle root.",
       "type": "string"
     },
-    "reserve_address": {
-      "type": "string"
-    },
     "total_amount": {
       "anyOf": [
         {
@@ -42,6 +42,13 @@
         {
           "type": "null"
         }
+      ]
+    },
+    "transfer_channel": {
+      "description": "transfer_channel is an ibc channel used to transfer unclaimed airdrops to cosmos treasury",
+      "type": [
+        "string",
+        "null"
       ]
     },
     "vesting_duration_seconds": {

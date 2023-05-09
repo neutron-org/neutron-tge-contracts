@@ -2,11 +2,13 @@ use crate::enumerable::query_all_address_map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, coin, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
-    StdResult, Uint128, WasmMsg,
+    attr, coin, to_binary, Attribute, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
+    Response, StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
-use cw20::{BalanceResponse, Cw20Contract, Cw20ExecuteMsg, Cw20QueryMsg};
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
+use neutron_sdk::bindings::msg::{IbcFee, NeutronMsg};
+use neutron_sdk::sudo::msg::RequestPacketTimeoutHeight;
 use sha2::Digest;
 use std::convert::TryInto;
 
@@ -25,6 +27,9 @@ use credits::msg::ExecuteMsg::AddVesting;
 const CONTRACT_NAME: &str = "crates.io:cw20-merkle-airdrop";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const NEUTRON_DENOM: &str = "untrn";
+const DEFAULT_TRANSFER_CHANNEL: &str = "channel-1";
+const DEFAULT_IBC_FEE_DENOM: &str = "untrn";
+const IBC_TRANSFER_PORT: &str = "transfer";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -32,7 +37,7 @@ pub fn instantiate(
     _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<NeutronMsg>, ContractError> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     PAUSED.save(deps.storage, &false)?;
@@ -42,7 +47,10 @@ pub fn instantiate(
         &Config {
             owner: info.sender,
             credits_address: deps.api.addr_validate(&msg.credits_address)?,
-            reserve_address: deps.api.addr_validate(&msg.reserve_address)?,
+            cosmos_hub_treasury: msg.cosmos_hub_treasury,
+            transfer_channel: msg
+                .transfer_channel
+                .unwrap_or(DEFAULT_TRANSFER_CHANNEL.to_string()),
         },
     )?;
 
@@ -86,13 +94,54 @@ pub fn execute(
     env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<NeutronMsg>, ContractError> {
     match msg {
         ExecuteMsg::Claim { amount, proof } => execute_claim(deps, env, info, amount, proof),
-        ExecuteMsg::WithdrawAll {} => execute_withdraw_all(deps, env, info),
+        ExecuteMsg::WithdrawAll {
+            recv_fee,
+            ack_fee,
+            timeout_fee,
+            timeout_revision,
+            timeout_height,
+            denom,
+        } => execute_withdraw_all(
+            deps,
+            env,
+            info,
+            recv_fee,
+            ack_fee,
+            timeout_fee,
+            timeout_revision,
+            timeout_height,
+            denom,
+        ),
         ExecuteMsg::Pause {} => execute_pause(deps, env, info),
         ExecuteMsg::Resume {} => execute_resume(deps, env, info),
+        ExecuteMsg::UpdateConfig {
+            new_transfer_channel,
+        } => execute_update_config(deps, env, info, new_transfer_channel),
     }
+}
+
+pub fn execute_update_config(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    new_transfer_channel: Option<String>,
+) -> Result<Response<NeutronMsg>, ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+    if info.sender != config.owner {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    let mut attrs: Vec<Attribute> = vec![attr("action", "update_config")];
+    if let Some(channel) = new_transfer_channel {
+        config.transfer_channel = channel.clone();
+        attrs.push(attr("new_transfer_channel", channel))
+    }
+
+    CONFIG.save(deps.storage, &config)?;
+    Ok(Response::new().add_attributes(attrs))
 }
 
 pub fn execute_claim(
@@ -101,7 +150,7 @@ pub fn execute_claim(
     info: MessageInfo,
     amount: Uint128,
     proof: Vec<String>,
-) -> Result<Response, ContractError> {
+) -> Result<Response<NeutronMsg>, ContractError> {
     // airdrop begun
     let start = AIRDROP_START.load(deps.storage)?;
     if env.block.time.seconds() < start {
@@ -165,12 +214,15 @@ pub fn execute_claim(
     claimed_amount += amount;
     AMOUNT_CLAIMED.save(deps.storage, &claimed_amount)?;
 
-    let transfer_message = Cw20Contract(config.credits_address.clone())
-        .call(Cw20ExecuteMsg::Transfer {
+    let transfer_message = WasmMsg::Execute {
+        contract_addr: config.credits_address.to_string(),
+        msg: to_binary(&Cw20ExecuteMsg::Transfer {
             recipient: info.sender.to_string(),
             amount,
-        })
-        .map_err(ContractError::Std)?;
+        })?,
+        funds: vec![],
+    };
+
     let vesting_message = WasmMsg::Execute {
         contract_addr: config.credits_address.to_string(),
         msg: to_binary(&AddVesting {
@@ -192,11 +244,26 @@ pub fn execute_claim(
     Ok(res)
 }
 
+fn get_fee_item(denom: String, amount: u128) -> Vec<Coin> {
+    if amount == 0 {
+        vec![]
+    } else {
+        vec![coin(amount, denom)]
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn execute_withdraw_all(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-) -> Result<Response, ContractError> {
+    recv_fee: Uint128,
+    ack_fee: Uint128,
+    timeout_fee: Uint128,
+    timeout_revision: u64,
+    timeout_height: u64,
+    denom: Option<String>,
+) -> Result<Response<NeutronMsg>, ContractError> {
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
     let expiration = vesting_start + vesting_duration;
@@ -219,7 +286,7 @@ pub fn execute_withdraw_all(
     // Get the current total balance for the contract and burn it all.
     // By burning, we exchange them for NTRN tokens
     let cfg = CONFIG.load(deps.storage)?;
-    let amount_to_withdraw = deps
+    let cntrn_amount = deps
         .querier
         .query_wasm_smart::<BalanceResponse>(
             cfg.credits_address.to_string(),
@@ -228,27 +295,62 @@ pub fn execute_withdraw_all(
             },
         )?
         .balance;
+    let mut msgs: Vec<CosmosMsg<NeutronMsg>> = vec![];
+    let amount_to_withdraw = if !cntrn_amount.is_zero() {
+        // Generate burn submessage and return a response
+        let burn_message = CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: cfg.credits_address.to_string(),
+            msg: to_binary(&Cw20ExecuteMsg::Burn {
+                amount: cntrn_amount,
+            })?,
+            funds: vec![],
+        });
+        msgs.push(burn_message);
+        cntrn_amount
+    } else {
+        // previous try of execute_withdraw_all failed on ibc stage
+        // we already have burned our cNRTN and got NTRN on contract account.
+        deps.querier
+            .query_balance(env.contract.address.clone(), NEUTRON_DENOM)?
+            .amount
+    };
 
-    // Generate burn submessage and return a response
-    let burn_message = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: cfg.credits_address.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::Burn {
-            amount: amount_to_withdraw,
-        })?,
-        funds: vec![],
+    let fee_denom = denom.unwrap_or(DEFAULT_IBC_FEE_DENOM.to_string());
+    let required_fees = recv_fee + ack_fee + timeout_fee;
+    if let Some(funded_fee) = info.funds.iter().find(|c| c.denom == NEUTRON_DENOM) {
+        if funded_fee.amount < required_fees {
+            return Err(ContractError::Underfunded {
+                got_fees: funded_fee.amount.u128(),
+                required_fees: required_fees.u128(),
+            });
+        }
+    }
+    let fee = IbcFee {
+        recv_fee: get_fee_item(fee_denom.clone(), recv_fee.u128()),
+        ack_fee: get_fee_item(fee_denom.clone(), ack_fee.u128()),
+        timeout_fee: get_fee_item(fee_denom, timeout_fee.u128()),
+    };
+    let send_message = CosmosMsg::Custom(NeutronMsg::IbcTransfer {
+        source_port: IBC_TRANSFER_PORT.to_string(),
+        source_channel: cfg.transfer_channel,
+        sender: env.contract.address.to_string(),
+        receiver: cfg.cosmos_hub_treasury.clone(),
+        token: coin(amount_to_withdraw.u128(), NEUTRON_DENOM),
+        timeout_height: RequestPacketTimeoutHeight {
+            revision_number: Some(timeout_revision),
+            revision_height: Some(timeout_height),
+        },
+        timeout_timestamp: 0,
+        fee,
+        memo: "".to_string(),
     });
-    let send_message = CosmosMsg::Bank(BankMsg::Send {
-        to_address: cfg.reserve_address.to_string(),
-        amount: vec![coin(amount_to_withdraw.u128(), NEUTRON_DENOM)],
-    });
-    let res = Response::new()
-        .add_messages([burn_message, send_message])
-        .add_attributes(vec![
-            attr("action", "withdraw_all"),
-            attr("address", info.sender),
-            attr("amount", amount_to_withdraw),
-            attr("recipient", cfg.reserve_address),
-        ]);
+    msgs.push(send_message);
+    let res = Response::new().add_messages(msgs).add_attributes(vec![
+        attr("action", "withdraw_all"),
+        attr("address", info.sender),
+        attr("amount", cntrn_amount),
+        attr("recipient", cfg.cosmos_hub_treasury),
+    ]);
     Ok(res)
 }
 
@@ -256,7 +358,7 @@ pub fn execute_pause(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-) -> Result<Response, ContractError> {
+) -> Result<Response<NeutronMsg>, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
     if info.sender != cfg.owner {
@@ -283,7 +385,7 @@ pub fn execute_resume(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-) -> Result<Response, ContractError> {
+) -> Result<Response<NeutronMsg>, ContractError> {
     // authorize owner
     let cfg = CONFIG.load(deps.storage)?;
     if info.sender != cfg.owner {
@@ -333,7 +435,7 @@ pub fn query_config(deps: Deps) -> StdResult<ConfigResponse> {
     Ok(ConfigResponse {
         owner: cfg.owner.to_string(),
         credits_address: cfg.credits_address.to_string(),
-        reserve_address: cfg.reserve_address.to_string(),
+        reserve_address: cfg.cosmos_hub_treasury,
     })
 }
 

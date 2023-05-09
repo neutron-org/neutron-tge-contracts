@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     pub owner: Addr,
     pub credits_address: Addr,
-    pub reserve_address: Addr,
+    pub cosmos_hub_treasury: String,
+    // an ibc channel used to transfer unclaimed airdrops to cosmos treasury
+    pub transfer_channel: String,
 }
 
 pub const CONFIG_KEY: &str = "config";

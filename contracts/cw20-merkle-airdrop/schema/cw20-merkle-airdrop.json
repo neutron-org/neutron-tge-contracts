@@ -8,9 +8,9 @@
     "type": "object",
     "required": [
       "airdrop_start",
+      "cosmos_hub_treasury",
       "credits_address",
       "merkle_root",
-      "reserve_address",
       "vesting_duration_seconds",
       "vesting_start"
     ],
@@ -20,6 +20,9 @@
         "type": "integer",
         "format": "uint64",
         "minimum": 0.0
+      },
+      "cosmos_hub_treasury": {
+        "type": "string"
       },
       "credits_address": {
         "type": "string"
@@ -35,9 +38,6 @@
         "description": "MerkleRoot is hex-encoded merkle root.",
         "type": "string"
       },
-      "reserve_address": {
-        "type": "string"
-      },
       "total_amount": {
         "anyOf": [
           {
@@ -46,6 +46,13 @@
           {
             "type": "null"
           }
+        ]
+      },
+      "transfer_channel": {
+        "description": "transfer_channel is an ibc channel used to transfer unclaimed airdrops to cosmos treasury",
+        "type": [
+          "string",
+          "null"
         ]
       },
       "vesting_duration_seconds": {
@@ -102,14 +109,68 @@
         "additionalProperties": false
       },
       {
-        "description": "Permissionless, activated after vesting is over (consult to `[InstantiateMsg]` documentation for more info). Withdraws all remaining cNTRN tokens, burns them, receiving NTRN in exchange, and sends all received NTRN's to reserve.",
+        "description": "Permissionless, activated after vesting is over (consult to `[InstantiateMsg]` documentation for more info). Withdraws all remaining cNTRN tokens, burns them, receiving NTRN in exchange, and sends all received NTRN's to reserve. IBC fees are required to be payed by the caller.",
         "type": "object",
         "required": [
           "withdraw_all"
         ],
         "properties": {
           "withdraw_all": {
-            "type": "object"
+            "type": "object",
+            "required": [
+              "ack_fee",
+              "recv_fee",
+              "timeout_fee",
+              "timeout_height",
+              "timeout_revision"
+            ],
+            "properties": {
+              "ack_fee": {
+                "$ref": "#/definitions/Uint128"
+              },
+              "denom": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "recv_fee": {
+                "$ref": "#/definitions/Uint128"
+              },
+              "timeout_fee": {
+                "$ref": "#/definitions/Uint128"
+              },
+              "timeout_height": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              },
+              "timeout_revision": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "update_config"
+        ],
+        "properties": {
+          "update_config": {
+            "type": "object",
+            "properties": {
+              "new_transfer_channel": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
           }
         },
         "additionalProperties": false
