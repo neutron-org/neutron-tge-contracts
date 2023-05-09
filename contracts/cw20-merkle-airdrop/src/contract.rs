@@ -317,7 +317,7 @@ pub fn execute_withdraw_all(
 
     let fee_denom = denom.unwrap_or(DEFAULT_IBC_FEE_DENOM.to_string());
     let required_fees = recv_fee + ack_fee + timeout_fee;
-    if let Some(funded_fee) = info.funds.iter().find(|c| c.denom == NEUTRON_DENOM) {
+    if let Some(funded_fee) = info.funds.iter().find(|c| c.denom == fee_denom) {
         if funded_fee.amount < required_fees {
             return Err(ContractError::Underfunded {
                 got_fees: funded_fee.amount.u128(),
