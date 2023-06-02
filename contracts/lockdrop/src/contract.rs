@@ -11,9 +11,9 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, CosmosMsg, Decimal,
-    Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult, Uint128,
-    Uint256, WasmMsg,
+    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
+    Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
+    Uint128, Uint256, WasmMsg,
 };
 use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
@@ -1011,15 +1011,13 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
                 },
             )?;
 
-            let astro_balance = {
-                let res: BalanceResponse = deps.querier.query_wasm_smart(
+            let reward_token_balance = deps
+                .querier
+                .query_balance(
+                    env.contract.address.clone(),
                     rwi.base_reward_token.to_string(),
-                    &Cw20QueryMsg::Balance {
-                        address: env.contract.address.to_string(),
-                    },
-                )?;
-                res.balance
-            };
+                )?
+                .amount;
 
             let prev_proxy_reward_balances: Vec<Asset> = pending_on_proxy
                 .iter()
@@ -1047,7 +1045,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             cosmos_msgs.push(
                 CallbackMsg::UpdatePoolOnDualRewardsClaim {
                     pool_type,
-                    prev_ntrn_balance: astro_balance,
+                    prev_ntrn_balance: reward_token_balance,
                     prev_proxy_reward_balances,
                 }
                 .to_cosmos_msg(&env)?,
@@ -1164,15 +1162,16 @@ pub fn update_pool_on_dual_rewards_claim(
     )?;
 
     let base_reward_received;
-    // Increment claimed Astro rewards per LP share
+    // Increment claimed rewards per LP share
     pool_info.generator_ntrn_per_share += {
-        let res: BalanceResponse = deps.querier.query_wasm_smart(
-            rwi.base_reward_token.to_string(),
-            &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
-            },
-        )?;
-        base_reward_received = res.balance - prev_ntrn_balance;
+        let reward_token_balance = deps
+            .querier
+            .query_balance(
+                env.contract.address.clone(),
+                rwi.base_reward_token.to_string(),
+            )?
+            .amount;
+        base_reward_received = reward_token_balance - prev_ntrn_balance;
         Decimal::from_ratio(base_reward_received, lp_balance)
     };
 
@@ -1284,21 +1283,20 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             },
         )?;
 
-        // Calculate claimable Astro staking rewards for this lockup
+        // Calculate claimable staking rewards for this lockup
         let total_lockup_astro_rewards = pool_info.generator_ntrn_per_share * astroport_lp_amount;
         let pending_astro_rewards =
             total_lockup_astro_rewards.checked_sub(lockup_info.generator_ntrn_debt)?;
         lockup_info.generator_ntrn_debt = total_lockup_astro_rewards;
 
-        // If claimable Astro staking rewards > 0, claim them
+        // If claimable staking rewards > 0, claim them
         if pending_astro_rewards > Uint128::zero() {
-            cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: rwi.base_reward_token.to_string(),
-                funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
-                    recipient: user_address.to_string(),
+            cosmos_msgs.push(CosmosMsg::Bank(BankMsg::Send {
+                to_address: user_address.to_string(),
+                amount: vec![Coin {
+                    denom: rwi.base_reward_token.to_string(),
                     amount: pending_astro_rewards,
-                })?,
+                }],
             }));
         }
         attributes.push(attr("generator_astro_reward", pending_astro_rewards));
