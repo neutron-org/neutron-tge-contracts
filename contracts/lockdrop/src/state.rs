@@ -2,6 +2,7 @@ use astroport::common::OwnershipProposal;
 use astroport::generator::PoolInfoResponse;
 use astroport::generator::QueryMsg as GenQueryMsg;
 use astroport::restricted_vector::RestrictedVector;
+use astroport_periphery::lockdrop::PoolInfoV2;
 use astroport_periphery::lockdrop::PoolType;
 use astroport_periphery::lockdrop::{
     Config, LockupInfoV1, LockupInfoV2, PoolInfo, State, UserInfo,
@@ -22,6 +23,10 @@ pub const ASSET_POOLS: SnapshotMap<PoolType, PoolInfo> = SnapshotMap::new(
     "LiquidityPools_changelog",
     Strategy::EveryBlock,
 );
+
+/// Pools V2
+pub const ASSET_POOLS_V2: Map<PoolType, PoolInfoV2> = Map::new("LiquidityPoolsV2");
+
 /// Key is an user address
 pub const USER_INFO: Map<&Addr, UserInfo> = Map::new("users");
 /// Key consists of an Terraswap LP token address, an user address, and a duration

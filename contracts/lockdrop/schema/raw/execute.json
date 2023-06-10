@@ -392,6 +392,74 @@
             }
           },
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "migrate_pair_step1"
+          ],
+          "properties": {
+            "migrate_pair_step1": {
+              "type": "object",
+              "required": [
+                "generator",
+                "pool_type"
+              ],
+              "properties": {
+                "generator": {
+                  "type": "string"
+                },
+                "pool_type": {
+                  "$ref": "#/definitions/PoolType"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "migrate_pair_step2"
+          ],
+          "properties": {
+            "migrate_pair_step2": {
+              "type": "object",
+              "required": [
+                "current_ntrn_balance",
+                "pool_type"
+              ],
+              "properties": {
+                "current_ntrn_balance": {
+                  "$ref": "#/definitions/Uint128"
+                },
+                "pool_type": {
+                  "$ref": "#/definitions/PoolType"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "migrate_pair_step3"
+          ],
+          "properties": {
+            "migrate_pair_step3": {
+              "type": "object",
+              "required": [
+                "pool_type"
+              ],
+              "properties": {
+                "pool_type": {
+                  "$ref": "#/definitions/PoolType"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
         }
       ]
     },

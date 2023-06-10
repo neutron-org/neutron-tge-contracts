@@ -11,9 +11,9 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, CosmosMsg, Decimal,
-    Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult, Uint128,
-    Uint256, WasmMsg,
+    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
+    Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
+    Uint128, Uint256, WasmMsg,
 };
 use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
@@ -21,12 +21,12 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
-    LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolType, QueryMsg, State,
+    LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolInfoV2, PoolType, QueryMsg, State,
     StateResponse, UpdateConfigMsg, UserInfoResponse, UserInfoWithListResponse,
 };
 
 use crate::state::{
-    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE,
+    CompatibleLoader, ASSET_POOLS, ASSET_POOLS_V2, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE,
     TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
 
@@ -302,6 +302,17 @@ fn _handle_callback(
             duration,
             withdraw_lp_stake,
         ),
+        CallbackMsg::MigratePairStep1 {
+            pool_type,
+            generator,
+        } => migrate_pair_step_1(deps, info, env, pool_type, generator),
+        CallbackMsg::MigratePairStep2 {
+            pool_type,
+            current_ntrn_balance,
+        } => migrate_pair_step_2(deps, info, env, pool_type, current_ntrn_balance),
+        CallbackMsg::MigratePairStep3 { pool_type } => {
+            migrate_pair_step_3(deps, info, env, pool_type)
+        }
     }
 }
 
@@ -391,8 +402,248 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 ///
 /// * **_msg** is an object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
-    Ok(Response::default())
+pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> StdResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
+    let mut msgs = vec![];
+    let mut attrs = vec![attr("action", "migrate")];
+
+    ASSET_POOLS_V2.save(
+        deps.storage,
+        PoolType::ATOM,
+        &PoolInfoV2 {
+            lp_token: deps.api.addr_validate(&msg.new_atom_token)?,
+            amount_in_lockups: Uint128::zero(),
+        },
+    )?;
+    ASSET_POOLS_V2.save(
+        deps.storage,
+        PoolType::USDC,
+        &PoolInfoV2 {
+            lp_token: deps.api.addr_validate(&msg.new_usdc_token)?,
+            amount_in_lockups: Uint128::zero(),
+        },
+    )?;
+
+    attrs.push(attr("new_atom_token", msg.new_atom_token));
+    attrs.push(attr("new_usdc_token", msg.new_usdc_token));
+
+    msgs.push(
+        CallbackMsg::MigratePairStep1 {
+            pool_type: PoolType::ATOM,
+            generator: generator.to_string(),
+        }
+        .to_cosmos_msg(&env)?,
+    );
+    msgs.push(
+        CallbackMsg::MigratePairStep1 {
+            pool_type: PoolType::USDC,
+            generator: generator.to_string(),
+        }
+        .to_cosmos_msg(&env)?,
+    );
+    Ok(Response::new().add_messages(msgs).add_attributes(attrs))
+}
+
+fn get_lp_token_pool_addr(deps: Deps, lp_token_addr: &Addr) -> StdResult<String> {
+    let minter_response: cw20::MinterResponse = deps
+        .querier
+        .query_wasm_smart(lp_token_addr.to_string(), &cw20::Cw20QueryMsg::Minter {})?;
+    Ok(minter_response.minter)
+}
+
+fn migrate_pair_step_1(
+    deps: DepsMut,
+    info: MessageInfo,
+    env: Env,
+    pool_type: PoolType,
+    generator: String,
+) -> StdResult<Response> {
+    if info.sender != env.contract.address {
+        return Err(StdError::generic_err("unauthorized"));
+    }
+    //get current ntrn contract balance
+    let current_ntrn_balance = deps
+        .querier
+        .query_balance(&env.contract.address, UNTRN_DENOM)?
+        .amount;
+
+    let mut attrs = vec![
+        attr("action", "migrate_pair_step_1"),
+        attr("pool_type", pool_type),
+    ];
+    let mut msgs = vec![];
+    let pool: PoolInfo = ASSET_POOLS.load(deps.storage, pool_type)?;
+    let pool_addr = get_lp_token_pool_addr(deps.as_ref(), &pool.lp_token)?;
+
+    //unstake from generator
+    attrs.push(attr(
+        "unstake_from_generator",
+        pool.amount_in_lockups.to_string(),
+    ));
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: generator,
+        funds: vec![],
+        msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
+            lp_token: pool.lp_token.to_string(),
+            amount: pool.amount_in_lockups,
+        })?,
+    }));
+
+    //withdraw lp tokens from pool
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: pool_addr,
+        funds: vec![],
+        msg: to_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity {
+            assets: vec![Asset {
+                info: AssetInfo::Token {
+                    contract_addr: pool.lp_token,
+                },
+                amount: pool.amount_in_lockups,
+            }],
+        })?,
+    }));
+    attrs.push(attr("withdraw_amount", pool.amount_in_lockups.to_string()));
+
+    //next step
+    msgs.push(
+        CallbackMsg::MigratePairStep2 {
+            pool_type: PoolType::USDC,
+            current_ntrn_balance,
+        }
+        .to_cosmos_msg(&env)?,
+    );
+    Ok(Response::new().add_messages(msgs).add_attributes(attrs))
+}
+
+fn migrate_pair_step_2(
+    deps: DepsMut,
+    info: MessageInfo,
+    env: Env,
+    pool_type: PoolType,
+    prev_ntrn_balance: Uint128,
+) -> StdResult<Response> {
+    if info.sender != env.contract.address {
+        return Err(StdError::generic_err("unauthorized"));
+    }
+    let mut attrs = vec![
+        attr("action", "migrate_pair_step_2"),
+        attr("pool_type", pool_type),
+    ];
+    let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, pool_type)?;
+    let new_pool_addr = get_lp_token_pool_addr(deps.as_ref(), &new_pool_info.lp_token)?;
+    let mut msgs = vec![];
+    let current_ntrn_balance = deps
+        .querier
+        .query_balance(&env.contract.address, UNTRN_DENOM)?
+        .amount;
+    attrs.push(attr(
+        "ntrn_balance_change",
+        (current_ntrn_balance - prev_ntrn_balance).to_string(),
+    ));
+    let ntrn_to_new_pool = current_ntrn_balance - prev_ntrn_balance;
+    let new_pool_info: astroport::pair::PoolResponse = deps
+        .querier
+        .query_wasm_smart(&new_pool_addr, &astroport::pair::QueryMsg::Pool {})?;
+    let token_denom = new_pool_info
+        .assets
+        .iter()
+        .find_map(|x| match &x.info {
+            AssetInfo::NativeToken { denom } if denom != UNTRN_DENOM => Some(denom.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| StdError::generic_err("No second leg of pair found"))?;
+    attrs.push(attr("token_denom", token_denom.clone()));
+    let token_balance = deps
+        .querier
+        .query_balance(&env.contract.address, token_denom.as_str())?
+        .amount;
+    attrs.push(attr("token_balance", token_balance.to_string()));
+
+    let base = Asset {
+        amount: ntrn_to_new_pool,
+        info: AssetInfo::NativeToken {
+            denom: UNTRN_DENOM.to_string(),
+        },
+    };
+    let other = Asset {
+        amount: token_balance,
+        info: AssetInfo::NativeToken {
+            denom: token_denom.to_string(),
+        },
+    };
+    let mut funds = vec![
+        Coin {
+            denom: UNTRN_DENOM.to_string(),
+            amount: ntrn_to_new_pool,
+        },
+        Coin {
+            denom: token_denom,
+            amount: token_balance,
+        },
+    ];
+    funds.sort_by(|a, b| a.denom.cmp(&b.denom));
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: new_pool_addr,
+        funds,
+        msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
+            assets: vec![base, other],
+            slippage_tolerance: None,
+            auto_stake: None,
+            receiver: None,
+        })?,
+    }));
+
+    attrs.push(attr("provide_liquidity", "true"));
+
+    msgs.push(CallbackMsg::MigratePairStep3 { pool_type }.to_cosmos_msg(&env)?);
+
+    Ok(Response::new().add_messages(msgs).add_attributes(attrs))
+}
+
+fn migrate_pair_step_3(
+    deps: DepsMut,
+    info: MessageInfo,
+    env: Env,
+    pool_type: PoolType,
+) -> StdResult<Response> {
+    if info.sender != env.contract.address {
+        return Err(StdError::generic_err("unauthorized"));
+    }
+    let config: Config = CONFIG.load(deps.storage)?;
+    let mut attrs = vec![
+        attr("action", "migrate_pair_step_3"),
+        attr("pool_type", pool_type),
+    ];
+    let mut new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, pool_type)?;
+    // get current balance
+    let balance_response: cw20::BalanceResponse = deps.querier.query_wasm_smart(
+        &new_pool_info.lp_token,
+        &Cw20QueryMsg::Balance {
+            address: env.contract.address.to_string(),
+        },
+    )?;
+    let current_balance = balance_response.balance;
+    attrs.push(attr("current_balance", current_balance.to_string()));
+
+    //update pool info
+    new_pool_info.amount_in_lockups = current_balance;
+    ASSET_POOLS_V2.save(deps.storage, pool_type, &new_pool_info)?;
+
+    // send stake message to generator
+    let stake_msgs = stake_messages(
+        config,
+        env.block.height + 1u64,
+        new_pool_info.lp_token,
+        current_balance,
+    )?;
+
+    Ok(Response::new()
+        .add_messages(stake_msgs)
+        .add_attributes(attrs))
 }
 
 /// Admin function to update Configuration parameters. Returns a default object of type [`Response`].
