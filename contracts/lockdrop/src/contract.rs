@@ -458,14 +458,11 @@ fn get_lp_token_pool_addr(deps: Deps, lp_token_addr: &Addr) -> StdResult<String>
 
 fn migrate_pair_step_1(
     deps: DepsMut,
-    info: MessageInfo,
+    _info: MessageInfo,
     env: Env,
     pool_type: PoolType,
     generator: String,
 ) -> StdResult<Response> {
-    if info.sender != env.contract.address {
-        return Err(StdError::generic_err("unauthorized"));
-    }
     //get current ntrn contract balance
     let current_ntrn_balance = deps
         .querier
@@ -496,40 +493,38 @@ fn migrate_pair_step_1(
 
     //withdraw lp tokens from pool
     msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: pool_addr,
+        contract_addr: pool.lp_token.to_string(),
         funds: vec![],
-        msg: to_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity {
-            assets: vec![Asset {
-                info: AssetInfo::Token {
-                    contract_addr: pool.lp_token,
-                },
-                amount: pool.amount_in_lockups,
-            }],
+        msg: to_binary(&Cw20ExecuteMsg::Send {
+            contract: pool_addr,
+            amount: pool.amount_in_lockups,
+            msg: to_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
         })?,
     }));
-    attrs.push(attr("withdraw_amount", pool.amount_in_lockups.to_string()));
+    attrs.push(attr(
+        "withdraw_from_pool_amount",
+        pool.amount_in_lockups.to_string(),
+    ));
 
     //next step
     msgs.push(
         CallbackMsg::MigratePairStep2 {
-            pool_type: PoolType::USDC,
+            pool_type,
             current_ntrn_balance,
         }
         .to_cosmos_msg(&env)?,
     );
+
     Ok(Response::new().add_messages(msgs).add_attributes(attrs))
 }
 
 fn migrate_pair_step_2(
     deps: DepsMut,
-    info: MessageInfo,
+    _info: MessageInfo,
     env: Env,
     pool_type: PoolType,
     prev_ntrn_balance: Uint128,
 ) -> StdResult<Response> {
-    if info.sender != env.contract.address {
-        return Err(StdError::generic_err("unauthorized"));
-    }
     let mut attrs = vec![
         attr("action", "migrate_pair_step_2"),
         attr("pool_type", pool_type),
@@ -586,6 +581,7 @@ fn migrate_pair_step_2(
             amount: token_balance,
         },
     ];
+
     funds.sort_by(|a, b| a.denom.cmp(&b.denom));
     msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: new_pool_addr,
@@ -607,13 +603,10 @@ fn migrate_pair_step_2(
 
 fn migrate_pair_step_3(
     deps: DepsMut,
-    info: MessageInfo,
+    _info: MessageInfo,
     env: Env,
     pool_type: PoolType,
 ) -> StdResult<Response> {
-    if info.sender != env.contract.address {
-        return Err(StdError::generic_err("unauthorized"));
-    }
     let config: Config = CONFIG.load(deps.storage)?;
     let mut attrs = vec![
         attr("action", "migrate_pair_step_3"),
