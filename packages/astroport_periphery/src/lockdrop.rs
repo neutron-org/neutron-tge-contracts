@@ -149,6 +149,8 @@ pub enum ExecuteMsg {
         duration: u64,
         withdraw_lp_stake: bool,
     },
+    /// Migrations
+    Migrate(MigrateExecuteMsg),
     /// Callbacks; only callable by the contract itself.
     Callback(CallbackMsg),
     /// ProposeNewOwner creates a proposal to change contract ownership.
@@ -163,6 +165,13 @@ pub enum ExecuteMsg {
     DropOwnershipProposal {},
     /// Used to claim contract ownership.
     ClaimOwnership {},
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MigrateExecuteMsg {
+    MigrateLiquidity { slippage_tolerance: Option<Decimal> },
+    MigrateUsers {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -195,10 +204,12 @@ pub enum CallbackMsg {
     MigratePairStep1 {
         pool_type: PoolType,
         generator: String,
+        slippage_tolerance: Option<Decimal>,
     },
     MigratePairStep2 {
         current_ntrn_balance: Uint128,
         pool_type: PoolType,
+        slippage_tolerance: Option<Decimal>,
     },
     MigratePairStep3 {
         pool_type: PoolType,
@@ -298,6 +309,19 @@ pub struct Config {
 pub struct State {
     /// Total NTRN incentives share
     pub total_incentives_share: Uint128,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
+pub enum MigrationState {
+    #[default]
+    /// Migration is started
+    Started,
+    ///
+    MigrateLiquidity,
+    /// Liquidity is migrated, can migrate users with pagination
+    MigrateUsers(u64),
+    /// Migration is completed
+    Completed,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

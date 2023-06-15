@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::str::FromStr;
 
@@ -22,13 +23,14 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
-    LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolInfoV2, PoolType, QueryMsg, State,
-    StateResponse, UpdateConfigMsg, UserInfoResponse, UserInfoWithListResponse,
+    LockUpInfoSummary, LockupInfoV2, MigrateExecuteMsg, MigrateMsg, MigrationState, PoolInfo,
+    PoolInfoV2, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg, UserInfoResponse,
+    UserInfoWithListResponse,
 };
 
 use crate::state::{
-    CompatibleLoader, ASSET_POOLS, ASSET_POOLS_V2, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE,
-    TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
+    CompatibleLoader, ASSET_POOLS, ASSET_POOLS_V2, CONFIG, LOCKUP_INFO, MIGRATION_STATUS,
+    OWNERSHIP_PROPOSAL, STATE, TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
 
 const AIRDROP_REWARDS_MULTIPLIER: &str = "1.0";
@@ -151,6 +153,17 @@ pub fn instantiate(
 /// * **ExecuteMsg::ClaimOwnership {}** Claims contract ownership.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
+    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state != MigrationState::Completed {
+        match msg {
+            ExecuteMsg::Migrate(_) => {}
+            _ => {
+                return Err(StdError::generic_err(
+                    "Contract is in migration state. Please wait for migration to complete.",
+                ))
+            }
+        }
+    }
     match msg {
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
@@ -166,6 +179,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             withdraw_lp_stake,
         ),
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
+        ExecuteMsg::Migrate(msg) => _handle_migrate(deps, env, info, msg),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
             propose_new_owner(
@@ -212,6 +226,20 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             atom_token,
             generator,
         } => handle_set_token_info(deps, env, info, usdc_token, atom_token, generator),
+    }
+}
+
+fn _handle_migrate(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    msg: MigrateExecuteMsg,
+) -> StdResult<Response> {
+    match msg {
+        MigrateExecuteMsg::MigrateLiquidity { slippage_tolerance } => {
+            migrate_liquidity(deps, env, info, slippage_tolerance)
+        }
+        MigrateExecuteMsg::MigrateUsers {} => migrate_users(deps, env, info),
     }
 }
 
@@ -306,11 +334,20 @@ fn _handle_callback(
         CallbackMsg::MigratePairStep1 {
             pool_type,
             generator,
-        } => migrate_pair_step_1(deps, info, env, pool_type, generator),
+            slippage_tolerance,
+        } => migrate_pair_step_1(deps, info, env, pool_type, generator, slippage_tolerance),
         CallbackMsg::MigratePairStep2 {
             pool_type,
             current_ntrn_balance,
-        } => migrate_pair_step_2(deps, info, env, pool_type, current_ntrn_balance),
+            slippage_tolerance,
+        } => migrate_pair_step_2(
+            deps,
+            info,
+            env,
+            pool_type,
+            current_ntrn_balance,
+            slippage_tolerance,
+        ),
         CallbackMsg::MigratePairStep3 { pool_type } => {
             migrate_pair_step_3(deps, info, env, pool_type)
         }
@@ -403,13 +440,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 ///
 /// * **_msg** is an object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> StdResult<Response> {
-    let config: Config = CONFIG.load(deps.storage)?;
-    let generator = config
-        .generator
-        .as_ref()
-        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
-    let mut msgs = vec![];
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
     let mut attrs = vec![attr("action", "migrate")];
 
     ASSET_POOLS_V2.save(
@@ -432,10 +463,35 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> StdResult<Response> 
     attrs.push(attr("new_atom_token", msg.new_atom_token));
     attrs.push(attr("new_usdc_token", msg.new_usdc_token));
 
+    MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateLiquidity)?;
+
+    Ok(Response::default().add_attributes(attrs))
+}
+
+fn migrate_liquidity(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+    slippage_tolerance: Option<Decimal>,
+) -> StdResult<Response> {
+    let migration_state = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state != MigrationState::MigrateLiquidity {
+        return Err(StdError::generic_err(
+            "Migration is not in the correct state",
+        ));
+    }
+    let attrs = vec![attr("action", "migrate_liquidity")];
+    let config: Config = CONFIG.load(deps.storage)?;
+    let mut msgs = vec![];
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
     msgs.push(
         CallbackMsg::MigratePairStep1 {
             pool_type: PoolType::ATOM,
             generator: generator.to_string(),
+            slippage_tolerance,
         }
         .to_cosmos_msg(&env)?,
     );
@@ -443,6 +499,7 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> StdResult<Response> 
         CallbackMsg::MigratePairStep1 {
             pool_type: PoolType::USDC,
             generator: generator.to_string(),
+            slippage_tolerance,
         }
         .to_cosmos_msg(&env)?,
     );
@@ -462,6 +519,7 @@ fn migrate_pair_step_1(
     env: Env,
     pool_type: PoolType,
     generator: String,
+    slippage_tolerance: Option<Decimal>,
 ) -> StdResult<Response> {
     //get current ntrn contract balance
     let current_ntrn_balance = deps
@@ -511,6 +569,7 @@ fn migrate_pair_step_1(
         CallbackMsg::MigratePairStep2 {
             pool_type,
             current_ntrn_balance,
+            slippage_tolerance,
         }
         .to_cosmos_msg(&env)?,
     );
@@ -524,6 +583,7 @@ fn migrate_pair_step_2(
     env: Env,
     pool_type: PoolType,
     prev_ntrn_balance: Uint128,
+    slippage_tolerance: Option<Decimal>,
 ) -> StdResult<Response> {
     let mut attrs = vec![
         attr("action", "migrate_pair_step_2"),
@@ -588,7 +648,7 @@ fn migrate_pair_step_2(
         funds,
         msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
             assets: vec![base, other],
-            slippage_tolerance: None,
+            slippage_tolerance,
             auto_stake: None,
             receiver: None,
         })?,
@@ -635,9 +695,101 @@ fn migrate_pair_step_3(
         current_balance,
     )?;
 
+    MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateUsers(0u64))?;
+
     Ok(Response::new()
         .add_messages(stake_msgs)
         .add_attributes(attrs))
+}
+
+fn migrate_users(deps: DepsMut, env: Env, _info: MessageInfo) -> StdResult<Response> {
+    let mut attrs = vec![attr("action", "migrate_users")];
+    let migrate_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    let limit = 30u64;
+
+    match migrate_state {
+        MigrationState::MigrateUsers(page) => {
+            // let mut lockup_infos = vec![];
+
+            let pool_types: Vec<PoolType> = ASSET_POOLS
+                .keys(deps.storage, None, None, Order::Ascending)
+                .collect::<Result<Vec<PoolType>, StdError>>()?;
+
+            let mut kfs: HashMap<String, Decimal256> = HashMap::new();
+            for pool_type in &pool_types {
+                let pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
+                let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
+                kfs.insert(
+                    (*pool_type).into(),
+                    Decimal256::from_ratio(
+                        new_pool_info.amount_in_lockups,
+                        pool_info.amount_in_lockups,
+                    ),
+                );
+            }
+
+            let users: Vec<Addr> = USER_INFO
+                .keys(deps.storage, None, None, Order::Ascending)
+                .skip(page as usize * limit as usize)
+                .take(limit as usize)
+                .collect::<Result<Vec<_>, _>>()?;
+            if users.is_empty() {
+                for pool_type in &pool_types {
+                    let mut pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
+                    let new_pool_info: PoolInfoV2 =
+                        ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
+                    pool_info.amount_in_lockups = new_pool_info.amount_in_lockups;
+                    pool_info.lp_token = new_pool_info.lp_token;
+                    ASSET_POOLS.save(deps.storage, *pool_type, &pool_info, env.block.height)?;
+                }
+                MIGRATION_STATUS.save(deps.storage, &MigrationState::Completed)?;
+                attrs.push(attr("migration_completed", "true"));
+            } else {
+                attrs.push(attr("users_count", users.len().to_string()));
+                for user in users {
+                    for pool_type in &pool_types {
+                        let mut total_lokups = Uint128::zero();
+                        let lookup_infos: Vec<(u64, LockupInfoV2)> = LOCKUP_INFO
+                            .prefix((*pool_type, &user))
+                            .range(deps.storage, None, None, Order::Ascending)
+                            .collect::<Result<Vec<(u64, LockupInfoV2)>, StdError>>()?;
+                        for (duration, mut lockup_info) in lookup_infos {
+                            let p: String = (*pool_type).into();
+                            let kf = kfs
+                                .get(&p)
+                                .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
+                            lockup_info.lp_units_locked =
+                                (*kf).checked_mul_uint256(lockup_info.lp_units_locked.into())?;
+                            LOCKUP_INFO.save(
+                                deps.storage,
+                                (*pool_type, &user, duration),
+                                &lockup_info,
+                            )?;
+                            total_lokups += lockup_info.lp_units_locked;
+                        }
+                        TOTAL_USER_LOCKUP_AMOUNT.update(
+                            deps.storage,
+                            (*pool_type, &user),
+                            env.block.height,
+                            |lockup_amount| -> StdResult<Uint128> {
+                                if let Some(la) = lockup_amount {
+                                    Ok(la.checked_add(total_lokups)?)
+                                } else {
+                                    Ok(total_lokups)
+                                }
+                            },
+                        )?;
+                    }
+                }
+                MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateUsers(page + 1u64))?;
+            }
+
+            Ok(Response::default().add_attributes(attrs))
+        }
+        _ => Err(StdError::generic_err(
+            "Migration is not in MigrateUsers state",
+        )),
+    }
 }
 
 /// Admin function to update Configuration parameters. Returns a default object of type [`Response`].
