@@ -397,6 +397,18 @@ fn _handle_callback(
 ///     }** Returns a total amount of LP tokens for the specified pool at a specific height.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state != MigrationState::Completed {
+        match msg {
+            QueryMsg::QueryUserLockupTotalAtHeight { .. }
+            | QueryMsg::QueryLockupTotalAtHeight { .. } => {
+                return Err(StdError::generic_err(
+                    "Contract is in migration state. Please wait for migration to complete.",
+                ))
+            }
+            _ => {}
+        }
+    }
     match msg {
         QueryMsg::Config {} => to_binary(&CONFIG.load(deps.storage)?),
         QueryMsg::State {} => to_binary(&query_state(deps)?),
@@ -746,6 +758,7 @@ fn migrate_users(deps: DepsMut, env: Env, _info: MessageInfo) -> StdResult<Respo
                 attrs.push(attr("migration_completed", "true"));
             } else {
                 attrs.push(attr("users_count", users.len().to_string()));
+                //iterate over users
                 for user in users {
                     for pool_type in &pool_types {
                         let mut total_lokups = Uint128::zero();
@@ -1691,7 +1704,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             },
         )?;
 
-        // Calculate claimable staking rewards for this lockup
+        // Calculate claimable staking rewards for this lockup (ASTRO incentives)
         let total_lockup_astro_rewards = pool_info
             .generator_ntrn_per_share
             .checked_mul(astroport_lp_amount.to_decimal())?
