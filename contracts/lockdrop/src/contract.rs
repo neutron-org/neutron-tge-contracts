@@ -157,6 +157,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
     if migration_state != MigrationState::Completed {
         match msg {
             ExecuteMsg::Migrate(..) => {}
+            ExecuteMsg::Callback(..) => {}
             _ => {
                 return Err(StdError::generic_err(
                     "Contract is in migration state. Please wait for migration to complete.",
