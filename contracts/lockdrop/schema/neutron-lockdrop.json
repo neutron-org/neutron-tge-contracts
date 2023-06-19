@@ -523,13 +523,9 @@
               "migrate_pair_step1": {
                 "type": "object",
                 "required": [
-                  "generator",
                   "pool_type"
                 ],
                 "properties": {
-                  "generator": {
-                    "type": "string"
-                  },
                   "pool_type": {
                     "$ref": "#/definitions/PoolType"
                   },
@@ -558,7 +554,8 @@
                 "type": "object",
                 "required": [
                   "current_ntrn_balance",
-                  "pool_type"
+                  "pool_type",
+                  "reward_amount"
                 ],
                 "properties": {
                   "current_ntrn_balance": {
@@ -566,6 +563,9 @@
                   },
                   "pool_type": {
                     "$ref": "#/definitions/PoolType"
+                  },
+                  "reward_amount": {
+                    "$ref": "#/definitions/Uint128"
                   },
                   "slippage_tolerance": {
                     "anyOf": [

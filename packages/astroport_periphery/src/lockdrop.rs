@@ -203,13 +203,13 @@ pub enum CallbackMsg {
     },
     MigratePairStep1 {
         pool_type: PoolType,
-        generator: String,
         slippage_tolerance: Option<Decimal>,
     },
     MigratePairStep2 {
         current_ntrn_balance: Uint128,
         pool_type: PoolType,
         slippage_tolerance: Option<Decimal>,
+        reward_amount: Uint128,
     },
     MigratePairStep3 {
         pool_type: PoolType,

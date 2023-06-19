@@ -334,13 +334,13 @@ fn _handle_callback(
         ),
         CallbackMsg::MigratePairStep1 {
             pool_type,
-            generator,
             slippage_tolerance,
-        } => migrate_pair_step_1(deps, info, env, pool_type, generator, slippage_tolerance),
+        } => migrate_pair_step_1(deps, info, env, pool_type, slippage_tolerance),
         CallbackMsg::MigratePairStep2 {
             pool_type,
             current_ntrn_balance,
             slippage_tolerance,
+            reward_amount,
         } => migrate_pair_step_2(
             deps,
             info,
@@ -348,6 +348,7 @@ fn _handle_callback(
             pool_type,
             current_ntrn_balance,
             slippage_tolerance,
+            reward_amount,
         ),
         CallbackMsg::MigratePairStep3 { pool_type } => {
             migrate_pair_step_3(deps, info, env, pool_type)
@@ -494,28 +495,18 @@ fn migrate_liquidity(
         ));
     }
     let attrs = vec![attr("action", "migrate_liquidity")];
-    let config: Config = CONFIG.load(deps.storage)?;
-    let mut msgs = vec![];
-    let generator = config
-        .generator
-        .as_ref()
-        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
-    msgs.push(
+    let msgs = vec![
         CallbackMsg::MigratePairStep1 {
             pool_type: PoolType::ATOM,
-            generator: generator.to_string(),
             slippage_tolerance,
         }
         .to_cosmos_msg(&env)?,
-    );
-    msgs.push(
         CallbackMsg::MigratePairStep1 {
             pool_type: PoolType::USDC,
-            generator: generator.to_string(),
             slippage_tolerance,
         }
         .to_cosmos_msg(&env)?,
-    );
+    ];
     Ok(Response::new().add_messages(msgs).add_attributes(attrs))
 }
 
@@ -526,14 +517,43 @@ fn get_lp_token_pool_addr(deps: Deps, lp_token_addr: &Addr) -> StdResult<String>
     Ok(minter_response.minter)
 }
 
+fn get_reward_amount(
+    deps: Deps,
+    env: &Env,
+    astroport_lp_token: &String,
+    generator: &String,
+) -> StdResult<Uint128> {
+    let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
+        generator,
+        &GenQueryMsg::RewardInfo {
+            lp_token: astroport_lp_token.to_string(),
+        },
+    )?;
+
+    let reward_token_balance = deps
+        .querier
+        .query_balance(
+            env.contract.address.clone(),
+            rwi.base_reward_token.to_string(),
+        )?
+        .amount;
+
+    Ok(reward_token_balance)
+}
+
 fn migrate_pair_step_1(
     deps: DepsMut,
     _info: MessageInfo,
     env: Env,
     pool_type: PoolType,
-    generator: String,
     slippage_tolerance: Option<Decimal>,
 ) -> StdResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
+
     //get current ntrn contract balance
     let current_ntrn_balance = deps
         .querier
@@ -548,13 +568,20 @@ fn migrate_pair_step_1(
     let pool: PoolInfo = ASSET_POOLS.load(deps.storage, pool_type)?;
     let pool_addr = get_lp_token_pool_addr(deps.as_ref(), &pool.lp_token)?;
 
+    let reward_amount = get_reward_amount(
+        deps.as_ref(),
+        &env,
+        &pool.lp_token.to_string(),
+        &generator.to_string(),
+    )?;
+
     //unstake from generator
     attrs.push(attr(
         "unstake_from_generator",
         pool.amount_in_lockups.to_string(),
     ));
     msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: generator,
+        contract_addr: generator.to_string(),
         funds: vec![],
         msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
             lp_token: pool.lp_token.to_string(),
@@ -583,6 +610,7 @@ fn migrate_pair_step_1(
             pool_type,
             current_ntrn_balance,
             slippage_tolerance,
+            reward_amount,
         }
         .to_cosmos_msg(&env)?,
     );
@@ -597,11 +625,18 @@ fn migrate_pair_step_2(
     pool_type: PoolType,
     prev_ntrn_balance: Uint128,
     slippage_tolerance: Option<Decimal>,
+    prev_reward_amount: Uint128,
 ) -> StdResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
     let mut attrs = vec![
         attr("action", "migrate_pair_step_2"),
         attr("pool_type", pool_type),
     ];
+    let mut pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, pool_type)?;
     let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, pool_type)?;
     let new_pool_addr = get_lp_token_pool_addr(deps.as_ref(), &new_pool_info.lp_token)?;
     let mut msgs = vec![];
@@ -613,6 +648,27 @@ fn migrate_pair_step_2(
         "ntrn_balance_change",
         (current_ntrn_balance - prev_ntrn_balance).to_string(),
     ));
+
+    pool_info.generator_ntrn_per_share = pool_info.generator_ntrn_per_share.checked_add({
+        let reward_token_balance = get_reward_amount(
+            deps.as_ref(),
+            &env,
+            &pool_info.lp_token.to_string(),
+            &generator.to_string(),
+        )?;
+        attrs.push(attr(
+            "reward_token_balance",
+            reward_token_balance.to_string(),
+        ));
+        let base_reward_received = reward_token_balance.checked_sub(prev_reward_amount)?;
+        Decimal::from_ratio(base_reward_received, pool_info.amount_in_lockups)
+    })?;
+    attrs.push(attr(
+        "generator_ntrn_per_share",
+        pool_info.generator_ntrn_per_share.to_string(),
+    ));
+    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
+
     let ntrn_to_new_pool = current_ntrn_balance - prev_ntrn_balance;
     let new_pool_info: astroport::pair::PoolResponse = deps
         .querier
@@ -768,10 +824,18 @@ fn migrate_users(deps: DepsMut, env: Env, _info: MessageInfo) -> StdResult<Respo
                             .range(deps.storage, None, None, Order::Ascending)
                             .collect::<Result<Vec<(u64, LockupInfoV2)>, StdError>>()?;
                         for (duration, mut lockup_info) in lookup_infos {
+                            let info = query_lockup_info(
+                                deps.as_ref(),
+                                &env.clone(),
+                                user.as_ref(),
+                                *pool_type,
+                                duration,
+                            )?;
                             let p: String = (*pool_type).into();
                             let kf = kfs
                                 .get(&p)
                                 .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
+                            lockup_info.generator_proxy_debt = info.generator_proxy_debt;
                             lockup_info.lp_units_locked =
                                 (*kf).checked_mul_uint256(lockup_info.lp_units_locked.into())?;
                             LOCKUP_INFO.save(
