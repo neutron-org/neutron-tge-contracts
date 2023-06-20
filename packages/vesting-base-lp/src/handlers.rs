@@ -853,3 +853,19 @@ fn compute_available_amount(current_time: u64, vesting_info: &VestingInfo) -> St
         .checked_sub(vesting_info.released_amount)
         .map_err(StdError::from)
 }
+
+fn compute_share(vesting_info: &VestingInfo) -> StdResult<Decimal> {
+    let config = CONFIG.load(deps.storage)?;
+    let state = vesting_state(config.extensions.historical).load(deps.storage)?;
+    let mut available_amount: Uint128 = Uint128::zero();
+    for sch in &vesting_info.schedules {
+
+        if let Some(end_point) = &sch.end_point {
+            available_amount = available_amount.checked_add(end_point.amount)?
+        }
+    }
+
+    available_amount
+        .checked_div(state.total_granted)?
+        .map_err(StdError::from)
+}
