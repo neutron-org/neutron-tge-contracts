@@ -30,7 +30,8 @@ use astroport_periphery::lockdrop::{
 
 use crate::state::{
     CompatibleLoader, ASSET_POOLS, ASSET_POOLS_V2, CONFIG, LOCKUP_INFO, MIGRATION_STATUS,
-    OWNERSHIP_PROPOSAL, STATE, TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
+    MIGRATION_USERS_COUNTER, MIGRATION_USERS_DEFAULT_LIMIT, OWNERSHIP_PROPOSAL, STATE,
+    TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
 
 const AIRDROP_REWARDS_MULTIPLIER: &str = "1.0";
@@ -240,7 +241,7 @@ fn _handle_migrate(
         MigrateExecuteMsg::MigrateLiquidity { slippage_tolerance } => {
             migrate_liquidity(deps, env, info, slippage_tolerance)
         }
-        MigrateExecuteMsg::MigrateUsers {} => migrate_users(deps, env, info),
+        MigrateExecuteMsg::MigrateUsers { limit } => migrate_users(deps, env, info, limit),
     }
 }
 
@@ -771,15 +772,21 @@ fn migrate_pair_step_3(
         .add_attributes(attrs))
 }
 
-fn migrate_users(deps: DepsMut, env: Env, _info: MessageInfo) -> StdResult<Response> {
+fn migrate_users(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+    limit: Option<u32>,
+) -> StdResult<Response> {
     let mut attrs = vec![attr("action", "migrate_users")];
     let migrate_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
-    let limit = 30u64;
+    let limit = limit.unwrap_or(MIGRATION_USERS_DEFAULT_LIMIT);
+    let current_skip = MIGRATION_USERS_COUNTER
+        .may_load(deps.storage)?
+        .unwrap_or(0u32);
 
     match migrate_state {
         MigrationState::MigrateUsers(page) => {
-            // let mut lockup_infos = vec![];
-
             let pool_types: Vec<PoolType> = ASSET_POOLS
                 .keys(deps.storage, None, None, Order::Ascending)
                 .collect::<Result<Vec<PoolType>, StdError>>()?;
@@ -799,7 +806,7 @@ fn migrate_users(deps: DepsMut, env: Env, _info: MessageInfo) -> StdResult<Respo
 
             let users: Vec<Addr> = USER_INFO
                 .keys(deps.storage, None, None, Order::Ascending)
-                .skip(page as usize * limit as usize)
+                .skip(current_skip as usize)
                 .take(limit as usize)
                 .collect::<Result<Vec<_>, _>>()?;
             if users.is_empty() {
@@ -859,6 +866,7 @@ fn migrate_users(deps: DepsMut, env: Env, _info: MessageInfo) -> StdResult<Respo
                         )?;
                     }
                 }
+                MIGRATION_USERS_COUNTER.save(deps.storage, &(current_skip + limit as u32))?;
                 MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateUsers(page + 1u64))?;
             }
 

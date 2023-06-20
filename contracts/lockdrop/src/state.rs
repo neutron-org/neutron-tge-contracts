@@ -27,7 +27,11 @@ pub const ASSET_POOLS: SnapshotMap<PoolType, PoolInfo> = SnapshotMap::new(
 
 /// Pools V2
 pub const ASSET_POOLS_V2: Map<PoolType, PoolInfoV2> = Map::new("liquidity_pools_v2");
+/// Migration status
 pub const MIGRATION_STATUS: Item<MigrationState> = Item::new("migration_status");
+/// Migration users current counter
+pub const MIGRATION_USERS_COUNTER: Item<u32> = Item::new("migration_users_counter");
+pub const MIGRATION_USERS_DEFAULT_LIMIT: u32 = 30;
 
 /// Key is an user address
 pub const USER_INFO: Map<&Addr, UserInfo> = Map::new("users");

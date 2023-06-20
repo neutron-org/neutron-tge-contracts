@@ -171,7 +171,7 @@ pub enum ExecuteMsg {
 #[serde(rename_all = "snake_case")]
 pub enum MigrateExecuteMsg {
     MigrateLiquidity { slippage_tolerance: Option<Decimal> },
-    MigrateUsers {},
+    MigrateUsers { limit: Option<u32> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

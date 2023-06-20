@@ -661,7 +661,17 @@
             ],
             "properties": {
               "migrate_users": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "uint32",
+                    "minimum": 0.0
+                  }
+                }
               }
             },
             "additionalProperties": false
