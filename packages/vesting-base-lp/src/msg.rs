@@ -1,6 +1,4 @@
-use crate::types::{
-    Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingState,
-};
+use crate::types::{Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo, VestingState};
 use astroport::asset::AssetInfo;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary, CosmosMsg, Decimal, Env, StdResult, to_binary, Uint128, WasmMsg};
@@ -182,7 +180,7 @@ pub enum CallbackMsg {
         cl_pair: Addr,
         ntrn_denom: String,
         paired_asset_denom: String,
-        user: Addr
+        user: VestingAccountResponse
     },
     ProvideLiquidityToClPairAfterWithdrawal {
         ntrn_denom: String,
@@ -191,14 +189,14 @@ pub enum CallbackMsg {
         paired_asset_init_balance: Uint128,
         cl_pair: Addr,
         slippage_tolerance: Decimal,
-        user: Addr
+        user: VestingAccountResponse
     },
     PostMigrationBalancesCheck {
         ntrn_denom: String,
         ntrn_init_balance: Uint128,
         paired_asset_denom: String,
         paired_asset_init_balance: Uint128,
-        user: Addr
+        user: VestingAccountResponse
     },
 }
 

@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+use std::ops::Mul;
 use crate::error::ContractError;
 use crate::ext_historical::{handle_execute_historical_msg, handle_query_historical_msg};
 use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
@@ -10,10 +12,14 @@ use crate::types::{
     VestingSchedule, VestingState,
 };
 use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfoExt, PairInfo, native_asset};
+use astroport::pair::{
+    Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
+};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use cosmwasm_std::{attr, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Storage, SubMsg, Uint128, Decimal, CosmosMsg, WasmMsg, Coin};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use cw_utils::must_pay;
+use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::generator::RewardInfoResponse;
 
 /// Exposes execute functions available in the contract.
@@ -282,7 +288,7 @@ fn execute_migrate_liquidity(
 
 ) -> Result<Response, ContractError> {
     // todo batching
-    let vesting_infos = vesting_infos.load(deps.storage, start_after, limit, order_by)?;
+    let vesting_infos = read_vesting_infos(deps.as_ref(), start_after, limit, order_by)?;
 
     let vesting_accounts: Vec<_> = vesting_infos
         .into_iter()
@@ -290,122 +296,109 @@ fn execute_migrate_liquidity(
         .collect();
 
     for user in vesting_accounts {
-        // TODO deps
-        // TODO: calculate user share
-        migrate_liquidity_inner( deps, env.clone(), slippage_tolerance, ntrn_atom_amount, ntrn_usdc_amount, user.address)
+        let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
+
+        // get pairs LP token addresses
+        let ntrn_atom_pair_info: PairInfo = deps.querier.query_wasm_smart(
+            migration_config.ntrn_atom_xyk_pair.clone(),
+            &PairQueryMsg::Pair {},
+        )?;
+        let ntrn_usdc_pair_info: PairInfo = deps.querier.query_wasm_smart(
+            migration_config.ntrn_usdc_xyk_pair.clone(),
+            &PairQueryMsg::Pair {},
+        )?;
+
+        // query max available amounts to be withdrawn from both pairs
+        let max_available_ntrn_atom_amount = {
+            let resp: BalanceResponse = deps.querier.query_wasm_smart(
+                ntrn_atom_pair_info.liquidity_token.clone(),
+                &Cw20QueryMsg::Balance {
+                    address: env.contract.address.to_string(),
+                },
+            )?;
+            resp.balance
+        };
+        let max_available_ntrn_usdc_amount = {
+            let resp: BalanceResponse = deps.querier.query_wasm_smart(
+                ntrn_usdc_pair_info.liquidity_token.clone(),
+                &Cw20QueryMsg::Balance {
+                    address: env.contract.address.to_string(),
+                },
+            )?;
+            resp.balance
+        };
+        if max_available_ntrn_atom_amount.is_zero() && max_available_ntrn_usdc_amount.is_zero() {
+            return Err(ContractError::MigrationComplete {});
+        }
+
+        // validate parameters to the max available values
+        if let Some(ntrn_atom_amount) = ntrn_atom_amount {
+            if ntrn_atom_amount.gt(&max_available_ntrn_atom_amount) {
+                return Err(ContractError::MigrationAmountUnavailable {
+                    amount: ntrn_atom_amount,
+                    max_amount: max_available_ntrn_atom_amount,
+                });
+            }
+        }
+        if let Some(ntrn_usdc_amount) = ntrn_usdc_amount {
+            if ntrn_usdc_amount.gt(&max_available_ntrn_usdc_amount) {
+                return Err(ContractError::MigrationAmountUnavailable {
+                    amount: ntrn_usdc_amount,
+                    max_amount: max_available_ntrn_usdc_amount,
+                });
+            }
+        }
+        if let Some(slippage_tolerance) = slippage_tolerance {
+            if slippage_tolerance.gt(&migration_config.max_slippage) {
+                return Err(ContractError::MigrationSlippageToBig {
+                    slippage_tolerance,
+                    max_slippage_tolerance: migration_config.max_slippage,
+                });
+            }
+        }
+
+        let ntrn_atom_amount = ntrn_atom_amount.unwrap_or(max_available_ntrn_atom_amount);
+        let ntrn_usdc_amount = ntrn_usdc_amount.unwrap_or(max_available_ntrn_usdc_amount);
+        let slippage_tolerance = slippage_tolerance.unwrap_or(migration_config.max_slippage);
+
+        let mut resp = Response::default();
+        if !ntrn_atom_amount.is_zero() {
+            resp = resp.add_message(
+                CallbackMsg::MigrateLiquidityToClPair {
+                    ntrn_denom: migration_config.ntrn_denom.clone(),
+                    amount: ntrn_atom_amount,
+                    slippage_tolerance,
+                    xyk_pair: migration_config.ntrn_atom_xyk_pair,
+                    xyk_lp_token: ntrn_atom_pair_info.liquidity_token,
+                    cl_pair: migration_config.ntrn_atom_cl_pair,
+                    paired_asset_denom: migration_config.atom_denom,
+                    user
+                }
+                    .to_cosmos_msg(&env)?,
+            );
+        }
+        if !ntrn_usdc_amount.is_zero() {
+            resp = resp.add_message(
+                CallbackMsg::MigrateLiquidityToClPair {
+                    ntrn_denom: migration_config.ntrn_denom,
+                    amount: ntrn_usdc_amount,
+                    slippage_tolerance,
+                    xyk_pair: migration_config.ntrn_usdc_xyk_pair,
+                    xyk_lp_token: ntrn_usdc_pair_info.liquidity_token,
+                    cl_pair: migration_config.ntrn_usdc_cl_pair,
+                    paired_asset_denom: migration_config.usdc_denom,
+                    user: user.clone().address,
+                }
+                    .to_cosmos_msg(&env)?,
+            );
+        }
+
+        Ok(resp)
     }
 
     Ok(Default::default())
 }
 
-
-fn migrate_liquidity_inner(
-    deps: DepsMut,
-    env: Env,
-    slippage_tolerance: Option<Decimal>,
-    ntrn_atom_amount: Option<Uint128>,
-    ntrn_usdc_amount: Option<Uint128>,
-    user: Addr,
-) -> Result<Response, ContractError> {
-    let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
-
-    // get pairs LP token addresses
-    let ntrn_atom_pair_info: PairInfo = deps.querier.query_wasm_smart(
-        migration_config.ntrn_atom_xyk_pair.clone(),
-        &PairQueryMsg::Pair {},
-    )?;
-    let ntrn_usdc_pair_info: PairInfo = deps.querier.query_wasm_smart(
-        migration_config.ntrn_usdc_xyk_pair.clone(),
-        &PairQueryMsg::Pair {},
-    )?;
-
-    // query max available amounts to be withdrawn from both pairs
-    let max_available_ntrn_atom_amount = {
-        let resp: BalanceResponse = deps.querier.query_wasm_smart(
-            ntrn_atom_pair_info.liquidity_token.clone(),
-            &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
-            },
-        )?;
-        resp.balance
-    };
-    let max_available_ntrn_usdc_amount = {
-        let resp: BalanceResponse = deps.querier.query_wasm_smart(
-            ntrn_usdc_pair_info.liquidity_token.clone(),
-            &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
-            },
-        )?;
-        resp.balance
-    };
-    if max_available_ntrn_atom_amount.is_zero() && max_available_ntrn_usdc_amount.is_zero() {
-        return Err(ContractError::MigrationComplete {});
-    }
-
-    // validate parameters to the max available values
-    if let Some(ntrn_atom_amount) = ntrn_atom_amount {
-        if ntrn_atom_amount.gt(&max_available_ntrn_atom_amount) {
-            return Err(ContractError::MigrationAmountUnavailable {
-                amount: ntrn_atom_amount,
-                max_amount: max_available_ntrn_atom_amount,
-            });
-        }
-    }
-    if let Some(ntrn_usdc_amount) = ntrn_usdc_amount {
-        if ntrn_usdc_amount.gt(&max_available_ntrn_usdc_amount) {
-            return Err(ContractError::MigrationAmountUnavailable {
-                amount: ntrn_usdc_amount,
-                max_amount: max_available_ntrn_usdc_amount,
-            });
-        }
-    }
-    if let Some(slippage_tolerance) = slippage_tolerance {
-        if slippage_tolerance.gt(&migration_config.max_slippage) {
-            return Err(ContractError::MigrationSlippageToBig {
-                slippage_tolerance,
-                max_slippage_tolerance: migration_config.max_slippage,
-            });
-        }
-    }
-
-    let ntrn_atom_amount = ntrn_atom_amount.unwrap_or(max_available_ntrn_atom_amount);
-    let ntrn_usdc_amount = ntrn_usdc_amount.unwrap_or(max_available_ntrn_usdc_amount);
-    let slippage_tolerance = slippage_tolerance.unwrap_or(migration_config.max_slippage);
-
-    let mut resp = Response::default();
-    if !ntrn_atom_amount.is_zero() {
-        resp = resp.add_message(
-            CallbackMsg::MigrateLiquidityToClPair {
-                ntrn_denom: migration_config.ntrn_denom.clone(),
-                amount: ntrn_atom_amount,
-                slippage_tolerance,
-                xyk_pair: migration_config.ntrn_atom_xyk_pair,
-                xyk_lp_token: ntrn_atom_pair_info.liquidity_token,
-                cl_pair: migration_config.ntrn_atom_cl_pair,
-                paired_asset_denom: migration_config.atom_denom,
-                user
-            }
-                .to_cosmos_msg(&env)?,
-        );
-    }
-    if !ntrn_usdc_amount.is_zero() {
-        resp = resp.add_message(
-            CallbackMsg::MigrateLiquidityToClPair {
-                ntrn_denom: migration_config.ntrn_denom,
-                amount: ntrn_usdc_amount,
-                slippage_tolerance,
-                xyk_pair: migration_config.ntrn_usdc_xyk_pair,
-                xyk_lp_token: ntrn_usdc_pair_info.liquidity_token,
-                cl_pair: migration_config.ntrn_usdc_cl_pair,
-                paired_asset_denom: migration_config.usdc_denom,
-                user: user.clone(),
-            }
-                .to_cosmos_msg(&env)?,
-        );
-    }
-
-    Ok(resp)
-}
 
 fn _handle_callback(
     deps: DepsMut<NeutronQuery>,
@@ -488,7 +481,7 @@ fn migrate_liquidity_to_cl_pair_callback(
     cl_pair: Addr,
     ntrn_denom: String,
     paired_asset_denom: String,
-    user: Addr
+    user: VestingAccountResponse
 ) -> Result<Response, ContractError> {
     let ntrn_init_balance = deps
         .querier
@@ -506,19 +499,24 @@ fn migrate_liquidity_to_cl_pair_callback(
         &generator.to_string(),
     )?;
 
-    // //unstake from generator
-    // attrs.push(attr(
-    //     "unstake_from_generator",
-    //     ?,
-    // ));
-    // msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-    //     contract_addr: generator.to_string(),
-    //     funds: vec![],
-    //     msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
-    //         lp_token: pool.lp_token.to_string(),
-    //         amount: ?,
-    //     })?,
-    // }));
+    let user_share = compute_share(&user.info)?;
+    let user_rewards_share = reward_amount.to_decimal().checked_mul(user_share)?;
+
+    //unstake from generator
+    attrs.push(attr(
+        "unstake_from_generator",
+        user_rewards_share,
+    ));
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: generator.to_string(),
+        funds: vec![],
+        msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
+            lp_token: pool.lp_token.to_string(),
+            amount: Uint128::from(user_rewards_share),
+        })?,
+    }));
+
+
     // TODO send shared generator ins to user
 
     let msgs: Vec<CosmosMsg> = vec![
@@ -558,7 +556,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     paired_asset_init_balance: Uint128,
     cl_pair_address: Addr,
     slippage_tolerance: Decimal,
-    user: Addr
+    user: VestingAccountResponse
 ) -> Result<Response, ContractError> {
     let ntrn_balance_after_withdrawal = deps
         .querier
