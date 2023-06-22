@@ -19,6 +19,8 @@ use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_ow
 use cosmwasm_std::{attr, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Storage, SubMsg, Uint128, Decimal, CosmosMsg, WasmMsg, Coin};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use cw_utils::must_pay;
+use astroport::generator::PoolInfoResponse;
+use astroport::generator::QueryMsg as GenQueryMsg;
 use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::generator::RewardInfoResponse;
 
@@ -87,7 +89,7 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
-        ExecuteMsg::MigrateLiquidity {} => execute_migrate_liquidity(deps, env, None, None, None)
+        ExecuteMsg::MigrateLiquidity {} => execute_migrate_liquidity(deps, env, None)
     }
 }
 
@@ -283,8 +285,6 @@ fn execute_migrate_liquidity(
     deps: DepsMut,
     env: Env,
     slippage_tolerance: Option<Decimal>,
-    ntrn_atom_amount: Option<Uint128>,
-    ntrn_usdc_amount: Option<Uint128>,
 
 ) -> Result<Response, ContractError> {
     // todo batching
@@ -357,8 +357,6 @@ fn execute_migrate_liquidity(
             }
         }
 
-        let ntrn_atom_amount = ntrn_atom_amount.unwrap_or(max_available_ntrn_atom_amount);
-        let ntrn_usdc_amount = ntrn_usdc_amount.unwrap_or(max_available_ntrn_usdc_amount);
         let slippage_tolerance = slippage_tolerance.unwrap_or(migration_config.max_slippage);
 
         let mut resp = Response::default();
@@ -366,7 +364,7 @@ fn execute_migrate_liquidity(
             resp = resp.add_message(
                 CallbackMsg::MigrateLiquidityToClPair {
                     ntrn_denom: migration_config.ntrn_denom.clone(),
-                    amount: ntrn_atom_amount,
+                    amount: max_available_ntrn_atom_amount,
                     slippage_tolerance,
                     xyk_pair: migration_config.ntrn_atom_xyk_pair,
                     xyk_lp_token: ntrn_atom_pair_info.liquidity_token,
@@ -381,7 +379,7 @@ fn execute_migrate_liquidity(
             resp = resp.add_message(
                 CallbackMsg::MigrateLiquidityToClPair {
                     ntrn_denom: migration_config.ntrn_denom,
-                    amount: ntrn_usdc_amount,
+                    amount: max_available_ntrn_usdc_amount,
                     slippage_tolerance,
                     xyk_pair: migration_config.ntrn_usdc_xyk_pair,
                     xyk_lp_token: ntrn_usdc_pair_info.liquidity_token,
@@ -451,7 +449,7 @@ fn _handle_callback(
             slippage_tolerance,
             user
         ),
-        CallbackMsg::PostMigrationBalancesCheck {
+        CallbackMsg::PostMigrationBalancesCheckAndVestingReschedule {
             ntrn_denom,
             ntrn_init_balance,
             paired_asset_denom,
@@ -495,37 +493,30 @@ fn migrate_liquidity_to_cl_pair_callback(
     let reward_amount = get_reward_amount(
         deps.as_ref(),
         &env,
-        &pool.lp_token.to_string(),
+        &xyk_lp_token.to_string(),
         &generator.to_string(),
     )?;
 
     let user_share = compute_share(&user.info)?;
     let user_rewards_share = reward_amount.to_decimal().checked_mul(user_share)?;
+    let user_amount = amount.to_decimal().checked_mul(user_share.clone())?;
 
-    //unstake from generator
-    attrs.push(attr(
-        "unstake_from_generator",
-        user_rewards_share,
-    ));
-    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: generator.to_string(),
-        funds: vec![],
-        msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
-            lp_token: pool.lp_token.to_string(),
-            amount: Uint128::from(user_rewards_share),
-        })?,
-    }));
-
-
-    // TODO send shared generator ins to user
 
     let msgs: Vec<CosmosMsg> = vec![
+        CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: generator.to_string(),
+            funds: vec![],
+            msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
+                lp_token: xyk_lp_token.to_string(),
+                amount: user_rewards_share.to_uint_floor(),
+            })?,
+       }),
         // push message to withdraw liquidity from the xyk pair
         CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: xyk_lp_token.to_string(),
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: xyk_pair.to_string(),
-                amount,
+                amount: user_amount.to_uint_floor(),
                 msg: to_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
             })?,
             funds: vec![],
@@ -594,7 +585,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
             ],
         }),
         // push the next migration step as a callback message
-        CallbackMsg::PostMigrationBalancesCheck {
+        CallbackMsg::PostMigrationBalancesCheckAndVestingReschedule {
             ntrn_denom,
             ntrn_init_balance,
             paired_asset_denom,
@@ -638,32 +629,9 @@ fn post_migration_balances_check_callback(
     ntrn_init_balance: Uint128,
     paired_asset_denom: String,
     paired_asset_init_balance: Uint128,
-    user: Addr
+    user: VestingAccountResponse
 ) -> Result<Response, ContractError> {
-    // let ntrn_balance = deps
-    //     .querier
-    //     .query_balance(user.to_string(), ntrn_denom.clone())?
-    //     .amount;
-    // let paired_asset_balance = deps
-    //     .querier
-    //     .query_balance(user.to_string(), paired_asset_denom.clone())?
-    //     .amount;
-    //
-    // if !ntrn_balance.eq(&ntrn_init_balance) {
-    //     return Err(ContractError::MigrationBalancesMismatch {
-    //         denom: ntrn_denom,
-    //         initial_balance: ntrn_init_balance,
-    //         final_balance: ntrn_balance,
-    //     });
-    // }
-    // if !paired_asset_balance.eq(&paired_asset_init_balance) {
-    //     return Err(ContractError::MigrationBalancesMismatch {
-    //         denom: paired_asset_denom,
-    //         initial_balance: paired_asset_init_balance,
-    //         final_balance: paired_asset_balance,
-    //     });
-    // }
-    //
+
     Ok(Response::default())
 }
 

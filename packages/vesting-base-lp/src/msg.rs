@@ -191,7 +191,7 @@ pub enum CallbackMsg {
         slippage_tolerance: Decimal,
         user: VestingAccountResponse
     },
-    PostMigrationBalancesCheck {
+    PostMigrationBalancesCheckAndVestingReschedule {
         ntrn_denom: String,
         ntrn_init_balance: Uint128,
         paired_asset_denom: String,
