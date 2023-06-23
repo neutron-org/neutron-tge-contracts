@@ -49,6 +49,9 @@ pub enum ExecuteMsg {
     HistoricalExtension { msg: ExecuteMsgHistorical },
     ///
     MigrateLiquidity {},
+    /// Callbacks; only callable by the contract itself.
+    Callback(CallbackMsg),
+
 }
 
 /// This structure describes the execute messages available in a managed vesting contract.
@@ -148,17 +151,15 @@ pub enum QueryMsgHistorical {
 /// This structure describes a migration message.
 /// We currently take no arguments for migrations.
 #[cw_serde]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MigrateMsg {
     pub max_slippage: Decimal,
     pub ntrn_denom: String,
-    pub atom_denom: String,
-    pub ntrn_atom_xyk_pair: String,
-    pub ntrn_atom_cl_pair: String,
-    pub usdc_denom: String,
-    pub ntrn_usdc_xyk_pair: String,
-    pub ntrn_usdc_cl_pair: String,
+    pub paired_denom: String,
+    pub xyk_pair: String,
+    pub cl_pair: String,
+    pub new_lp_token: String,
+    pub batch_size: u32,
 }
 /// This structure describes a CW20 hook message.
 #[cw_serde]
@@ -168,9 +169,7 @@ pub enum Cw20HookMsg {
         vesting_accounts: Vec<VestingAccount>,
     },
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum CallbackMsg {
     MigrateLiquidityToClPair {
         xyk_pair: Addr,
@@ -191,11 +190,7 @@ pub enum CallbackMsg {
         slippage_tolerance: Decimal,
         user: VestingAccountResponse
     },
-    PostMigrationBalancesCheckAndVestingReschedule {
-        ntrn_denom: String,
-        ntrn_init_balance: Uint128,
-        paired_asset_denom: String,
-        paired_asset_init_balance: Uint128,
+    PostMigrationVestingReschedule {
         user: VestingAccountResponse
     },
 }
@@ -213,17 +208,15 @@ impl CallbackMsg {
 }
 
 /// Config for xyk->CL liquidity migration.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[cw_serde]
 pub struct XykToClMigrationConfig {
     /// The maximum allowed slippage tolerance for xyk to CL liquidity migration calls.
     pub max_slippage: Decimal,
     pub ntrn_denom: String,
-    pub atom_denom: String,
-    pub ntrn_atom_xyk_pair: Addr,
-    pub ntrn_atom_cl_pair: Addr,
-    pub usdc_denom: String,
-    pub ntrn_usdc_xyk_pair: Addr,
-    pub ntrn_usdc_cl_pair: Addr,
+    pub xyk_pair: Addr,
+    pub cl_pair: Addr,
+    pub paired_denom: String,
 }
+
 
 

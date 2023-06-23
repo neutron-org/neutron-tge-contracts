@@ -4,6 +4,8 @@ use cosmwasm_std::{Addr, Decimal, Deps, StdResult};
 use cw_storage_plus::{Bound, Item, Map, SnapshotItem, SnapshotMap, Strategy};
 
 pub(crate) const CONFIG: Item<Config> = Item::new("config");
+/// Migration status
+pub(crate) const MIGRATION_STATUS: Item<MigrationState> = Item::new("migration_status");
 pub(crate) const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
 pub(crate) const VESTING_MANAGERS: Map<Addr, ()> = Map::new("vesting_managers");
 pub(crate) const VESTING_STATE: SnapshotItem<VestingState> = SnapshotItem::new(
@@ -29,6 +31,13 @@ pub(crate) const VESTING_INFO_HISTORICAL: SnapshotMap<Addr, VestingInfo> = Snaps
     "vesting_info__checkpoints",
     "vesting_info__changelog",
     Strategy::EveryBlock,
+);
+
+pub(crate) const VESTING_STATE_OLD: SnapshotItem<VestingState> = SnapshotItem::new(
+    "vesting_state",
+    "vesting_state__checkpoints",
+    "vesting_state__changelog",
+    Strategy::Never,
 );
 
 pub(crate) fn vesting_state(historical: bool) -> SnapshotItem<'static, VestingState> {
@@ -162,15 +171,24 @@ pub const XYK_TO_CL_MIGRATION_CONFIG: Item<XykToClMigrationConfig> =
     Item::new("xyk_to_cl_migration_config");
 
 /// Config for xyk->CL liquidity migration.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
+#[cw_serde]
 pub struct XykToClMigrationConfig {
     /// The maximum allowed slippage tolerance for xyk to CL liquidity migration calls.
     pub max_slippage: Decimal,
     pub ntrn_denom: String,
-    pub atom_denom: String,
-    pub ntrn_atom_xyk_pair: Addr,
-    pub ntrn_atom_cl_pair: Addr,
-    pub usdc_denom: String,
-    pub ntrn_usdc_xyk_pair: Addr,
-    pub ntrn_usdc_cl_pair: Addr,
+    pub xyk_pair: Addr,
+    pub paired_denom: String,
+    pub cl_pair: Addr,
+    pub new_lp_token: Addr,
+    pub last_processed_user: Option<Addr>,
+    pub batch_size: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
+pub enum MigrationState {
+    #[default]
+    /// Migration is started
+    Started,
+
+    Completed,
 }

@@ -5,7 +5,7 @@ use crate::ext_historical::{handle_execute_historical_msg, handle_query_historic
 use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
 use crate::ext_with_managers::{handle_execute_with_managers_msg, handle_query_managers_msg};
 use crate::msg::{CallbackMsg, Cw20HookMsg, ExecuteMsg, MigrateMsg, QueryMsg};
-use crate::state::{read_vesting_infos, vesting_info, vesting_state, XYK_TO_CL_MIGRATION_CONFIG, XykToClMigrationConfig};
+use crate::state::{MIGRATION_STATUS, MigrationState, read_vesting_infos, vesting_info, vesting_state, VESTING_STATE, VESTING_STATE_OLD, XYK_TO_CL_MIGRATION_CONFIG, XykToClMigrationConfig};
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS};
 use crate::types::{
     Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo,
@@ -31,6 +31,16 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
+    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state != MigrationState::Completed {
+        match msg {
+            ExecuteMsg::MigrateLiquidity(..) => {}
+            ExecuteMsg::Callback(..) => {}
+            _ => {
+                return Err(ContractError::MigrationIncomplete {})
+            }
+        }
+    }
     match msg {
         ExecuteMsg::Claim { recipient, amount } => claim(deps, env, info, recipient, amount),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
@@ -89,7 +99,8 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
-        ExecuteMsg::MigrateLiquidity {} => execute_migrate_liquidity(deps, env, None)
+        ExecuteMsg::MigrateLiquidity {} => execute_migrate_liquidity(deps, env, None),
+        ExecuteMsg::Callback(msg) => _handle_callback(deps, ennv, info, msg)
     }
 }
 
@@ -287,67 +298,52 @@ fn execute_migrate_liquidity(
     slippage_tolerance: Option<Decimal>,
 
 ) -> Result<Response, ContractError> {
-    // todo batching
-    let vesting_infos = read_vesting_infos(deps.as_ref(), start_after, limit, order_by)?;
+    let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
+
+    let vesting_infos = read_vesting_infos(deps.as_ref(), migration_config.last_processed_user, Some(migration_config.batch_size), order_by)?;
+
 
     let vesting_accounts: Vec<_> = vesting_infos
         .into_iter()
         .map(|(address, info)| VestingAccountResponse { address, info })
         .collect();
 
+    if vesting_accounts.len() == 0 {
+        MIGRATION_STATUS.save(deps.storage, &MigrationState::Completed)
+    }
+
     for user in vesting_accounts {
-        let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
 
         // get pairs LP token addresses
-        let ntrn_atom_pair_info: PairInfo = deps.querier.query_wasm_smart(
-            migration_config.ntrn_atom_xyk_pair.clone(),
-            &PairQueryMsg::Pair {},
-        )?;
-        let ntrn_usdc_pair_info: PairInfo = deps.querier.query_wasm_smart(
-            migration_config.ntrn_usdc_xyk_pair.clone(),
+        let pair_info: PairInfo = deps.querier.query_wasm_smart(
+            migration_config.xyk_pair.clone(),
             &PairQueryMsg::Pair {},
         )?;
 
         // query max available amounts to be withdrawn from both pairs
-        let max_available_ntrn_atom_amount = {
+        let max_available_amount = {
             let resp: BalanceResponse = deps.querier.query_wasm_smart(
-                ntrn_atom_pair_info.liquidity_token.clone(),
+                pair_info.liquidity_token.clone(),
                 &Cw20QueryMsg::Balance {
                     address: env.contract.address.to_string(),
                 },
             )?;
             resp.balance
         };
-        let max_available_ntrn_usdc_amount = {
-            let resp: BalanceResponse = deps.querier.query_wasm_smart(
-                ntrn_usdc_pair_info.liquidity_token.clone(),
-                &Cw20QueryMsg::Balance {
-                    address: env.contract.address.to_string(),
-                },
-            )?;
-            resp.balance
-        };
-        if max_available_ntrn_atom_amount.is_zero() && max_available_ntrn_usdc_amount.is_zero() {
+        if max_available_amount.is_zero() {
             return Err(ContractError::MigrationComplete {});
         }
 
-        // validate parameters to the max available values
-        if let Some(ntrn_atom_amount) = ntrn_atom_amount {
-            if ntrn_atom_amount.gt(&max_available_ntrn_atom_amount) {
-                return Err(ContractError::MigrationAmountUnavailable {
-                    amount: ntrn_atom_amount,
-                    max_amount: max_available_ntrn_atom_amount,
-                });
-            }
-        }
-        if let Some(ntrn_usdc_amount) = ntrn_usdc_amount {
-            if ntrn_usdc_amount.gt(&max_available_ntrn_usdc_amount) {
-                return Err(ContractError::MigrationAmountUnavailable {
-                    amount: ntrn_usdc_amount,
-                    max_amount: max_available_ntrn_usdc_amount,
-                });
-            }
-        }
+        // // validate parameters to the max available values
+        // if let Some(amount) = ntrn_atom_amount {
+        //     if amount.gt(&max_available_amount) {
+        //         return Err(ContractError::MigrationAmountUnavailable {
+        //             amount,
+        //             max_amount: max_available_amount,
+        //         });
+        //     }
+        // }
+
         if let Some(slippage_tolerance) = slippage_tolerance {
             if slippage_tolerance.gt(&migration_config.max_slippage) {
                 return Err(ContractError::MigrationSlippageToBig {
@@ -360,32 +356,17 @@ fn execute_migrate_liquidity(
         let slippage_tolerance = slippage_tolerance.unwrap_or(migration_config.max_slippage);
 
         let mut resp = Response::default();
-        if !ntrn_atom_amount.is_zero() {
+        if !max_available_amount.is_zero() {
             resp = resp.add_message(
                 CallbackMsg::MigrateLiquidityToClPair {
                     ntrn_denom: migration_config.ntrn_denom.clone(),
-                    amount: max_available_ntrn_atom_amount,
+                    amount: max_available_amount,
                     slippage_tolerance,
-                    xyk_pair: migration_config.ntrn_atom_xyk_pair,
-                    xyk_lp_token: ntrn_atom_pair_info.liquidity_token,
-                    cl_pair: migration_config.ntrn_atom_cl_pair,
-                    paired_asset_denom: migration_config.atom_denom,
+                    xyk_pair: migration_config.xyk_pair.clone(),
+                    xyk_lp_token: pair_info.liquidity_token,
+                    cl_pair: migration_config.cl_pair.clone(),
+                    paired_asset_denom: migration_config.paired_denom.clone(),
                     user
-                }
-                    .to_cosmos_msg(&env)?,
-            );
-        }
-        if !ntrn_usdc_amount.is_zero() {
-            resp = resp.add_message(
-                CallbackMsg::MigrateLiquidityToClPair {
-                    ntrn_denom: migration_config.ntrn_denom,
-                    amount: max_available_ntrn_usdc_amount,
-                    slippage_tolerance,
-                    xyk_pair: migration_config.ntrn_usdc_xyk_pair,
-                    xyk_lp_token: ntrn_usdc_pair_info.liquidity_token,
-                    cl_pair: migration_config.ntrn_usdc_cl_pair,
-                    paired_asset_denom: migration_config.usdc_denom,
-                    user: user.clone().address,
                 }
                     .to_cosmos_msg(&env)?,
             );
@@ -399,7 +380,7 @@ fn execute_migrate_liquidity(
 
 
 fn _handle_callback(
-    deps: DepsMut<NeutronQuery>,
+    deps: DepsMut,
     env: Env,
     info: MessageInfo,
     msg: CallbackMsg,
@@ -449,21 +430,12 @@ fn _handle_callback(
             slippage_tolerance,
             user
         ),
-        CallbackMsg::PostMigrationBalancesCheckAndVestingReschedule {
-            ntrn_denom,
-            ntrn_init_balance,
-            paired_asset_denom,
-            paired_asset_init_balance,
+        CallbackMsg::PostMigrationVestingReschedule {
             user
-        } => post_migration_balances_check_callback(
+        } => post_migration_vesting_reschedule_callback(
             deps,
             env,
-            ntrn_denom,
-            ntrn_init_balance,
-            paired_asset_denom,
-            paired_asset_init_balance,
-            user
-        ),
+            user),
     }
 }
 
@@ -551,11 +523,11 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
 ) -> Result<Response, ContractError> {
     let ntrn_balance_after_withdrawal = deps
         .querier
-        .query_balance(user.to_string(), ntrn_denom.clone())?
+        .query_balance(env.contract.address.to_string(), ntrn_denom.clone())?
         .amount;
     let paired_asset_balance_after_withdrawal = deps
         .querier
-        .query_balance(user.to_string(), paired_asset_denom.clone())?
+        .query_balance(env.contract.address.to_string(), paired_asset_denom.clone())?
         .amount;
 
     // calc amount of assets that's been withdrawn
@@ -585,11 +557,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
             ],
         }),
         // push the next migration step as a callback message
-        CallbackMsg::PostMigrationBalancesCheckAndVestingReschedule {
-            ntrn_denom,
-            ntrn_init_balance,
-            paired_asset_denom,
-            paired_asset_init_balance,
+        CallbackMsg::PostMigrationVestingReschedule {
             user
         }
             .to_cosmos_msg(&env)?,
@@ -622,15 +590,48 @@ fn get_reward_amount(
     Ok(reward_token_balance)
 }
 
-fn post_migration_balances_check_callback(
+fn post_migration_vesting_reschedule_callback(
     deps: DepsMut,
     env: Env,
-    ntrn_denom: String,
-    ntrn_init_balance: Uint128,
-    paired_asset_denom: String,
-    paired_asset_init_balance: Uint128,
     user: VestingAccountResponse
 ) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
+    let balance_response: BalanceResponse = deps.querier.query_wasm_smart(
+        &migration_config.new_lp_token,
+        &Cw20QueryMsg::Balance {
+            address: env.contract.address.to_string(),
+        },
+    )?;
+    let current_balance = balance_response.balance;
+    let state = vesting_state(config.extensions.historical).load(deps.storage)?;
+    let balance_diff = current_balance.checked_sub(state.total_granted)?;
+
+
+    let mut schedules = user.info.schedules.first()?;
+    schedules.start_point.amount = balance_diff;
+
+
+    vesting_info.(
+        deps.storage,
+        user.address,
+        &VestingInfo {
+            schedules: vec![*schedules],
+            released_amount: Uint128::zero(),
+        },
+        env.block.height,
+    )?;
+
+    vesting_state(config.extensions.historical).update::<_, ContractError>(
+        deps.storage,
+        height,
+        |s| {
+            let mut state = s.unwrap_or_default();
+            state.total_granted = state.total_granted.checked_add(balance_diff)?;
+            Ok(state)
+        },
+    )?;
+
 
     Ok(Response::default())
 }
@@ -735,21 +736,36 @@ fn query_vesting_available_amount(deps: Deps, env: Env, address: String) -> StdR
 }
 
 /// Manages contract migration.
-#[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
     XYK_TO_CL_MIGRATION_CONFIG.save(
         deps.storage,
         &XykToClMigrationConfig {
             max_slippage: msg.max_slippage,
             ntrn_denom: msg.ntrn_denom,
-            atom_denom: msg.atom_denom,
-            ntrn_atom_xyk_pair: deps.api.addr_validate(msg.ntrn_atom_xyk_pair.as_str())?,
-            ntrn_atom_cl_pair: deps.api.addr_validate(msg.ntrn_atom_cl_pair.as_str())?,
-            usdc_denom: msg.usdc_denom,
-            ntrn_usdc_xyk_pair: deps.api.addr_validate(msg.ntrn_usdc_xyk_pair.as_str())?,
-            ntrn_usdc_cl_pair: deps.api.addr_validate(msg.ntrn_usdc_cl_pair.as_str())?,
+            xyk_pair: deps.api.addr_validate(msg.xyk_pair.as_str())?,
+            paired_denom: msg.paired_denom,
+            cl_pair: deps.api.addr_validate(msg.cl_pair.as_str())?,
+            batch_size: msg.batch_size,
+            last_processed_user: None,
+            new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
         },
     )?;
+
+    let state = vesting_state(config.extensions.historical).load(deps.storage)?;
+    VESTING_STATE_OLD.save(deps.storage, &state, env.block.height)?;
+    vesting_state(config.extensions.historical).update(
+        deps.storage,
+        height,
+        |s| {
+            let mut state = s.unwrap_or_default();
+            state.total_granted = Uint128::zero();
+            Ok(state)
+        },
+    )?;
+
+    MIGRATION_STATUS.save(deps.storage, &MigrationState::Started)?;
+
     Ok(Response::default())
 }
 
@@ -821,17 +837,15 @@ fn compute_available_amount(current_time: u64, vesting_info: &VestingInfo) -> St
 }
 
 fn compute_share(vesting_info: &VestingInfo) -> StdResult<Decimal> {
-    let config = CONFIG.load(deps.storage)?;
-    let state = vesting_state(config.extensions.historical).load(deps.storage)?;
-    let mut available_amount: Uint128 = Uint128::zero();
+    let state = VESTING_STATE_OLD.load(deps.storage)?;
+    let mut available_amount: Decimal = Decimal::zero();
     for sch in &vesting_info.schedules {
 
         if let Some(end_point) = &sch.end_point {
-            available_amount = available_amount.checked_add(end_point.amount)?
+            available_amount = available_amount.checked_add(Decimal::new(end_point.amount))?
         }
     }
 
     available_amount
-        .checked_div(state.total_granted)?
-        .map_err(StdError::from)
+        .checked_div(Decimal::new(state.total_granted))?.map_err()
 }
