@@ -157,7 +157,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
     let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
     if migration_state != MigrationState::Completed {
         match msg {
-            ExecuteMsg::Migrate(..) => {}
+            ExecuteMsg::MigrateFromXykToCl(..) => {}
             ExecuteMsg::Callback(..) => {}
             _ => {
                 return Err(StdError::generic_err(
@@ -181,7 +181,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             withdraw_lp_stake,
         ),
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
-        ExecuteMsg::Migrate(msg) => _handle_migrate(deps, env, info, msg),
+        ExecuteMsg::MigrateFromXykToCl(msg) => _handle_migrate(deps, env, info, msg),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
             propose_new_owner(

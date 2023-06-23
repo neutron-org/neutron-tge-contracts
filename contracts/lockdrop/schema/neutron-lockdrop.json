@@ -284,10 +284,10 @@
         "description": "Migrations",
         "type": "object",
         "required": [
-          "migrate"
+          "migrate_from_xyk_to_cl"
         ],
         "properties": {
-          "migrate": {
+          "migrate_from_xyk_to_cl": {
             "$ref": "#/definitions/MigrateExecuteMsg"
           }
         },

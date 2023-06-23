@@ -150,7 +150,7 @@ pub enum ExecuteMsg {
         withdraw_lp_stake: bool,
     },
     /// Migrations
-    Migrate(MigrateExecuteMsg),
+    MigrateFromXykToCl(MigrateExecuteMsg),
     /// Callbacks; only callable by the contract itself.
     Callback(CallbackMsg),
     /// ProposeNewOwner creates a proposal to change contract ownership.
