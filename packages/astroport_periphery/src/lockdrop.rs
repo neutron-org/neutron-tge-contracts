@@ -320,7 +320,7 @@ pub enum MigrationState {
     ///
     MigrateLiquidity,
     /// Liquidity is migrated, can migrate users with pagination
-    MigrateUsers(u64),
+    MigrateUsers,
     /// Migration is completed
     Completed,
 }

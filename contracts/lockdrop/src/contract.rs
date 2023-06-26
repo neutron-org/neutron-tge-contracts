@@ -773,7 +773,7 @@ fn migrate_pair_step_3(
         current_balance,
     )?;
 
-    MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateUsers(0u64))?;
+    MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateUsers)?;
 
     Ok(Response::new()
         .add_messages(stake_msgs)
@@ -794,7 +794,7 @@ fn migrate_users(
         .unwrap_or(0u32);
 
     match migrate_state {
-        MigrationState::MigrateUsers(page) => {
+        MigrationState::MigrateUsers => {
             let pool_types: Vec<PoolType> = ASSET_POOLS
                 .keys(deps.storage, None, None, Order::Ascending)
                 .collect::<Result<Vec<PoolType>, StdError>>()?;
@@ -875,7 +875,6 @@ fn migrate_users(
                     }
                 }
                 MIGRATION_USERS_COUNTER.save(deps.storage, &(current_skip + limit as u32))?;
-                MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateUsers(page + 1u64))?;
             }
 
             Ok(Response::default().add_attributes(attrs))
