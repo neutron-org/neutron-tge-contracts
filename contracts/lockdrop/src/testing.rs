@@ -134,7 +134,6 @@ fn increase_ntrn_incentives() {
     let info = mock_info(owner.as_str(), &[coin(100u128, UNTRN_DENOM)]);
 
     let res = execute(deps.as_mut(), env.clone(), info, msg);
-    println!("{:?}", res);
     assert!(res.is_ok());
 
     let config: Config =
