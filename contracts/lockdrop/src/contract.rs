@@ -846,19 +846,11 @@ fn migrate_users(
                     .range(deps.storage, None, None, Order::Ascending)
                     .collect::<Result<Vec<(u64, LockupInfoV2)>, StdError>>()?;
                 for (duration, mut lockup_info) in lookup_infos {
-                    let info = query_lockup_info(
-                        deps.as_ref(),
-                        &env.clone(),
-                        user.as_ref(),
-                        *pool_type,
-                        duration,
-                    )?;
                     let p: String = (*pool_type).into();
                     let kf = kfs
                         .get(&p)
                         .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
                     // update user's lockup positions
-                    lockup_info.generator_proxy_debt = info.generator_proxy_debt;
                     lockup_info.lp_units_locked =
                         (*kf).checked_mul_uint256(lockup_info.lp_units_locked.into())?;
                     LOCKUP_INFO.save(deps.storage, (*pool_type, &user, duration), &lockup_info)?;
