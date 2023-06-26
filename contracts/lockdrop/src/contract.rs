@@ -29,9 +29,9 @@ use astroport_periphery::lockdrop::{
 };
 
 use crate::state::{
-    CompatibleLoader, ASSET_POOLS, ASSET_POOLS_V2, CONFIG, LOCKUP_INFO, MIGRATION_STATUS,
-    MIGRATION_USERS_COUNTER, MIGRATION_USERS_DEFAULT_LIMIT, OWNERSHIP_PROPOSAL, STATE,
-    TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
+    CompatibleLoader, ASSET_POOLS, ASSET_POOLS_V2, CONFIG, LOCKUP_INFO, MIGRATION_MAX_SLIPPAGE,
+    MIGRATION_STATUS, MIGRATION_USERS_COUNTER, MIGRATION_USERS_DEFAULT_LIMIT, OWNERSHIP_PROPOSAL,
+    STATE, TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
 
 const AIRDROP_REWARDS_MULTIPLIER: &str = "1.0";
@@ -474,6 +474,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
             amount_in_lockups: Uint128::zero(),
         },
     )?;
+    MIGRATION_MAX_SLIPPAGE.save(deps.storage, &msg.max_slippage)?;
 
     attrs.push(attr("new_atom_token", msg.new_atom_token));
     attrs.push(attr("new_usdc_token", msg.new_usdc_token));
@@ -490,11 +491,18 @@ fn migrate_liquidity(
     slippage_tolerance: Option<Decimal>,
 ) -> StdResult<Response> {
     let migration_state = MIGRATION_STATUS.load(deps.storage)?;
+
     if migration_state != MigrationState::MigrateLiquidity {
         return Err(StdError::generic_err(
             "Migration is not in the correct state",
         ));
     }
+
+    let max_slippage = MIGRATION_MAX_SLIPPAGE.load(deps.storage)?;
+    if slippage_tolerance.unwrap_or_default() > max_slippage {
+        return Err(StdError::generic_err("Slippage tolerance is too high"));
+    }
+
     let attrs = vec![attr("action", "migrate_liquidity")];
     let msgs = vec![
         CallbackMsg::MigratePairStep1 {

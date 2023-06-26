@@ -9,6 +9,7 @@ use astroport_periphery::lockdrop::{
     Config, LockupInfoV1, LockupInfoV2, PoolInfo, State, UserInfo,
 };
 use astroport_periphery::U64Key;
+use cosmwasm_std::Decimal;
 use cosmwasm_std::{Addr, Deps, StdError, StdResult, Uint128};
 use cw_storage_plus::{Item, Map, SnapshotMap, Strategy};
 
@@ -31,7 +32,10 @@ pub const ASSET_POOLS_V2: Map<PoolType, PoolInfoV2> = Map::new("liquidity_pools_
 pub const MIGRATION_STATUS: Item<MigrationState> = Item::new("migration_status");
 /// Migration users current counter
 pub const MIGRATION_USERS_COUNTER: Item<u32> = Item::new("migration_users_counter");
+/// Migration users default limit
 pub const MIGRATION_USERS_DEFAULT_LIMIT: u32 = 30;
+/// Migration max slippage for providing liquidity
+pub const MIGRATION_MAX_SLIPPAGE: Item<Decimal> = Item::new("migration_max_slippage");
 
 /// Key is an user address
 pub const USER_INFO: Map<&Addr, UserInfo> = Map::new("users");

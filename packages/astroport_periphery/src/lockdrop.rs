@@ -261,6 +261,7 @@ pub enum QueryMsg {
 pub struct MigrateMsg {
     pub new_atom_token: String,
     pub new_usdc_token: String,
+    pub max_slippage: Decimal,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
