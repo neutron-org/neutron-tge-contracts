@@ -796,6 +796,9 @@ fn migrate_users(
     }
     let mut attrs = vec![attr("action", "migrate_users")];
     let limit = limit.unwrap_or(MIGRATION_USERS_DEFAULT_LIMIT);
+    if limit == 0 {
+        return Err(StdError::generic_err("Limit cannot be zero"));
+    }
     let current_skip = MIGRATION_USERS_COUNTER
         .may_load(deps.storage)?
         .unwrap_or(0u32);
