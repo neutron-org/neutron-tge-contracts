@@ -577,6 +577,7 @@ fn migrate_pair_step_1(
     let pool: PoolInfo = ASSET_POOLS.load(deps.storage, pool_type)?;
     let pool_addr = get_lp_token_pool_addr(deps.as_ref(), &pool.lp_token)?;
 
+    //get reward amount so we can calculate difference
     let reward_amount = get_reward_amount(
         deps.as_ref(),
         &env,
@@ -657,7 +658,7 @@ fn migrate_pair_step_2(
         "ntrn_balance_change",
         (current_ntrn_balance - prev_ntrn_balance).to_string(),
     ));
-
+    // update reward info so users can claim after the migration
     pool_info.generator_ntrn_per_share = pool_info.generator_ntrn_per_share.checked_add({
         let reward_token_balance = get_reward_amount(
             deps.as_ref(),
@@ -677,7 +678,7 @@ fn migrate_pair_step_2(
         pool_info.generator_ntrn_per_share.to_string(),
     ));
     ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
-
+    //calculate amount of NTRN claimed from pool
     let ntrn_to_new_pool = current_ntrn_balance - prev_ntrn_balance;
     let new_pool_info: astroport::pair::PoolResponse = deps
         .querier
@@ -691,12 +692,14 @@ fn migrate_pair_step_2(
         })
         .ok_or_else(|| StdError::generic_err("No second leg of pair found"))?;
     attrs.push(attr("token_denom", token_denom.clone()));
+    //calculate amount of token (ATOM|USDC) claimed from pool
     let token_balance = deps
         .querier
         .query_balance(&env.contract.address, token_denom.as_str())?
         .amount;
     attrs.push(attr("token_balance", token_balance.to_string()));
 
+    //construct message to send NTRN and (ATOM|USDC) to new pool
     let base = Asset {
         amount: ntrn_to_new_pool,
         info: AssetInfo::NativeToken {
@@ -719,7 +722,6 @@ fn migrate_pair_step_2(
             amount: token_balance,
         },
     ];
-
     funds.sort_by(|a, b| a.denom.cmp(&b.denom));
     msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: new_pool_addr,
@@ -751,7 +753,7 @@ fn migrate_pair_step_3(
         attr("pool_type", pool_type),
     ];
     let mut new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, pool_type)?;
-    // get current balance
+    // get current balance of new LP token
     let balance_response: cw20::BalanceResponse = deps.querier.query_wasm_smart(
         &new_pool_info.lp_token,
         &Cw20QueryMsg::Balance {
@@ -761,7 +763,7 @@ fn migrate_pair_step_3(
     let current_balance = balance_response.balance;
     attrs.push(attr("current_balance", current_balance.to_string()));
 
-    //update pool info
+    //update pool info to reflect new LP token balance
     new_pool_info.amount_in_lockups = current_balance;
     ASSET_POOLS_V2.save(deps.storage, pool_type, &new_pool_info)?;
 
@@ -786,103 +788,97 @@ fn migrate_users(
     _info: MessageInfo,
     limit: Option<u32>,
 ) -> StdResult<Response> {
-    let mut attrs = vec![attr("action", "migrate_users")];
     let migrate_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migrate_state != MigrationState::MigrateUsers {
+        return Err(StdError::generic_err(
+            "Migration is not in MigrateUsers state",
+        ));
+    }
+    let mut attrs = vec![attr("action", "migrate_users")];
     let limit = limit.unwrap_or(MIGRATION_USERS_DEFAULT_LIMIT);
     let current_skip = MIGRATION_USERS_COUNTER
         .may_load(deps.storage)?
         .unwrap_or(0u32);
 
-    match migrate_state {
-        MigrationState::MigrateUsers => {
-            let pool_types: Vec<PoolType> = ASSET_POOLS
-                .keys(deps.storage, None, None, Order::Ascending)
-                .collect::<Result<Vec<PoolType>, StdError>>()?;
+    let pool_types: Vec<PoolType> = ASSET_POOLS
+        .keys(deps.storage, None, None, Order::Ascending)
+        .collect::<Result<Vec<PoolType>, StdError>>()?;
 
-            let mut kfs: HashMap<String, Decimal256> = HashMap::new();
-            for pool_type in &pool_types {
-                let pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
-                let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
-                kfs.insert(
-                    (*pool_type).into(),
-                    Decimal256::from_ratio(
-                        new_pool_info.amount_in_lockups,
-                        pool_info.amount_in_lockups,
-                    ),
-                );
-            }
-
-            let users: Vec<Addr> = USER_INFO
-                .keys(deps.storage, None, None, Order::Ascending)
-                .skip(current_skip as usize)
-                .take(limit as usize)
-                .collect::<Result<Vec<_>, _>>()?;
-            if users.is_empty() {
-                for pool_type in &pool_types {
-                    let mut pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
-                    let new_pool_info: PoolInfoV2 =
-                        ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
-                    pool_info.amount_in_lockups = new_pool_info.amount_in_lockups;
-                    pool_info.lp_token = new_pool_info.lp_token;
-                    ASSET_POOLS.save(deps.storage, *pool_type, &pool_info, env.block.height)?;
-                }
-                MIGRATION_STATUS.save(deps.storage, &MigrationState::Completed)?;
-                attrs.push(attr("migration_completed", "true"));
-            } else {
-                attrs.push(attr("users_count", users.len().to_string()));
-                //iterate over users
-                for user in users {
-                    for pool_type in &pool_types {
-                        let mut total_lokups = Uint128::zero();
-                        let lookup_infos: Vec<(u64, LockupInfoV2)> = LOCKUP_INFO
-                            .prefix((*pool_type, &user))
-                            .range(deps.storage, None, None, Order::Ascending)
-                            .collect::<Result<Vec<(u64, LockupInfoV2)>, StdError>>()?;
-                        for (duration, mut lockup_info) in lookup_infos {
-                            let info = query_lockup_info(
-                                deps.as_ref(),
-                                &env.clone(),
-                                user.as_ref(),
-                                *pool_type,
-                                duration,
-                            )?;
-                            let p: String = (*pool_type).into();
-                            let kf = kfs
-                                .get(&p)
-                                .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
-                            lockup_info.generator_proxy_debt = info.generator_proxy_debt;
-                            lockup_info.lp_units_locked =
-                                (*kf).checked_mul_uint256(lockup_info.lp_units_locked.into())?;
-                            LOCKUP_INFO.save(
-                                deps.storage,
-                                (*pool_type, &user, duration),
-                                &lockup_info,
-                            )?;
-                            total_lokups += lockup_info.lp_units_locked;
-                        }
-                        TOTAL_USER_LOCKUP_AMOUNT.update(
-                            deps.storage,
-                            (*pool_type, &user),
-                            env.block.height,
-                            |lockup_amount| -> StdResult<Uint128> {
-                                if let Some(la) = lockup_amount {
-                                    Ok(la.checked_add(total_lokups)?)
-                                } else {
-                                    Ok(total_lokups)
-                                }
-                            },
-                        )?;
-                    }
-                }
-                MIGRATION_USERS_COUNTER.save(deps.storage, &(current_skip + limit as u32))?;
-            }
-
-            Ok(Response::default().add_attributes(attrs))
+    let users: Vec<Addr> = USER_INFO
+        .keys(deps.storage, None, None, Order::Ascending)
+        .skip(current_skip as usize)
+        .take(limit as usize)
+        .collect::<Result<Vec<_>, _>>()?;
+    if users.is_empty() {
+        //if no users left, finish migration and update pool numbers and token addresses
+        for pool_type in &pool_types {
+            let mut pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
+            let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
+            pool_info.amount_in_lockups = new_pool_info.amount_in_lockups;
+            pool_info.lp_token = new_pool_info.lp_token;
+            ASSET_POOLS.save(deps.storage, *pool_type, &pool_info, env.block.height)?;
         }
-        _ => Err(StdError::generic_err(
-            "Migration is not in MigrateUsers state",
-        )),
+        MIGRATION_STATUS.save(deps.storage, &MigrationState::Completed)?;
+        attrs.push(attr("migration_completed", "true"));
+    } else {
+        //calculate kfs of pools. Kf is a ratio of new pool amount in lockups to old pool amount in lockups
+        let mut kfs: HashMap<String, Decimal256> = HashMap::new();
+        for pool_type in &pool_types {
+            let pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
+            let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
+            kfs.insert(
+                (*pool_type).into(),
+                Decimal256::from_ratio(
+                    new_pool_info.amount_in_lockups,
+                    pool_info.amount_in_lockups,
+                ),
+            );
+        }
+        attrs.push(attr("users_count", users.len().to_string()));
+        for user in users {
+            for pool_type in &pool_types {
+                let mut total_lokups = Uint128::zero();
+                let lookup_infos: Vec<(u64, LockupInfoV2)> = LOCKUP_INFO
+                    .prefix((*pool_type, &user))
+                    .range(deps.storage, None, None, Order::Ascending)
+                    .collect::<Result<Vec<(u64, LockupInfoV2)>, StdError>>()?;
+                for (duration, mut lockup_info) in lookup_infos {
+                    let info = query_lockup_info(
+                        deps.as_ref(),
+                        &env.clone(),
+                        user.as_ref(),
+                        *pool_type,
+                        duration,
+                    )?;
+                    let p: String = (*pool_type).into();
+                    let kf = kfs
+                        .get(&p)
+                        .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
+                    // update user's lockup positions
+                    lockup_info.generator_proxy_debt = info.generator_proxy_debt;
+                    lockup_info.lp_units_locked =
+                        (*kf).checked_mul_uint256(lockup_info.lp_units_locked.into())?;
+                    LOCKUP_INFO.save(deps.storage, (*pool_type, &user, duration), &lockup_info)?;
+                    total_lokups += lockup_info.lp_units_locked;
+                }
+                // update user's total lockup amount
+                TOTAL_USER_LOCKUP_AMOUNT.update(
+                    deps.storage,
+                    (*pool_type, &user),
+                    env.block.height,
+                    |lockup_amount| -> StdResult<Uint128> {
+                        if let Some(la) = lockup_amount {
+                            Ok(la.checked_add(total_lokups)?)
+                        } else {
+                            Ok(total_lokups)
+                        }
+                    },
+                )?;
+            }
+        }
+        MIGRATION_USERS_COUNTER.save(deps.storage, &(current_skip + limit as u32))?;
     }
+    Ok(Response::default().add_attributes(attrs))
 }
 
 /// Admin function to update Configuration parameters. Returns a default object of type [`Response`].
