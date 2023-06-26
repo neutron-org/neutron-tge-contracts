@@ -812,6 +812,18 @@ fn migrate_users(
         .skip(current_skip as usize)
         .take(limit as usize)
         .collect::<Result<Vec<_>, _>>()?;
+
+    //calculate kfs of pools. Kf is a ratio of new pool amount in lockups to old pool amount in lockups
+    let mut kfs: HashMap<String, Decimal> = HashMap::new();
+    for pool_type in &pool_types {
+        let pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
+        let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
+        kfs.insert(
+            (*pool_type).into(),
+            Decimal::from_ratio(new_pool_info.amount_in_lockups, pool_info.amount_in_lockups),
+        );
+    }
+
     if users.is_empty() {
         //if no users left, finish migration and update pool numbers and token addresses
         for pool_type in &pool_types {
@@ -819,24 +831,16 @@ fn migrate_users(
             let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
             pool_info.amount_in_lockups = new_pool_info.amount_in_lockups;
             pool_info.lp_token = new_pool_info.lp_token;
+            let p: String = (*pool_type).into();
+            let kf = kfs
+                .get(&p)
+                .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
+            pool_info.generator_ntrn_per_share *= kf;
             ASSET_POOLS.save(deps.storage, *pool_type, &pool_info, env.block.height)?;
         }
         MIGRATION_STATUS.save(deps.storage, &MigrationState::Completed)?;
         attrs.push(attr("migration_completed", "true"));
     } else {
-        //calculate kfs of pools. Kf is a ratio of new pool amount in lockups to old pool amount in lockups
-        let mut kfs: HashMap<String, Decimal256> = HashMap::new();
-        for pool_type in &pool_types {
-            let pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
-            let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
-            kfs.insert(
-                (*pool_type).into(),
-                Decimal256::from_ratio(
-                    new_pool_info.amount_in_lockups,
-                    pool_info.amount_in_lockups,
-                ),
-            );
-        }
         attrs.push(attr("users_count", users.len().to_string()));
         for user in users {
             for pool_type in &pool_types {
@@ -852,7 +856,7 @@ fn migrate_users(
                         .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
                     // update user's lockup positions
                     lockup_info.lp_units_locked =
-                        (*kf).checked_mul_uint256(lockup_info.lp_units_locked.into())?;
+                        (*kf).checked_mul_uint128(lockup_info.lp_units_locked)?;
                     LOCKUP_INFO.save(deps.storage, (*pool_type, &user, duration), &lockup_info)?;
                     total_lokups += lockup_info.lp_units_locked;
                 }
