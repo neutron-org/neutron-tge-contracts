@@ -1,6 +1,6 @@
 use astroport::asset::AssetInfo;
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Order, Uint128};
+use cosmwasm_std::{Addr, Decimal, Order, Uint128};
 
 /// This structure stores the main parameters for the generator vesting contract.
 #[cw_serde]
@@ -86,6 +86,29 @@ pub struct VestingAccountResponse {
 pub struct VestingAccountsResponse {
     /// A list of accounts that are vesting tokens
     pub vesting_accounts: Vec<VestingAccountResponse>,
+}
+
+/// Config for xyk->CL liquidity migration.
+#[cw_serde]
+pub struct XykToClMigrationConfig {
+    /// The maximum allowed slippage tolerance for xyk to CL liquidity migration calls.
+    pub max_slippage: Decimal,
+    pub ntrn_denom: String,
+    pub xyk_pair: Addr,
+    pub paired_denom: String,
+    pub cl_pair: Addr,
+    pub new_lp_token: Addr,
+    pub last_processed_user: Option<Addr>,
+    pub batch_size: u32,
+    pub generator_address: Addr,
+}
+
+#[cw_serde]
+pub enum MigrationState {
+    /// Migration is started
+    Started,
+
+    Completed,
 }
 
 /// This enum describes the types of sorting that can be applied to some piece of data

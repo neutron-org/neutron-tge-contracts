@@ -1,6 +1,8 @@
-use crate::types::{Config, OrderBy, VestingInfo, VestingState};
+use crate::types::{
+    Config, MigrationState, OrderBy, VestingInfo, VestingState, XykToClMigrationConfig,
+};
 use astroport::common::OwnershipProposal;
-use cosmwasm_std::{Addr, Decimal, Deps, StdResult};
+use cosmwasm_std::{Addr, Deps, StdResult};
 use cw_storage_plus::{Bound, Item, Map, SnapshotItem, SnapshotMap, Strategy};
 
 pub(crate) const CONFIG: Item<Config> = Item::new("config");
@@ -169,26 +171,3 @@ mod testing {
 
 pub const XYK_TO_CL_MIGRATION_CONFIG: Item<XykToClMigrationConfig> =
     Item::new("xyk_to_cl_migration_config");
-
-/// Config for xyk->CL liquidity migration.
-#[cw_serde]
-pub struct XykToClMigrationConfig {
-    /// The maximum allowed slippage tolerance for xyk to CL liquidity migration calls.
-    pub max_slippage: Decimal,
-    pub ntrn_denom: String,
-    pub xyk_pair: Addr,
-    pub paired_denom: String,
-    pub cl_pair: Addr,
-    pub new_lp_token: Addr,
-    pub last_processed_user: Option<Addr>,
-    pub batch_size: u32,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
-pub enum MigrationState {
-    #[default]
-    /// Migration is started
-    Started,
-
-    Completed,
-}

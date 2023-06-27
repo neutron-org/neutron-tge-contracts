@@ -1,7 +1,9 @@
-use crate::types::{Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo, VestingState};
+use crate::types::{
+    Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingState,
+};
 use astroport::asset::AssetInfo;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{Addr, Binary, CosmosMsg, Decimal, Env, StdResult, to_binary, Uint128, WasmMsg};
+use cosmwasm_std::{to_binary, Addr, Binary, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg};
 use cw20::Cw20ReceiveMsg;
 
 /// This structure describes the execute messages available in a vesting contract.
@@ -51,7 +53,6 @@ pub enum ExecuteMsg {
     MigrateLiquidity {},
     /// Callbacks; only callable by the contract itself.
     Callback(CallbackMsg),
-
 }
 
 /// This structure describes the execute messages available in a managed vesting contract.
@@ -160,6 +161,7 @@ pub struct MigrateMsg {
     pub cl_pair: String,
     pub new_lp_token: String,
     pub batch_size: u32,
+    pub generator_address: String,
 }
 /// This structure describes a CW20 hook message.
 #[cw_serde]
@@ -179,7 +181,7 @@ pub enum CallbackMsg {
         cl_pair: Addr,
         ntrn_denom: String,
         paired_asset_denom: String,
-        user: VestingAccountResponse
+        user: VestingAccountResponse,
     },
     ProvideLiquidityToClPairAfterWithdrawal {
         ntrn_denom: String,
@@ -188,10 +190,10 @@ pub enum CallbackMsg {
         paired_asset_init_balance: Uint128,
         cl_pair: Addr,
         slippage_tolerance: Decimal,
-        user: VestingAccountResponse
+        user: VestingAccountResponse,
     },
     PostMigrationVestingReschedule {
-        user: VestingAccountResponse
+        user: VestingAccountResponse,
     },
 }
 
@@ -206,17 +208,3 @@ impl CallbackMsg {
         }))
     }
 }
-
-/// Config for xyk->CL liquidity migration.
-#[cw_serde]
-pub struct XykToClMigrationConfig {
-    /// The maximum allowed slippage tolerance for xyk to CL liquidity migration calls.
-    pub max_slippage: Decimal,
-    pub ntrn_denom: String,
-    pub xyk_pair: Addr,
-    pub cl_pair: Addr,
-    pub paired_denom: String,
-}
-
-
-

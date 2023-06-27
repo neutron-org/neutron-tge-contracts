@@ -33,7 +33,7 @@ pub enum ContractError {
     MigrationIncomplete {},
 
     #[error(
-    "Amount to be migrated is greater that the max available amount: {amount} > {max_amount}"
+        "Amount to be migrated is greater that the max available amount: {amount} > {max_amount}"
     )]
     MigrationAmountUnavailable {
         amount: Uint128,
@@ -47,6 +47,9 @@ pub enum ContractError {
         slippage_tolerance: Decimal,
         max_slippage_tolerance: Decimal,
     },
+
+    #[error("Migration is complete")]
+    MigrationComplete {},
 }
 
 impl From<OverflowError> for ContractError {
