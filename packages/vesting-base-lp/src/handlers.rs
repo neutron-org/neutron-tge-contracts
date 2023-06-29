@@ -740,7 +740,7 @@ fn query_vesting_available_amount(deps: Deps, env: Env, address: String) -> StdR
 
 /// Manages contract migration.
 pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
-    let config = CONFIG.load(deps.storage)?;
+    let mut config = CONFIG.load(deps.storage)?;
     XYK_TO_CL_MIGRATION_CONFIG.save(
         deps.storage,
         &XykToClMigrationConfig {
@@ -755,6 +755,11 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
             generator_address: deps.api.addr_validate(msg.generator_address.as_str())?,
         },
     )?;
+    config.vesting_token = Some(AssetInfo::Token {
+        contract_addr: deps.api.addr_validate(msg.new_lp_token.as_str())?,
+    });
+
+    CONFIG.save(deps.storage, &config)?;
 
     let state = vesting_state(config.extensions.historical).load(deps.storage)?;
     VESTING_STATE_OLD.save(deps.storage, &state, env.block.height)?;
