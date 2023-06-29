@@ -18,9 +18,8 @@ cw2 = { version = "0.15" }
 cw20 = { version = "0.15" }
 cosmwasm-std = { version = "1.1" }
 cw-storage-plus = "0.15"
-astroport = { path = "../astroport", default-features = false }
 thiserror = { version = "1.0" }
 cw-utils = "0.15"
 cosmwasm-schema = { version = "1.1", default-features = false  }
 vesting-base = {path = "../vesting-base"}
-astroport-periphery = { path = "../astroport_periphery" }
+astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v2.5.0" }

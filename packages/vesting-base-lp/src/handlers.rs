@@ -72,18 +72,18 @@ pub fn execute(
                 owner,
                 expires_in,
                 config.owner,
-                &OWNERSHIP_PROPOSAL,
+                OWNERSHIP_PROPOSAL,
             )
             .map_err(Into::into)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, &OWNERSHIP_PROPOSAL)
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
                 .map_err(Into::into)
         }
         ExecuteMsg::ClaimOwnership {} => {
-            claim_ownership(deps, info, env, &OWNERSHIP_PROPOSAL, |deps, new_owner| {
+            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
                 CONFIG.update::<_, StdError>(deps.storage, |mut v| {
                     v.owner = new_owner;
                     Ok(v)
@@ -597,7 +597,7 @@ fn post_migration_vesting_reschedule_callback(
             amount: balance_diff,
         })
     } else {
-        new_end_point = Option::None
+        new_end_point = None
     }
 
     let new_schedule = VestingSchedule {
@@ -629,6 +629,10 @@ fn post_migration_vesting_reschedule_callback(
             Ok(state)
         },
     )?;
+
+    let mut old_state = VESTING_STATE_OLD.load(deps.storage)?;
+    old_state.total_granted = old_state.total_granted.checked_sub(balance_diff)?;
+    VESTING_STATE_OLD.save(deps.storage, &state)?;
 
     migration_config.last_processed_user = Some(user.address.clone());
     XYK_TO_CL_MIGRATION_CONFIG.save(deps.storage, &migration_config)?;
@@ -756,7 +760,7 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
     CONFIG.save(deps.storage, &config)?;
 
     let state = vesting_state(config.extensions.historical).load(deps.storage)?;
-    VESTING_STATE_OLD.save(deps.storage, &state, env.block.height)?;
+    VESTING_STATE_OLD.save(deps.storage, &state)?;
     vesting_state(config.extensions.historical).update::<_, ContractError>(
         deps.storage,
         env.block.height,
