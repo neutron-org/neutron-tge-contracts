@@ -320,13 +320,13 @@ fn execute_migrate_liquidity(
     }
     let mut resp = Response::default();
 
-    for user in vesting_accounts.into_iter() {
-        // get pairs LP token addresses
-        let pair_info: PairInfo = deps
-            .querier
-            .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
+    // get pairs LP token addresses
+    let pair_info: PairInfo = deps
+        .querier
+        .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
 
-        // query max available amounts to be withdrawn from both pairs
+    for user in vesting_accounts.into_iter() {
+        // query max available amounts to be withdrawn from pool
         let max_available_amount = {
             let resp: BalanceResponse = deps.querier.query_wasm_smart(
                 pair_info.liquidity_token.clone(),
@@ -339,16 +339,6 @@ fn execute_migrate_liquidity(
         if max_available_amount.is_zero() {
             return Err(ContractError::MigrationComplete {});
         }
-
-        // // validate parameters to the max available values
-        // if let Some(amount) = ntrn_atom_amount {
-        //     if amount.gt(&max_available_amount) {
-        //         return Err(ContractError::MigrationAmountUnavailable {
-        //             amount,
-        //             max_amount: max_available_amount,
-        //         });
-        //     }
-        // }
 
         if let Some(slippage_tolerance) = slippage_tolerance {
             if slippage_tolerance.gt(&migration_config.max_slippage) {
@@ -364,12 +354,12 @@ fn execute_migrate_liquidity(
         if !max_available_amount.is_zero() {
             resp = resp.add_message(
                 CallbackMsg::MigrateLiquidityToClPair {
-                    ntrn_denom: migration_config.ntrn_denom.clone(),
+                    xyk_pair: migration_config.xyk_pair.clone(),
+                    xyk_lp_token: pair_info.liquidity_token.clone(),
                     amount: max_available_amount,
                     slippage_tolerance,
-                    xyk_pair: migration_config.xyk_pair.clone(),
-                    xyk_lp_token: pair_info.liquidity_token,
                     cl_pair: migration_config.cl_pair.clone(),
+                    ntrn_denom: migration_config.ntrn_denom.clone(),
                     paired_asset_denom: migration_config.paired_denom.clone(),
                     user,
                 }
@@ -418,7 +408,7 @@ fn _handle_callback(
             ntrn_init_balance,
             paired_asset_denom,
             paired_asset_init_balance,
-            cl_pair: cl_pair_address,
+            cl_pair,
             slippage_tolerance,
             user,
         } => provide_liquidity_to_cl_pair_after_withdrawal_callback(
@@ -428,7 +418,7 @@ fn _handle_callback(
             ntrn_init_balance,
             paired_asset_denom,
             paired_asset_init_balance,
-            cl_pair_address,
+            cl_pair,
             slippage_tolerance,
             user,
         ),
@@ -586,7 +576,8 @@ fn post_migration_vesting_reschedule_callback(
     user: &VestingAccountResponse,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
+    let mut migration_config: XykToClMigrationConfig =
+        XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
     let balance_response: BalanceResponse = deps.querier.query_wasm_smart(
         &migration_config.new_lp_token,
         &Cw20QueryMsg::Balance {
@@ -638,6 +629,9 @@ fn post_migration_vesting_reschedule_callback(
             Ok(state)
         },
     )?;
+
+    migration_config.last_processed_user = Some(user.address.clone());
+    XYK_TO_CL_MIGRATION_CONFIG.save(deps.storage, &migration_config)?;
 
     Ok(Response::default())
 }
