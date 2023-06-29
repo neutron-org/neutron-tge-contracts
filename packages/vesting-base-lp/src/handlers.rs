@@ -459,18 +459,22 @@ fn migrate_liquidity_to_cl_pair_callback(
     let user_share = compute_share(&user.info, &state)?;
     let user_rewards_share = reward_amount.to_decimal().checked_mul(user_share)?;
     let user_amount = amount.to_decimal().checked_mul(user_share)?;
+    let mut msgs: Vec<CosmosMsg> = vec![];
+    // push message to withdraw liquidity from the xyk pair
+    // push the next migration step as a callback message
 
-    let msgs: Vec<CosmosMsg> = vec![
-        CosmosMsg::Wasm(WasmMsg::Execute {
+    if !user_rewards_share.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: generator,
             funds: vec![],
             msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
                 lp_token: xyk_lp_token.to_string(),
                 amount: user_rewards_share.to_uint_floor(),
             })?,
-        }),
-        // push message to withdraw liquidity from the xyk pair
-        CosmosMsg::Wasm(WasmMsg::Execute {
+        }))
+    }
+    if !user_amount.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: xyk_lp_token.to_string(),
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: xyk_pair.to_string(),
@@ -478,8 +482,10 @@ fn migrate_liquidity_to_cl_pair_callback(
                 msg: to_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
             })?,
             funds: vec![],
-        }),
-        // push the next migration step as a callback message
+        }))
+    }
+
+    msgs.push(
         CallbackMsg::ProvideLiquidityToClPairAfterWithdrawal {
             ntrn_denom,
             ntrn_init_balance,
@@ -490,7 +496,7 @@ fn migrate_liquidity_to_cl_pair_callback(
             user,
         }
         .to_cosmos_msg(&env)?,
-    ];
+    );
 
     Ok(Response::default().add_messages(msgs))
 }
@@ -521,9 +527,10 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     let withdrawn_paired_asset_amount =
         paired_asset_balance_after_withdrawal.checked_sub(paired_asset_init_balance)?;
 
-    let msgs: Vec<CosmosMsg> = vec![
-        // push message to provide liquidity to the CL pair
-        CosmosMsg::Wasm(WasmMsg::Execute {
+    let mut msgs: Vec<CosmosMsg> = vec![];
+
+    if !withdrawn_ntrn_amount.is_zero() && !withdrawn_paired_asset_amount.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: cl_pair_address.to_string(),
             msg: to_binary(&PairExecuteMsg::ProvideLiquidity {
                 assets: vec![
@@ -538,10 +545,10 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
                 Coin::new(withdrawn_ntrn_amount.into(), ntrn_denom),
                 Coin::new(withdrawn_paired_asset_amount.into(), paired_asset_denom),
             ],
-        }),
-        // push the next migration step as a callback message
-        CallbackMsg::PostMigrationVestingReschedule { user }.to_cosmos_msg(&env)?,
-    ];
+        }))
+    }
+
+    msgs.push(CallbackMsg::PostMigrationVestingReschedule { user }.to_cosmos_msg(&env)?);
 
     Ok(Response::default().add_messages(msgs))
 }
@@ -843,14 +850,15 @@ fn compute_available_amount(current_time: u64, vesting_info: &VestingInfo) -> St
 }
 
 fn compute_share(vesting_info: &VestingInfo, state: &VestingState) -> StdResult<Decimal> {
-    let mut available_amount: Decimal = Decimal::zero();
+    if state.total_granted.is_zero() {
+        return Ok(Decimal::zero());
+    }
+    let mut available_amount: Uint128 = Uint128::zero();
     for sch in &vesting_info.schedules {
         if let Some(end_point) = &sch.end_point {
-            available_amount = available_amount.checked_add(Decimal::new(end_point.amount))?
+            available_amount = available_amount.checked_add(end_point.amount)?
         }
     }
 
-    Ok(available_amount
-        .checked_div(Decimal::new(state.total_granted))
-        .unwrap())
+    Ok(Decimal::from_ratio(available_amount, state.total_granted))
 }
