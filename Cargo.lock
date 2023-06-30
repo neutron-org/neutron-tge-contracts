@@ -60,6 +60,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "astroport"
+version = "2.8.0"
+source = "git+https://github.com/astroport-fi/astroport-core.git?tag=v2.8.0#3b44a4044b823a145730f66ffaf7ae4205b2cd35"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus 0.15.1",
+ "cw-utils 0.15.1",
+ "cw20 0.15.1",
+ "itertools",
+ "uint",
+]
+
+[[package]]
 name = "astroport-factory"
 version = "1.5.0"
 source = "git+https://github.com/astroport-fi/astroport-core.git?rev=65ce7d1879cc5d95b09fa14202f0423bba52ae0e#65ce7d1879cc5d95b09fa14202f0423bba52ae0e"
@@ -145,7 +159,7 @@ dependencies = [
 name = "astroport-periphery"
 version = "1.1.0"
 dependencies = [
- "astroport 2.5.0 (git+https://github.com/astroport-fi/astroport-core.git?tag=v2.5.0)",
+ "astroport 2.8.0",
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-storage-plus 0.15.1",
@@ -1003,7 +1017,7 @@ dependencies = [
 name = "neutron-lockdrop"
 version = "1.2.1"
 dependencies = [
- "astroport 2.5.0 (git+https://github.com/astroport-fi/astroport-core.git?tag=v2.5.0)",
+ "astroport 2.8.0",
  "astroport-periphery",
  "cosmwasm-schema",
  "cosmwasm-std",

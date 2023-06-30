@@ -1839,7 +1839,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
 
         // If claimable proxy staking rewards > 0, claim them
         for pending_proxy_reward in pending_proxy_rewards {
-            cosmos_msgs.push(pending_proxy_reward.into_msg(&deps.querier, user_address.clone())?);
+            cosmos_msgs.push(pending_proxy_reward.into_msg(user_address.clone())?);
         }
 
         //  COSMOSMSG :: If LP Tokens are staked, we unstake the amount which needs to be returned to the user
