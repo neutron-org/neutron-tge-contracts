@@ -161,7 +161,6 @@ pub struct MigrateMsg {
     pub cl_pair: String,
     pub new_lp_token: String,
     pub batch_size: u32,
-    pub generator_address: String,
 }
 /// This structure describes a CW20 hook message.
 #[cw_serde]
@@ -190,9 +189,11 @@ pub enum CallbackMsg {
         paired_asset_init_balance: Uint128,
         cl_pair: Addr,
         slippage_tolerance: Decimal,
+        withdrawn_amount: Uint128,
         user: VestingAccountResponse,
     },
     PostMigrationVestingReschedule {
+        withdrawn_amount: Uint128,
         user: VestingAccountResponse,
     },
 }

@@ -18,8 +18,6 @@ use astroport::asset::{
 };
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::cosmwasm_ext::IntegerToDecimal;
-use astroport::generator::QueryMsg as GenQueryMsg;
-use astroport::generator::RewardInfoResponse;
 use astroport::pair::{
     Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
 };
@@ -238,10 +236,9 @@ fn claim(
     let mut response = Response::new();
 
     if !claim_amount.is_zero() {
-        let transfer_msg = vesting_token.with_balance(claim_amount).into_msg(
-            &deps.querier,
-            recipient.unwrap_or_else(|| info.sender.to_string()),
-        )?;
+        let transfer_msg = vesting_token
+            .with_balance(claim_amount)
+            .into_msg(recipient.unwrap_or_else(|| info.sender.to_string()))?;
         response = response.add_submessage(SubMsg::new(transfer_msg));
 
         sender_vesting_info.released_amount = sender_vesting_info
@@ -325,20 +322,25 @@ fn execute_migrate_liquidity(
         .querier
         .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
 
+    let state = VESTING_STATE_OLD.load(deps.storage)?;
+    // query max available amounts to be withdrawn from pool
+    let max_available_amount = {
+        let resp: BalanceResponse = deps.querier.query_wasm_smart(
+            pair_info.liquidity_token.clone(),
+            &Cw20QueryMsg::Balance {
+                address: env.contract.address.to_string(),
+            },
+        )?;
+        resp.balance
+    };
+
     for user in vesting_accounts.into_iter() {
-        // query max available amounts to be withdrawn from pool
-        let max_available_amount = {
-            let resp: BalanceResponse = deps.querier.query_wasm_smart(
-                pair_info.liquidity_token.clone(),
-                &Cw20QueryMsg::Balance {
-                    address: env.contract.address.to_string(),
-                },
-            )?;
-            resp.balance
-        };
         if max_available_amount.is_zero() {
-            return Err(ContractError::MigrationComplete {});
+            return Ok(resp);
         }
+
+        let user_share = compute_share(&user.info, &state)?;
+        let user_amount = max_available_amount.to_decimal().checked_mul(user_share)?;
 
         if let Some(slippage_tolerance) = slippage_tolerance {
             if slippage_tolerance.gt(&migration_config.max_slippage) {
@@ -356,7 +358,7 @@ fn execute_migrate_liquidity(
                 CallbackMsg::MigrateLiquidityToClPair {
                     xyk_pair: migration_config.xyk_pair.clone(),
                     xyk_lp_token: pair_info.liquidity_token.clone(),
-                    amount: max_available_amount,
+                    amount: user_amount.to_uint_floor(),
                     slippage_tolerance,
                     cl_pair: migration_config.cl_pair.clone(),
                     ntrn_denom: migration_config.ntrn_denom.clone(),
@@ -410,6 +412,7 @@ fn _handle_callback(
             paired_asset_init_balance,
             cl_pair,
             slippage_tolerance,
+            withdrawn_amount,
             user,
         } => provide_liquidity_to_cl_pair_after_withdrawal_callback(
             deps,
@@ -420,11 +423,13 @@ fn _handle_callback(
             paired_asset_init_balance,
             cl_pair,
             slippage_tolerance,
+            withdrawn_amount,
             user,
         ),
-        CallbackMsg::PostMigrationVestingReschedule { user } => {
-            post_migration_vesting_reschedule_callback(deps, env, &user)
-        }
+        CallbackMsg::PostMigrationVestingReschedule {
+            withdrawn_amount,
+            user,
+        } => post_migration_vesting_reschedule_callback(deps, env, withdrawn_amount, &user),
     }
 }
 
@@ -450,41 +455,21 @@ fn migrate_liquidity_to_cl_pair_callback(
         .query_balance(env.contract.address.to_string(), paired_asset_denom.clone())?
         .amount;
 
-    let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
-    let generator = migration_config.generator_address.to_string();
-    let reward_amount =
-        get_reward_amount(deps.as_ref(), &env, &xyk_lp_token.to_string(), &generator)?;
-
-    let state = VESTING_STATE_OLD.load(deps.storage)?;
-    let user_share = compute_share(&user.info, &state)?;
-    let user_rewards_share = reward_amount.to_decimal().checked_mul(user_share)?;
-    let user_amount = amount.to_decimal().checked_mul(user_share)?;
     let mut msgs: Vec<CosmosMsg> = vec![];
-    // push message to withdraw liquidity from the xyk pair
-    // push the next migration step as a callback message
 
-    if !user_rewards_share.is_zero() {
-        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: generator,
-            funds: vec![],
-            msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
-                lp_token: xyk_lp_token.to_string(),
-                amount: user_rewards_share.to_uint_floor(),
-            })?,
-        }))
-    }
-    if !user_amount.is_zero() {
+    // push message to withdraw liquidity from the xyk pair
+    if !amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: xyk_lp_token.to_string(),
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: xyk_pair.to_string(),
-                amount: user_amount.to_uint_floor(),
+                amount,
                 msg: to_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
             })?,
             funds: vec![],
         }))
     }
-
+    // push the next migration step as a callback message
     msgs.push(
         CallbackMsg::ProvideLiquidityToClPairAfterWithdrawal {
             ntrn_denom,
@@ -493,6 +478,7 @@ fn migrate_liquidity_to_cl_pair_callback(
             paired_asset_init_balance,
             cl_pair,
             slippage_tolerance,
+            withdrawn_amount: amount,
             user,
         }
         .to_cosmos_msg(&env)?,
@@ -511,6 +497,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     paired_asset_init_balance: Uint128,
     cl_pair_address: Addr,
     slippage_tolerance: Decimal,
+    withdrawn_amount: Uint128,
     user: VestingAccountResponse,
 ) -> Result<Response, ContractError> {
     let ntrn_balance_after_withdrawal = deps
@@ -548,38 +535,21 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
         }))
     }
 
-    msgs.push(CallbackMsg::PostMigrationVestingReschedule { user }.to_cosmos_msg(&env)?);
+    msgs.push(
+        CallbackMsg::PostMigrationVestingReschedule {
+            withdrawn_amount,
+            user,
+        }
+        .to_cosmos_msg(&env)?,
+    );
 
     Ok(Response::default().add_messages(msgs))
-}
-
-fn get_reward_amount(
-    deps: Deps,
-    env: &Env,
-    astroport_lp_token: &String,
-    generator: &String,
-) -> StdResult<Uint128> {
-    let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
-        generator,
-        &GenQueryMsg::RewardInfo {
-            lp_token: astroport_lp_token.to_string(),
-        },
-    )?;
-
-    let reward_token_balance = deps
-        .querier
-        .query_balance(
-            env.contract.address.clone(),
-            rwi.base_reward_token.to_string(),
-        )?
-        .amount;
-
-    Ok(reward_token_balance)
 }
 
 fn post_migration_vesting_reschedule_callback(
     deps: DepsMut,
     env: Env,
+    withdrawn_amount: Uint128,
     user: &VestingAccountResponse,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
@@ -591,9 +561,14 @@ fn post_migration_vesting_reschedule_callback(
             address: env.contract.address.to_string(),
         },
     )?;
-    let current_balance = balance_response.balance;
     let state = vesting_state(config.extensions.historical).load(deps.storage)?;
-    let balance_diff = current_balance.checked_sub(state.total_granted)?;
+    let current_balance = balance_response.balance;
+
+    let balance_diff: Uint128 = if !current_balance.is_zero() {
+        current_balance.checked_sub(state.total_granted)?
+    } else {
+        Uint128::zero()
+    };
 
     let schedule = user.info.schedules.last().unwrap();
 
@@ -638,7 +613,7 @@ fn post_migration_vesting_reschedule_callback(
     )?;
 
     let mut old_state = VESTING_STATE_OLD.load(deps.storage)?;
-    old_state.total_granted = old_state.total_granted.checked_sub(balance_diff)?;
+    old_state.total_granted = old_state.total_granted.checked_sub(withdrawn_amount)?;
     VESTING_STATE_OLD.save(deps.storage, &state)?;
 
     migration_config.last_processed_user = Some(user.address.clone());
@@ -757,7 +732,6 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
             batch_size: msg.batch_size,
             last_processed_user: None,
             new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
-            generator_address: deps.api.addr_validate(msg.generator_address.as_str())?,
         },
     )?;
     config.vesting_token = Some(AssetInfo::Token {
@@ -856,9 +830,14 @@ fn compute_share(vesting_info: &VestingInfo, state: &VestingState) -> StdResult<
     let mut available_amount: Uint128 = Uint128::zero();
     for sch in &vesting_info.schedules {
         if let Some(end_point) = &sch.end_point {
-            available_amount = available_amount.checked_add(end_point.amount)?
+            available_amount = available_amount
+                .checked_add(end_point.amount)?
+                .checked_sub(sch.start_point.amount)?
         }
     }
 
-    Ok(Decimal::from_ratio(available_amount, state.total_granted))
+    Ok(Decimal::from_ratio(
+        available_amount.checked_sub(vesting_info.released_amount)?,
+        state.total_granted,
+    ))
 }

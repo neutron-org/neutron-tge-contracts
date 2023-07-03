@@ -100,7 +100,6 @@ pub struct XykToClMigrationConfig {
     pub new_lp_token: Addr,
     pub last_processed_user: Option<Addr>,
     pub batch_size: u32,
-    pub generator_address: Addr,
 }
 
 #[cw_serde]
