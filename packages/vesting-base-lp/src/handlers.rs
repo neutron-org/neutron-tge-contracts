@@ -4,8 +4,7 @@ use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
 use crate::ext_with_managers::{handle_execute_with_managers_msg, handle_query_managers_msg};
 use crate::msg::{CallbackMsg, Cw20HookMsg, ExecuteMsg, MigrateMsg, QueryMsg};
 use crate::state::{
-    read_vesting_infos, vesting_info, vesting_state, MIGRATION_STATUS, VESTING_STATE_OLD,
-    XYK_TO_CL_MIGRATION_CONFIG,
+    read_vesting_infos, vesting_info, vesting_state, MIGRATION_STATUS, XYK_TO_CL_MIGRATION_CONFIG,
 };
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS};
 use crate::types::{
@@ -409,7 +408,6 @@ fn _handle_callback(
             paired_asset_init_balance,
             cl_pair,
             slippage_tolerance,
-            withdrawn_amount,
             user,
         } => provide_liquidity_to_cl_pair_after_withdrawal_callback(
             deps,
@@ -420,13 +418,11 @@ fn _handle_callback(
             paired_asset_init_balance,
             cl_pair,
             slippage_tolerance,
-            withdrawn_amount,
             user,
         ),
-        CallbackMsg::PostMigrationVestingReschedule {
-            withdrawn_amount,
-            user,
-        } => post_migration_vesting_reschedule_callback(deps, env, withdrawn_amount, &user),
+        CallbackMsg::PostMigrationVestingReschedule { user } => {
+            post_migration_vesting_reschedule_callback(deps, env, &user)
+        }
     }
 }
 
@@ -475,7 +471,6 @@ fn migrate_liquidity_to_cl_pair_callback(
             paired_asset_init_balance,
             cl_pair,
             slippage_tolerance,
-            withdrawn_amount: amount,
             user,
         }
         .to_cosmos_msg(&env)?,
@@ -494,7 +489,6 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     paired_asset_init_balance: Uint128,
     cl_pair_address: Addr,
     slippage_tolerance: Decimal,
-    withdrawn_amount: Uint128,
     user: VestingAccountResponse,
 ) -> Result<Response, ContractError> {
     let ntrn_balance_after_withdrawal = deps
@@ -532,13 +526,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
         }))
     }
 
-    msgs.push(
-        CallbackMsg::PostMigrationVestingReschedule {
-            withdrawn_amount,
-            user,
-        }
-        .to_cosmos_msg(&env)?,
-    );
+    msgs.push(CallbackMsg::PostMigrationVestingReschedule { user }.to_cosmos_msg(&env)?);
 
     Ok(Response::default().add_messages(msgs))
 }
@@ -546,7 +534,6 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
 fn post_migration_vesting_reschedule_callback(
     deps: DepsMut,
     env: Env,
-    withdrawn_amount: Uint128,
     user: &VestingAccountResponse,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
@@ -608,10 +595,6 @@ fn post_migration_vesting_reschedule_callback(
             Ok(state)
         },
     )?;
-
-    let mut old_state = VESTING_STATE_OLD.load(deps.storage)?;
-    old_state.total_granted = old_state.total_granted.checked_sub(withdrawn_amount)?;
-    VESTING_STATE_OLD.save(deps.storage, &state)?;
 
     migration_config.last_processed_user = Some(user.address.clone());
     XYK_TO_CL_MIGRATION_CONFIG.save(deps.storage, &migration_config)?;
@@ -737,8 +720,6 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
 
     CONFIG.save(deps.storage, &config)?;
 
-    let state = vesting_state(config.extensions.historical).load(deps.storage)?;
-    VESTING_STATE_OLD.save(deps.storage, &state)?;
     vesting_state(config.extensions.historical).update::<_, ContractError>(
         deps.storage,
         env.block.height,

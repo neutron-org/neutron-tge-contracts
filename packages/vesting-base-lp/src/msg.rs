@@ -189,11 +189,9 @@ pub enum CallbackMsg {
         paired_asset_init_balance: Uint128,
         cl_pair: Addr,
         slippage_tolerance: Decimal,
-        withdrawn_amount: Uint128,
         user: VestingAccountResponse,
     },
     PostMigrationVestingReschedule {
-        withdrawn_amount: Uint128,
         user: VestingAccountResponse,
     },
 }
