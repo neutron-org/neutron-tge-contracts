@@ -17,7 +17,6 @@ use astroport::asset::{
     addr_opt_validate, native_asset, token_asset_info, AssetInfo, AssetInfoExt, PairInfo,
 };
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
-use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::pair::{
     Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
 };
@@ -322,7 +321,6 @@ fn execute_migrate_liquidity(
         .querier
         .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
 
-    let state = VESTING_STATE_OLD.load(deps.storage)?;
     // query max available amounts to be withdrawn from pool
     let max_available_amount = {
         let resp: BalanceResponse = deps.querier.query_wasm_smart(
@@ -339,8 +337,7 @@ fn execute_migrate_liquidity(
             return Ok(resp);
         }
 
-        let user_share = compute_share(&user.info, &state)?;
-        let user_amount = max_available_amount.to_decimal().checked_mul(user_share)?;
+        let user_amount = compute_share(&user.info)?;
 
         if let Some(slippage_tolerance) = slippage_tolerance {
             if slippage_tolerance.gt(&migration_config.max_slippage) {
@@ -358,7 +355,7 @@ fn execute_migrate_liquidity(
                 CallbackMsg::MigrateLiquidityToClPair {
                     xyk_pair: migration_config.xyk_pair.clone(),
                     xyk_lp_token: pair_info.liquidity_token.clone(),
-                    amount: user_amount.to_uint_floor(),
+                    amount: user_amount,
                     slippage_tolerance,
                     cl_pair: migration_config.cl_pair.clone(),
                     ntrn_denom: migration_config.ntrn_denom.clone(),
@@ -823,10 +820,7 @@ fn compute_available_amount(current_time: u64, vesting_info: &VestingInfo) -> St
         .map_err(StdError::from)
 }
 
-fn compute_share(vesting_info: &VestingInfo, state: &VestingState) -> StdResult<Decimal> {
-    if state.total_granted.is_zero() {
-        return Ok(Decimal::zero());
-    }
+fn compute_share(vesting_info: &VestingInfo) -> StdResult<Uint128> {
     let mut available_amount: Uint128 = Uint128::zero();
     for sch in &vesting_info.schedules {
         if let Some(end_point) = &sch.end_point {
@@ -836,8 +830,5 @@ fn compute_share(vesting_info: &VestingInfo, state: &VestingState) -> StdResult<
         }
     }
 
-    Ok(Decimal::from_ratio(
-        available_amount.checked_sub(vesting_info.released_amount)?,
-        state.total_granted,
-    ))
+    Ok(available_amount.checked_sub(vesting_info.released_amount)?)
 }

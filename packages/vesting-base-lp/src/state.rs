@@ -10,7 +10,7 @@ pub(crate) const CONFIG: Item<Config> = Item::new("config");
 pub(crate) const MIGRATION_STATUS: Item<MigrationState> = Item::new("migration_status");
 pub(crate) const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
 pub(crate) const VESTING_MANAGERS: Map<Addr, ()> = Map::new("vesting_managers");
-pub(crate) const VESTING_STATE_OLD: Item<VestingState> = Item::new("vesting state old");
+pub(crate) const VESTING_STATE_OLD: Item<VestingState> = Item::new("vesting_state_old");
 pub(crate) const VESTING_STATE: SnapshotItem<VestingState> = SnapshotItem::new(
     "vesting_state",
     "vesting_state__checkpoints",
