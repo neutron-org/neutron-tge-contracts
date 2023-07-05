@@ -1,4 +1,4 @@
-use cosmwasm_std::{Decimal, OverflowError, StdError, Uint128};
+use cosmwasm_std::{Decimal, OverflowError, StdError};
 use cw_utils::PaymentError;
 use thiserror::Error;
 
@@ -31,14 +31,6 @@ pub enum ContractError {
 
     #[error("Contract is in migration state. Please wait for migration to complete.")]
     MigrationIncomplete {},
-
-    #[error(
-        "Amount to be migrated is greater that the max available amount: {amount} > {max_amount}"
-    )]
-    MigrationAmountUnavailable {
-        amount: Uint128,
-        max_amount: Uint128,
-    },
 
     #[error(
     "Provided slippage tolerance {slippage_tolerance} is more than the max allowed {max_slippage_tolerance}"

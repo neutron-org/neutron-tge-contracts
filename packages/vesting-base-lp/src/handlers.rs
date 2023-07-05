@@ -296,6 +296,10 @@ fn execute_migrate_liquidity(
     env: Env,
     slippage_tolerance: Option<Decimal>,
 ) -> Result<Response, ContractError> {
+    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state == MigrationState::Completed {
+        return Err(ContractError::MigrationComplete {});
+    }
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
 
     let vesting_infos = read_vesting_infos(
