@@ -335,11 +335,11 @@ fn execute_migrate_liquidity(
         resp.balance
     };
 
-    for user in vesting_accounts.into_iter() {
-        if max_available_amount.is_zero() {
-            return Ok(resp);
-        }
+    if max_available_amount.is_zero() {
+        return Ok(resp);
+    }
 
+    for user in vesting_accounts.into_iter() {
         let user_amount = compute_share(&user.info)?;
 
         if let Some(slippage_tolerance) = slippage_tolerance {
@@ -353,21 +353,19 @@ fn execute_migrate_liquidity(
 
         let slippage_tolerance = slippage_tolerance.unwrap_or(migration_config.max_slippage);
 
-        if !max_available_amount.is_zero() {
-            resp = resp.add_message(
-                CallbackMsg::MigrateLiquidityToClPair {
-                    xyk_pair: migration_config.xyk_pair.clone(),
-                    xyk_lp_token: pair_info.liquidity_token.clone(),
-                    amount: user_amount,
-                    slippage_tolerance,
-                    cl_pair: migration_config.cl_pair.clone(),
-                    ntrn_denom: migration_config.ntrn_denom.clone(),
-                    paired_asset_denom: migration_config.paired_denom.clone(),
-                    user,
-                }
-                .to_cosmos_msg(&env)?,
-            );
-        }
+        resp = resp.add_message(
+            CallbackMsg::MigrateLiquidityToClPair {
+                xyk_pair: migration_config.xyk_pair.clone(),
+                xyk_lp_token: pair_info.liquidity_token.clone(),
+                amount: user_amount,
+                slippage_tolerance,
+                cl_pair: migration_config.cl_pair.clone(),
+                ntrn_denom: migration_config.ntrn_denom.clone(),
+                paired_asset_denom: migration_config.paired_denom.clone(),
+                user,
+            }
+            .to_cosmos_msg(&env)?,
+        );
     }
 
     Ok(resp)
@@ -809,9 +807,7 @@ fn compute_share(vesting_info: &VestingInfo) -> StdResult<Uint128> {
     let mut available_amount: Uint128 = Uint128::zero();
     for sch in &vesting_info.schedules {
         if let Some(end_point) = &sch.end_point {
-            available_amount = available_amount
-                .checked_add(end_point.amount)?
-                .checked_sub(sch.start_point.amount)?
+            available_amount = available_amount.checked_add(end_point.amount)?
         }
     }
 
