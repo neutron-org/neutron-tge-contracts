@@ -338,6 +338,91 @@ fn expiration() {
 }
 
 #[test]
+fn update_reserve_address() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+    let airdrop_start = env.block.time.minus_seconds(5_000).seconds();
+    let vesting_start = env.block.time.plus_seconds(10_000).seconds();
+    let vesting_duration_seconds = 20_000;
+    let info = mock_info("owner0000", &[]);
+
+    let msg = InstantiateMsg {
+        credits_address: "credits0000".to_string(),
+        reserve_address: "reserve0000".to_string(),
+        merkle_root: "5d4f48f147cb6cb742b376dce5626b2a036f69faec10cd73631c791780e150fc".to_string(),
+        airdrop_start,
+        vesting_start,
+        vesting_duration_seconds,
+        total_amount: None,
+        hrp: None,
+    };
+    let _res = instantiate(deps.as_mut(), env.clone(), info, msg).unwrap();
+
+    // can't claim expired
+    let msg = ExecuteMsg::UpdateReserve {
+        address: "reserve0001".to_string(),
+    };
+
+    let res = execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("regularaddress", &[]),
+        msg.clone(),
+    )
+    .unwrap_err();
+    assert_eq!(res, ContractError::Unauthorized {});
+
+    let res = execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("owner0000", &[]),
+        msg.clone(),
+    )
+    .unwrap();
+    assert_eq!(
+        res.attributes,
+        vec![
+            attr("action", "update_reserve"),
+            attr("address", "reserve0001"),
+        ]
+    );
+
+    // old reserve is unauthorized now
+    let res = execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("reserve0000", &[]),
+        msg,
+    )
+    .unwrap_err();
+    assert_eq!(res, ContractError::Unauthorized {});
+
+    let res = execute(
+        deps.as_mut(),
+        env.clone(),
+        mock_info("reserve0001", &[]),
+        ExecuteMsg::UpdateReserve {
+            address: "reserve0002".to_string(),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        res.attributes,
+        vec![
+            attr("action", "update_reserve"),
+            attr("address", "reserve0002"),
+        ]
+    );
+
+    assert_eq!(
+        from_binary::<ConfigResponse>(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap())
+            .unwrap()
+            .reserve_address,
+        "reserve0002"
+    );
+}
+
+#[test]
 fn withdraw_all() {
     let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
     let mut router = mock_app();
@@ -449,11 +534,24 @@ fn withdraw_all() {
         )
         .unwrap();
     assert_eq!(Uint128::new(10000), response.balance);
-    //withdraw before expiration
+
     let withdraw_msg = ExecuteMsg::WithdrawAll {};
+    //unauthorized
     let err = router
         .execute_contract(
             Addr::unchecked("owner0000".to_string()),
+            merkle_airdrop_addr.clone(),
+            &withdraw_msg,
+            &[],
+        )
+        .unwrap_err()
+        .downcast::<ContractError>()
+        .unwrap();
+    assert_eq!(err, ContractError::Unauthorized {});
+    //withdraw before expiration
+    let err = router
+        .execute_contract(
+            Addr::unchecked("reserve0000".to_string()),
             merkle_airdrop_addr.clone(),
             &withdraw_msg,
             &[],
@@ -480,7 +578,7 @@ fn withdraw_all() {
     let withdraw_all_msg = ExecuteMsg::WithdrawAll {};
     router
         .execute_contract(
-            Addr::unchecked("owner0000".to_string()),
+            Addr::unchecked("reserve0000".to_string()),
             merkle_airdrop_addr.clone(),
             &withdraw_all_msg,
             &[],

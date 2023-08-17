@@ -92,6 +92,7 @@ pub fn execute(
         ExecuteMsg::WithdrawAll {} => execute_withdraw_all(deps, env, info),
         ExecuteMsg::Pause {} => execute_pause(deps, env, info),
         ExecuteMsg::Resume {} => execute_resume(deps, env, info),
+        ExecuteMsg::UpdateReserve { address } => execute_update_reserve(deps, env, info, address),
     }
 }
 
@@ -197,6 +198,10 @@ pub fn execute_withdraw_all(
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, ContractError> {
+    let cfg = CONFIG.load(deps.storage)?;
+    if info.sender != cfg.reserve_address {
+        return Err(ContractError::Unauthorized {});
+    }
     let vesting_start = VESTING_START.load(deps.storage)?;
     let vesting_duration = VESTING_DURATION.load(deps.storage)?;
     let expiration = vesting_start + vesting_duration;
@@ -218,7 +223,6 @@ pub fn execute_withdraw_all(
 
     // Get the current total balance for the contract and burn it all.
     // By burning, we exchange them for NTRN tokens
-    let cfg = CONFIG.load(deps.storage)?;
     let amount_to_withdraw = deps
         .querier
         .query_wasm_smart::<BalanceResponse>(
@@ -245,11 +249,28 @@ pub fn execute_withdraw_all(
         .add_messages([burn_message, send_message])
         .add_attributes(vec![
             attr("action", "withdraw_all"),
-            attr("address", info.sender),
             attr("amount", amount_to_withdraw),
             attr("recipient", cfg.reserve_address),
         ]);
     Ok(res)
+}
+
+fn execute_update_reserve(
+    deps: DepsMut,
+    _: Env,
+    info: MessageInfo,
+    address: String,
+) -> Result<Response, ContractError> {
+    let mut cfg = CONFIG.load(deps.storage)?;
+    if cfg.owner != info.sender && cfg.reserve_address != info.sender {
+        return Err(ContractError::Unauthorized {});
+    }
+    cfg.reserve_address = deps.api.addr_validate(&address)?;
+    CONFIG.save(deps.storage, &cfg)?;
+    Ok(Response::new().add_attributes(vec![
+        attr("action", "update_reserve"),
+        attr("address", address),
+    ]))
 }
 
 pub fn execute_pause(
