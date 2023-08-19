@@ -42,6 +42,9 @@ pub enum ExecuteMsg {
     WithdrawAll {},
     Pause {},
     Resume {},
+    UpdateReserve {
+        address: String,
+    },
 }
 
 #[cw_serde]
