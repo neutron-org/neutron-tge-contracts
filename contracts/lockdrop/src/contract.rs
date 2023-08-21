@@ -865,13 +865,7 @@ fn migrate_users(
                     deps.storage,
                     (*pool_type, &user),
                     env.block.height,
-                    |lockup_amount| -> StdResult<Uint128> {
-                        if let Some(la) = lockup_amount {
-                            Ok(la.checked_add(total_lokups)?)
-                        } else {
-                            Ok(total_lokups)
-                        }
-                    },
+                    |_lockup_amount| -> StdResult<Uint128> { Ok(total_lokups) },
                 )?;
             }
         }
