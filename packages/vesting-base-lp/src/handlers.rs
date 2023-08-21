@@ -606,6 +606,11 @@ fn post_migration_vesting_reschedule_callback(
 
 /// Exposes all the queries available in the contract.
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state != MigrationState::Completed {
+        Err(ContractError::MigrationIncomplete {})
+    }
+
     match msg {
         QueryMsg::Config {} => Ok(to_binary(&query_config(deps)?)?),
         QueryMsg::VestingAccount { address } => {
