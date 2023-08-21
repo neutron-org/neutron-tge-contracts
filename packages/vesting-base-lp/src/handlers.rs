@@ -608,7 +608,7 @@ fn post_migration_vesting_reschedule_callback(
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
     if migration_state != MigrationState::Completed {
-        Err(ContractError::MigrationIncomplete {})
+        return Err(ContractError::MigrationIncomplete {}.into());
     }
 
     match msg {

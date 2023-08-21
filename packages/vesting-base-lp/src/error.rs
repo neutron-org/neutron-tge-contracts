@@ -44,6 +44,13 @@ pub enum ContractError {
     MigrationComplete {},
 }
 
+#[allow(clippy::from_over_into)]
+impl Into<StdError> for ContractError {
+    fn into(self) -> StdError {
+        StdError::generic_err(self.to_string())
+    }
+}
+
 impl From<OverflowError> for ContractError {
     fn from(o: OverflowError) -> Self {
         StdError::from(o).into()
