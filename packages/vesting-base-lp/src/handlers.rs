@@ -36,7 +36,9 @@ pub fn execute(
     let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
     if migration_state != MigrationState::Completed {
         match msg {
-            ExecuteMsg::MigrateLiquidity {} => {}
+            ExecuteMsg::MigrateLiquidity {
+                slippage_tolerance: _,
+            } => {}
             ExecuteMsg::Callback(..) => {}
             _ => return Err(ContractError::MigrationIncomplete {}),
         }
@@ -99,7 +101,9 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
-        ExecuteMsg::MigrateLiquidity {} => execute_migrate_liquidity(deps, env, None),
+        ExecuteMsg::MigrateLiquidity { slippage_tolerance } => {
+            execute_migrate_liquidity(deps, env, slippage_tolerance)
+        }
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
     }
 }
