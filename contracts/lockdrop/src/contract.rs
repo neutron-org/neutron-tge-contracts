@@ -869,7 +869,7 @@ fn migrate_users(
                 )?;
             }
         }
-        MIGRATION_USERS_COUNTER.save(deps.storage, &(current_skip + limit as u32))?;
+        MIGRATION_USERS_COUNTER.save(deps.storage, &(current_skip + limit))?;
     }
     Ok(Response::default().add_attributes(attrs))
 }
