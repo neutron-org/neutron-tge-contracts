@@ -1,4 +1,5 @@
 use std::cmp::min;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::str::FromStr;
 
@@ -22,13 +23,15 @@ use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
-    LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolType, QueryMsg, State,
-    StateResponse, UpdateConfigMsg, UserInfoResponse, UserInfoWithListResponse,
+    LockUpInfoSummary, LockupInfoV2, MigrateExecuteMsg, MigrateMsg, MigrationState, PoolInfo,
+    PoolInfoV2, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg, UserInfoResponse,
+    UserInfoWithListResponse,
 };
 
 use crate::state::{
-    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE,
-    TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
+    CompatibleLoader, ASSET_POOLS, ASSET_POOLS_V2, CONFIG, LOCKUP_INFO, MIGRATION_MAX_SLIPPAGE,
+    MIGRATION_STATUS, MIGRATION_USERS_COUNTER, MIGRATION_USERS_DEFAULT_LIMIT, OWNERSHIP_PROPOSAL,
+    STATE, TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
 
 const AIRDROP_REWARDS_MULTIPLIER: &str = "1.0";
@@ -151,6 +154,18 @@ pub fn instantiate(
 /// * **ExecuteMsg::ClaimOwnership {}** Claims contract ownership.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
+    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state != MigrationState::Completed {
+        match msg {
+            ExecuteMsg::MigrateFromXykToCl(..) => {}
+            ExecuteMsg::Callback(..) => {}
+            _ => {
+                return Err(StdError::generic_err(
+                    "Contract is in migration state. Please wait for migration to complete.",
+                ))
+            }
+        }
+    }
     match msg {
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
@@ -166,6 +181,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             withdraw_lp_stake,
         ),
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
+        ExecuteMsg::MigrateFromXykToCl(msg) => _handle_migrate(deps, env, info, msg),
         ExecuteMsg::ProposeNewOwner { owner, expires_in } => {
             let config: Config = CONFIG.load(deps.storage)?;
             propose_new_owner(
@@ -212,6 +228,20 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             atom_token,
             generator,
         } => handle_set_token_info(deps, env, info, usdc_token, atom_token, generator),
+    }
+}
+
+fn _handle_migrate(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    msg: MigrateExecuteMsg,
+) -> StdResult<Response> {
+    match msg {
+        MigrateExecuteMsg::MigrateLiquidity { slippage_tolerance } => {
+            migrate_liquidity(deps, env, info, slippage_tolerance)
+        }
+        MigrateExecuteMsg::MigrateUsers { limit } => migrate_users(deps, env, info, limit),
     }
 }
 
@@ -303,6 +333,27 @@ fn _handle_callback(
             duration,
             withdraw_lp_stake,
         ),
+        CallbackMsg::MigratePairStep1 {
+            pool_type,
+            slippage_tolerance,
+        } => migrate_pair_step_1(deps, info, env, pool_type, slippage_tolerance),
+        CallbackMsg::MigratePairStep2 {
+            pool_type,
+            current_ntrn_balance,
+            slippage_tolerance,
+            reward_amount,
+        } => migrate_pair_step_2(
+            deps,
+            info,
+            env,
+            pool_type,
+            current_ntrn_balance,
+            slippage_tolerance,
+            reward_amount,
+        ),
+        CallbackMsg::MigratePairStep3 { pool_type } => {
+            migrate_pair_step_3(deps, info, env, pool_type)
+        }
     }
 }
 
@@ -349,6 +400,18 @@ fn _handle_callback(
 ///     }** Returns a total amount of LP tokens for the specified pool at a specific height.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state != MigrationState::Completed {
+        match msg {
+            QueryMsg::QueryUserLockupTotalAtHeight { .. }
+            | QueryMsg::QueryLockupTotalAtHeight { .. } => {
+                return Err(StdError::generic_err(
+                    "Contract is in migration state. Please wait for migration to complete.",
+                ))
+            }
+            _ => {}
+        }
+    }
     match msg {
         QueryMsg::Config {} => to_binary(&CONFIG.load(deps.storage)?),
         QueryMsg::State {} => to_binary(&query_state(deps)?),
@@ -392,8 +455,423 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 ///
 /// * **_msg** is an object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
-    Ok(Response::default())
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
+    let mut attrs = vec![attr("action", "migrate")];
+
+    ASSET_POOLS_V2.save(
+        deps.storage,
+        PoolType::ATOM,
+        &PoolInfoV2 {
+            lp_token: deps.api.addr_validate(&msg.new_atom_token)?,
+            amount_in_lockups: Uint128::zero(),
+        },
+    )?;
+    ASSET_POOLS_V2.save(
+        deps.storage,
+        PoolType::USDC,
+        &PoolInfoV2 {
+            lp_token: deps.api.addr_validate(&msg.new_usdc_token)?,
+            amount_in_lockups: Uint128::zero(),
+        },
+    )?;
+    MIGRATION_MAX_SLIPPAGE.save(deps.storage, &msg.max_slippage)?;
+
+    attrs.push(attr("new_atom_token", msg.new_atom_token));
+    attrs.push(attr("new_usdc_token", msg.new_usdc_token));
+
+    MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateLiquidity)?;
+
+    Ok(Response::default().add_attributes(attrs))
+}
+
+fn migrate_liquidity(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+    slippage_tolerance: Option<Decimal>,
+) -> StdResult<Response> {
+    let migration_state = MIGRATION_STATUS.load(deps.storage)?;
+
+    if migration_state != MigrationState::MigrateLiquidity {
+        return Err(StdError::generic_err(
+            "Migration is not in the correct state",
+        ));
+    }
+
+    let max_slippage = MIGRATION_MAX_SLIPPAGE.load(deps.storage)?;
+    if slippage_tolerance.unwrap_or_default() > max_slippage {
+        return Err(StdError::generic_err("Slippage tolerance is too high"));
+    }
+
+    let attrs = vec![attr("action", "migrate_liquidity")];
+    let msgs = vec![
+        CallbackMsg::MigratePairStep1 {
+            pool_type: PoolType::ATOM,
+            slippage_tolerance,
+        }
+        .to_cosmos_msg(&env)?,
+        CallbackMsg::MigratePairStep1 {
+            pool_type: PoolType::USDC,
+            slippage_tolerance,
+        }
+        .to_cosmos_msg(&env)?,
+    ];
+    Ok(Response::new().add_messages(msgs).add_attributes(attrs))
+}
+
+fn get_lp_token_pool_addr(deps: Deps, lp_token_addr: &Addr) -> StdResult<String> {
+    let minter_response: cw20::MinterResponse = deps
+        .querier
+        .query_wasm_smart(lp_token_addr.to_string(), &cw20::Cw20QueryMsg::Minter {})?;
+    Ok(minter_response.minter)
+}
+
+fn get_reward_amount(
+    deps: Deps,
+    env: &Env,
+    astroport_lp_token: &String,
+    generator: &String,
+) -> StdResult<Uint128> {
+    let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
+        generator,
+        &GenQueryMsg::RewardInfo {
+            lp_token: astroport_lp_token.to_string(),
+        },
+    )?;
+
+    let reward_token_balance = deps
+        .querier
+        .query_balance(
+            env.contract.address.clone(),
+            rwi.base_reward_token.to_string(),
+        )?
+        .amount;
+
+    Ok(reward_token_balance)
+}
+
+fn migrate_pair_step_1(
+    deps: DepsMut,
+    _info: MessageInfo,
+    env: Env,
+    pool_type: PoolType,
+    slippage_tolerance: Option<Decimal>,
+) -> StdResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
+
+    //get current ntrn contract balance
+    let current_ntrn_balance = deps
+        .querier
+        .query_balance(&env.contract.address, UNTRN_DENOM)?
+        .amount;
+
+    let mut attrs = vec![
+        attr("action", "migrate_pair_step_1"),
+        attr("pool_type", pool_type),
+    ];
+    let mut msgs = vec![];
+    let pool: PoolInfo = ASSET_POOLS.load(deps.storage, pool_type)?;
+    let pool_addr = get_lp_token_pool_addr(deps.as_ref(), &pool.lp_token)?;
+
+    //get reward amount so we can calculate difference
+    let reward_amount = get_reward_amount(
+        deps.as_ref(),
+        &env,
+        &pool.lp_token.to_string(),
+        &generator.to_string(),
+    )?;
+
+    //unstake from generator
+    attrs.push(attr(
+        "unstake_from_generator",
+        pool.amount_in_lockups.to_string(),
+    ));
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: generator.to_string(),
+        funds: vec![],
+        msg: to_binary(&astroport::generator::ExecuteMsg::Withdraw {
+            lp_token: pool.lp_token.to_string(),
+            amount: pool.amount_in_lockups,
+        })?,
+    }));
+
+    //withdraw lp tokens from pool
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: pool.lp_token.to_string(),
+        funds: vec![],
+        msg: to_binary(&Cw20ExecuteMsg::Send {
+            contract: pool_addr,
+            amount: pool.amount_in_lockups,
+            msg: to_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
+        })?,
+    }));
+    attrs.push(attr(
+        "withdraw_from_pool_amount",
+        pool.amount_in_lockups.to_string(),
+    ));
+
+    //next step
+    msgs.push(
+        CallbackMsg::MigratePairStep2 {
+            pool_type,
+            current_ntrn_balance,
+            slippage_tolerance,
+            reward_amount,
+        }
+        .to_cosmos_msg(&env)?,
+    );
+
+    Ok(Response::new().add_messages(msgs).add_attributes(attrs))
+}
+
+fn migrate_pair_step_2(
+    deps: DepsMut,
+    _info: MessageInfo,
+    env: Env,
+    pool_type: PoolType,
+    prev_ntrn_balance: Uint128,
+    slippage_tolerance: Option<Decimal>,
+    prev_reward_amount: Uint128,
+) -> StdResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
+    let mut attrs = vec![
+        attr("action", "migrate_pair_step_2"),
+        attr("pool_type", pool_type),
+    ];
+    let mut pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, pool_type)?;
+    let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, pool_type)?;
+    let new_pool_addr = get_lp_token_pool_addr(deps.as_ref(), &new_pool_info.lp_token)?;
+    let mut msgs = vec![];
+    let current_ntrn_balance = deps
+        .querier
+        .query_balance(&env.contract.address, UNTRN_DENOM)?
+        .amount;
+    attrs.push(attr(
+        "ntrn_balance_change",
+        (current_ntrn_balance - prev_ntrn_balance).to_string(),
+    ));
+    // update reward info so users can claim after the migration
+    pool_info.generator_ntrn_per_share = pool_info.generator_ntrn_per_share.checked_add({
+        let reward_token_balance = get_reward_amount(
+            deps.as_ref(),
+            &env,
+            &pool_info.lp_token.to_string(),
+            &generator.to_string(),
+        )?;
+        attrs.push(attr(
+            "reward_token_balance",
+            reward_token_balance.to_string(),
+        ));
+        let base_reward_received = reward_token_balance.checked_sub(prev_reward_amount)?;
+        Decimal::from_ratio(base_reward_received, pool_info.amount_in_lockups)
+    })?;
+    attrs.push(attr(
+        "generator_ntrn_per_share",
+        pool_info.generator_ntrn_per_share.to_string(),
+    ));
+    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
+    //calculate amount of NTRN claimed from pool
+    let ntrn_to_new_pool = current_ntrn_balance - prev_ntrn_balance;
+    let new_pool_info: astroport::pair::PoolResponse = deps
+        .querier
+        .query_wasm_smart(&new_pool_addr, &astroport::pair::QueryMsg::Pool {})?;
+    let token_denom = new_pool_info
+        .assets
+        .iter()
+        .find_map(|x| match &x.info {
+            AssetInfo::NativeToken { denom } if denom != UNTRN_DENOM => Some(denom.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| StdError::generic_err("No second leg of pair found"))?;
+    attrs.push(attr("token_denom", token_denom.clone()));
+    //calculate amount of token (ATOM|USDC) claimed from pool
+    let token_balance = deps
+        .querier
+        .query_balance(&env.contract.address, token_denom.as_str())?
+        .amount;
+    attrs.push(attr("token_balance", token_balance.to_string()));
+
+    //construct message to send NTRN and (ATOM|USDC) to new pool
+    let base = Asset {
+        amount: ntrn_to_new_pool,
+        info: AssetInfo::NativeToken {
+            denom: UNTRN_DENOM.to_string(),
+        },
+    };
+    let other = Asset {
+        amount: token_balance,
+        info: AssetInfo::NativeToken {
+            denom: token_denom.to_string(),
+        },
+    };
+    let mut funds = vec![
+        Coin {
+            denom: UNTRN_DENOM.to_string(),
+            amount: ntrn_to_new_pool,
+        },
+        Coin {
+            denom: token_denom,
+            amount: token_balance,
+        },
+    ];
+    funds.sort_by(|a, b| a.denom.cmp(&b.denom));
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: new_pool_addr,
+        funds,
+        msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
+            assets: vec![base, other],
+            slippage_tolerance,
+            auto_stake: None,
+            receiver: None,
+        })?,
+    }));
+
+    attrs.push(attr("provide_liquidity", "true"));
+
+    msgs.push(CallbackMsg::MigratePairStep3 { pool_type }.to_cosmos_msg(&env)?);
+
+    Ok(Response::new().add_messages(msgs).add_attributes(attrs))
+}
+
+fn migrate_pair_step_3(
+    deps: DepsMut,
+    _info: MessageInfo,
+    env: Env,
+    pool_type: PoolType,
+) -> StdResult<Response> {
+    let config: Config = CONFIG.load(deps.storage)?;
+    let mut attrs = vec![
+        attr("action", "migrate_pair_step_3"),
+        attr("pool_type", pool_type),
+    ];
+    let mut new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, pool_type)?;
+    // get current balance of new LP token
+    let balance_response: cw20::BalanceResponse = deps.querier.query_wasm_smart(
+        &new_pool_info.lp_token,
+        &Cw20QueryMsg::Balance {
+            address: env.contract.address.to_string(),
+        },
+    )?;
+    let current_balance = balance_response.balance;
+    attrs.push(attr("current_balance", current_balance.to_string()));
+
+    //update pool info to reflect new LP token balance
+    new_pool_info.amount_in_lockups = current_balance;
+    ASSET_POOLS_V2.save(deps.storage, pool_type, &new_pool_info)?;
+
+    // send stake message to generator
+    let stake_msgs = stake_messages(
+        config,
+        env.block.height + 1u64,
+        new_pool_info.lp_token,
+        current_balance,
+    )?;
+
+    MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateUsers)?;
+
+    Ok(Response::new()
+        .add_messages(stake_msgs)
+        .add_attributes(attrs))
+}
+
+fn migrate_users(
+    deps: DepsMut,
+    env: Env,
+    _info: MessageInfo,
+    limit: Option<u32>,
+) -> StdResult<Response> {
+    let migrate_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migrate_state != MigrationState::MigrateUsers {
+        return Err(StdError::generic_err(
+            "Migration is not in MigrateUsers state",
+        ));
+    }
+    let mut attrs = vec![attr("action", "migrate_users")];
+    let limit = limit.unwrap_or(MIGRATION_USERS_DEFAULT_LIMIT);
+    if limit == 0 {
+        return Err(StdError::generic_err("Limit cannot be zero"));
+    }
+    let current_skip = MIGRATION_USERS_COUNTER
+        .may_load(deps.storage)?
+        .unwrap_or(0u32);
+
+    let pool_types: Vec<PoolType> = ASSET_POOLS
+        .keys(deps.storage, None, None, Order::Ascending)
+        .collect::<Result<Vec<PoolType>, StdError>>()?;
+
+    let users: Vec<Addr> = USER_INFO
+        .keys(deps.storage, None, None, Order::Ascending)
+        .skip(current_skip as usize)
+        .take(limit as usize)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    //calculate kfs of pools. Kf is a ratio of new pool amount in lockups to old pool amount in lockups
+    let mut kfs: HashMap<String, Decimal> = HashMap::new();
+    for pool_type in &pool_types {
+        let pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
+        let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
+        kfs.insert(
+            (*pool_type).into(),
+            Decimal::from_ratio(new_pool_info.amount_in_lockups, pool_info.amount_in_lockups),
+        );
+    }
+
+    if users.is_empty() {
+        //if no users left, finish migration and update pool numbers and token addresses
+        for pool_type in &pool_types {
+            let mut pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, *pool_type)?;
+            let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, *pool_type)?;
+            pool_info.amount_in_lockups = new_pool_info.amount_in_lockups;
+            pool_info.lp_token = new_pool_info.lp_token;
+            let p: String = (*pool_type).into();
+            let kf = kfs
+                .get(&p)
+                .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
+            pool_info.generator_ntrn_per_share *= kf;
+            ASSET_POOLS.save(deps.storage, *pool_type, &pool_info, env.block.height)?;
+        }
+        MIGRATION_STATUS.save(deps.storage, &MigrationState::Completed)?;
+        attrs.push(attr("migration_completed", "true"));
+    } else {
+        attrs.push(attr("users_count", users.len().to_string()));
+        for user in users {
+            for pool_type in &pool_types {
+                let mut total_lokups = Uint128::zero();
+                let lookup_infos: Vec<(u64, LockupInfoV2)> = LOCKUP_INFO
+                    .prefix((*pool_type, &user))
+                    .range(deps.storage, None, None, Order::Ascending)
+                    .collect::<Result<Vec<(u64, LockupInfoV2)>, StdError>>()?;
+                for (duration, mut lockup_info) in lookup_infos {
+                    let p: String = (*pool_type).into();
+                    let kf = kfs
+                        .get(&p)
+                        .ok_or_else(|| StdError::generic_err("Can't get kf"))?;
+                    // update user's lockup positions
+                    lockup_info.lp_units_locked =
+                        (*kf).checked_mul_uint128(lockup_info.lp_units_locked)?;
+                    LOCKUP_INFO.save(deps.storage, (*pool_type, &user, duration), &lockup_info)?;
+                    total_lokups += lockup_info.lp_units_locked;
+                }
+                // update user's total lockup amount
+                TOTAL_USER_LOCKUP_AMOUNT.update(
+                    deps.storage,
+                    (*pool_type, &user),
+                    env.block.height,
+                    |_lockup_amount| -> StdResult<Uint128> { Ok(total_lokups) },
+                )?;
+            }
+        }
+        MIGRATION_USERS_COUNTER.save(deps.storage, &(current_skip + limit as u32))?;
+    }
+    Ok(Response::default().add_attributes(attrs))
 }
 
 /// Admin function to update Configuration parameters. Returns a default object of type [`Response`].
@@ -1295,7 +1773,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             },
         )?;
 
-        // Calculate claimable staking rewards for this lockup
+        // Calculate claimable staking rewards for this lockup (ASTRO incentives)
         let total_lockup_astro_rewards = pool_info
             .generator_ntrn_per_share
             .checked_mul(astroport_lp_amount.to_decimal())?
@@ -1355,7 +1833,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
 
         // If claimable proxy staking rewards > 0, claim them
         for pending_proxy_reward in pending_proxy_rewards {
-            cosmos_msgs.push(pending_proxy_reward.into_msg(&deps.querier, user_address.clone())?);
+            cosmos_msgs.push(pending_proxy_reward.into_msg(user_address.clone())?);
         }
 
         //  COSMOSMSG :: If LP Tokens are staked, we unstake the amount which needs to be returned to the user
