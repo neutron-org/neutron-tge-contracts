@@ -33,8 +33,8 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
-    if migration_state != MigrationState::Completed {
+    let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
+    if migration_state.unwrap_or(MigrationState::Completed) != MigrationState::Completed {
         match msg {
             ExecuteMsg::MigrateLiquidity {
                 slippage_tolerance: _,
@@ -610,8 +610,8 @@ fn post_migration_vesting_reschedule_callback(
 
 /// Exposes all the queries available in the contract.
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
-    if migration_state != MigrationState::Completed {
+    let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
+    if migration_state.unwrap_or(MigrationState::Completed) != MigrationState::Completed {
         return Err(ContractError::MigrationIncomplete {}.into());
     }
 

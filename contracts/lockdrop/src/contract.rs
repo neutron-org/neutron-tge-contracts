@@ -154,8 +154,8 @@ pub fn instantiate(
 /// * **ExecuteMsg::ClaimOwnership {}** Claims contract ownership.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
-    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
-    if migration_state != MigrationState::Completed {
+    let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
+    if migration_state.unwrap_or(MigrationState::Completed) != MigrationState::Completed {
         match msg {
             ExecuteMsg::MigrateFromXykToCl(..) => {}
             ExecuteMsg::Callback(..) => {}
@@ -400,8 +400,8 @@ fn _handle_callback(
 ///     }** Returns a total amount of LP tokens for the specified pool at a specific height.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
-    if migration_state != MigrationState::Completed {
+    let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
+    if migration_state.unwrap_or(MigrationState::Completed) != MigrationState::Completed {
         match msg {
             QueryMsg::QueryUserLockupTotalAtHeight { .. }
             | QueryMsg::QueryLockupTotalAtHeight { .. } => {
