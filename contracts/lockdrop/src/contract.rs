@@ -339,22 +339,34 @@ fn _handle_callback(
         } => migrate_pair_step_1(deps, info, env, pool_type, slippage_tolerance),
         CallbackMsg::MigratePairStep2 {
             pool_type,
-            current_ntrn_balance,
+            prev_ntrn_balance,
+            prev_token_balance,
             slippage_tolerance,
-            reward_amount,
+            prev_reward_amount,
         } => migrate_pair_step_2(
             deps,
             info,
             env,
-            pool_type,
-            current_ntrn_balance,
-            slippage_tolerance,
-            reward_amount,
+            MigratePairStep2Data {
+                pool_type,
+                slippage_tolerance,
+                prev_ntrn_balance,
+                prev_token_balance,
+                prev_reward_amount,
+            },
         ),
         CallbackMsg::MigratePairStep3 { pool_type } => {
             migrate_pair_step_3(deps, info, env, pool_type)
         }
     }
+}
+
+struct MigratePairStep2Data {
+    pub pool_type: PoolType,
+    pub prev_ntrn_balance: Uint128,
+    pub prev_token_balance: Uint128,
+    pub slippage_tolerance: Option<Decimal>,
+    pub prev_reward_amount: Uint128,
 }
 
 /// Exposes all the queries available in the contract.
@@ -563,10 +575,28 @@ fn migrate_pair_step_1(
         .as_ref()
         .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
 
+    let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, pool_type)?;
+    let new_pool_addr = get_lp_token_pool_addr(deps.as_ref(), &new_pool_info.lp_token)?;
+    let new_pool_info: astroport::pair::PoolResponse = deps
+        .querier
+        .query_wasm_smart(new_pool_addr, &astroport::pair::QueryMsg::Pool {})?;
     //get current ntrn contract balance
     let current_ntrn_balance = deps
         .querier
         .query_balance(&env.contract.address, UNTRN_DENOM)?
+        .amount;
+    let token_denom = new_pool_info
+        .assets
+        .iter()
+        .find_map(|x| match &x.info {
+            AssetInfo::NativeToken { denom } if denom != UNTRN_DENOM => Some(denom.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| StdError::generic_err("No second leg of pair found"))?;
+    //calculate amount of token (ATOM|USDC) claimed from pool
+    let current_token_balance = deps
+        .querier
+        .query_balance(&env.contract.address, token_denom.as_str())?
         .amount;
 
     let mut attrs = vec![
@@ -618,9 +648,10 @@ fn migrate_pair_step_1(
     msgs.push(
         CallbackMsg::MigratePairStep2 {
             pool_type,
-            current_ntrn_balance,
+            prev_ntrn_balance: current_ntrn_balance,
+            prev_token_balance: current_token_balance,
+            prev_reward_amount: reward_amount,
             slippage_tolerance,
-            reward_amount,
         }
         .to_cosmos_msg(&env)?,
     );
@@ -632,10 +663,7 @@ fn migrate_pair_step_2(
     deps: DepsMut,
     _info: MessageInfo,
     env: Env,
-    pool_type: PoolType,
-    prev_ntrn_balance: Uint128,
-    slippage_tolerance: Option<Decimal>,
-    prev_reward_amount: Uint128,
+    data: MigratePairStep2Data,
 ) -> StdResult<Response> {
     let config: Config = CONFIG.load(deps.storage)?;
     let generator = config
@@ -644,10 +672,10 @@ fn migrate_pair_step_2(
         .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
     let mut attrs = vec![
         attr("action", "migrate_pair_step_2"),
-        attr("pool_type", pool_type),
+        attr("pool_type", data.pool_type),
     ];
-    let mut pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, pool_type)?;
-    let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, pool_type)?;
+    let mut pool_info: PoolInfo = ASSET_POOLS.load(deps.storage, data.pool_type)?;
+    let new_pool_info: PoolInfoV2 = ASSET_POOLS_V2.load(deps.storage, data.pool_type)?;
     let new_pool_addr = get_lp_token_pool_addr(deps.as_ref(), &new_pool_info.lp_token)?;
     let mut msgs = vec![];
     let current_ntrn_balance = deps
@@ -656,7 +684,7 @@ fn migrate_pair_step_2(
         .amount;
     attrs.push(attr(
         "ntrn_balance_change",
-        (current_ntrn_balance - prev_ntrn_balance).to_string(),
+        (current_ntrn_balance - data.prev_ntrn_balance).to_string(),
     ));
     // update reward info so users can claim after the migration
     pool_info.generator_ntrn_per_share = pool_info.generator_ntrn_per_share.checked_add({
@@ -670,16 +698,16 @@ fn migrate_pair_step_2(
             "reward_token_balance",
             reward_token_balance.to_string(),
         ));
-        let base_reward_received = reward_token_balance.checked_sub(prev_reward_amount)?;
+        let base_reward_received = reward_token_balance.checked_sub(data.prev_reward_amount)?;
         Decimal::from_ratio(base_reward_received, pool_info.amount_in_lockups)
     })?;
     attrs.push(attr(
         "generator_ntrn_per_share",
         pool_info.generator_ntrn_per_share.to_string(),
     ));
-    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
+    ASSET_POOLS.save(deps.storage, data.pool_type, &pool_info, env.block.height)?;
     //calculate amount of NTRN claimed from pool
-    let ntrn_to_new_pool = current_ntrn_balance - prev_ntrn_balance;
+    let ntrn_to_new_pool = current_ntrn_balance - data.prev_ntrn_balance;
     let new_pool_info: astroport::pair::PoolResponse = deps
         .querier
         .query_wasm_smart(&new_pool_addr, &astroport::pair::QueryMsg::Pool {})?;
@@ -693,11 +721,12 @@ fn migrate_pair_step_2(
         .ok_or_else(|| StdError::generic_err("No second leg of pair found"))?;
     attrs.push(attr("token_denom", token_denom.clone()));
     //calculate amount of token (ATOM|USDC) claimed from pool
-    let token_balance = deps
+    let current_token_balance = deps
         .querier
         .query_balance(&env.contract.address, token_denom.as_str())?
         .amount;
-    attrs.push(attr("token_balance", token_balance.to_string()));
+    let token_to_new_pool = current_token_balance - data.prev_token_balance;
+    attrs.push(attr("token_balance_change", token_to_new_pool.to_string()));
 
     //construct message to send NTRN and (ATOM|USDC) to new pool
     let base = Asset {
@@ -707,7 +736,7 @@ fn migrate_pair_step_2(
         },
     };
     let other = Asset {
-        amount: token_balance,
+        amount: token_to_new_pool,
         info: AssetInfo::NativeToken {
             denom: token_denom.to_string(),
         },
@@ -719,7 +748,7 @@ fn migrate_pair_step_2(
         },
         Coin {
             denom: token_denom,
-            amount: token_balance,
+            amount: token_to_new_pool,
         },
     ];
     funds.sort_by(|a, b| a.denom.cmp(&b.denom));
@@ -728,7 +757,7 @@ fn migrate_pair_step_2(
         funds,
         msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
             assets: vec![base, other],
-            slippage_tolerance,
+            slippage_tolerance: data.slippage_tolerance,
             auto_stake: None,
             receiver: None,
         })?,
@@ -736,7 +765,12 @@ fn migrate_pair_step_2(
 
     attrs.push(attr("provide_liquidity", "true"));
 
-    msgs.push(CallbackMsg::MigratePairStep3 { pool_type }.to_cosmos_msg(&env)?);
+    msgs.push(
+        CallbackMsg::MigratePairStep3 {
+            pool_type: data.pool_type,
+        }
+        .to_cosmos_msg(&env)?,
+    );
 
     Ok(Response::new().add_messages(msgs).add_attributes(attrs))
 }

@@ -206,10 +206,11 @@ pub enum CallbackMsg {
         slippage_tolerance: Option<Decimal>,
     },
     MigratePairStep2 {
-        current_ntrn_balance: Uint128,
+        prev_ntrn_balance: Uint128,
+        prev_token_balance: Uint128,
+        prev_reward_amount: Uint128,
         pool_type: PoolType,
         slippage_tolerance: Option<Decimal>,
-        reward_amount: Uint128,
     },
     MigratePairStep3 {
         pool_type: PoolType,
