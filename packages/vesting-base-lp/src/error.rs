@@ -29,6 +29,9 @@ pub enum ContractError {
     #[error("Vesting token is not set!")]
     VestingTokenIsNotSet {},
 
+    #[error("Vesting token is already set!")]
+    VestingTokenAlreadySet {},
+
     #[error("Contract is in migration state. Please wait for migration to complete.")]
     MigrationIncomplete {},
 
