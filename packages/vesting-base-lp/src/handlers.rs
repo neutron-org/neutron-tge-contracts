@@ -340,6 +340,7 @@ fn execute_migrate_liquidity(
     };
 
     if max_available_amount.is_zero() {
+        MIGRATION_STATUS.save(deps.storage, &MigrationState::Completed)?;
         return Ok(resp);
     }
 
