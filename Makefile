@@ -15,7 +15,7 @@ compile:
 	@./build_release.sh
 
 check_contracts:
-	@cargo install cosmwasm-check
+	@cargo install cosmwasm-check --locked
 	@cosmwasm-check --available-capabilities iterator,staking,stargate,neutron artifacts/*.wasm
 
 build: schema clippy test fmt compile check_contracts

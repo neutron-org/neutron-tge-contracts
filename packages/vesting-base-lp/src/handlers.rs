@@ -336,21 +336,6 @@ fn execute_migrate_liquidity(
         .querier
         .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
 
-    // query max available amounts to be withdrawn from pool
-    let max_available_amount = {
-        let resp: BalanceResponse = deps.querier.query_wasm_smart(
-            pair_info.liquidity_token.clone(),
-            &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
-            },
-        )?;
-        resp.balance
-    };
-
-    if max_available_amount.is_zero() {
-        return Ok(resp);
-    }
-
     for user in vesting_accounts.into_iter() {
         let user_amount = compute_share(&user.info)?;
 
@@ -745,6 +730,7 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
         |s| {
             let mut state = s.unwrap_or_default();
             state.total_granted = Uint128::zero();
+            state.total_released = Uint128::zero();
             Ok(state)
         },
     )?;
