@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use crate::error::ContractError;
 use crate::ext_historical::{handle_execute_historical_msg, handle_query_historical_msg};
 use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
@@ -722,6 +723,7 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
         |s| {
             let mut state = s.unwrap_or_default();
             state.total_granted = Uint128::zero();
+            state.total_released = Uint128::zero();
             Ok(state)
         },
     )?;
