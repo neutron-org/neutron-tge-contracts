@@ -55,12 +55,41 @@ fn set_vesting_token() {
     execute(
         deps.as_mut(),
         env.clone(),
-        info,
+        info.clone(),
         ExecuteMsg::SetVestingToken {
             vesting_token: token_asset_info(Addr::unchecked("ntrn_token")),
         },
     )
     .unwrap();
+
+    assert_eq!(
+        from_binary::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
+            .unwrap(),
+        Config {
+            owner: Addr::unchecked("owner"),
+            token_info_manager: Addr::unchecked(token_info_manager),
+            vesting_token: Some(token_asset_info(Addr::unchecked("ntrn_token"))),
+            extensions: Extensions {
+                historical: false,
+                managed: false,
+                with_managers: false
+            }
+        }
+    );
+
+    // set vesting token second time by the owner -> VestingTokenAlreadySet
+    assert_eq!(
+        execute(
+            deps.as_mut(),
+            env.clone(),
+            info,
+            ExecuteMsg::SetVestingToken {
+                vesting_token: token_asset_info(Addr::unchecked("not_a_ntrn_token")),
+            },
+        )
+        .unwrap_err(),
+        ContractError::VestingTokenAlreadySet {},
+    );
 
     assert_eq!(
         from_binary::<Config>(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap(),

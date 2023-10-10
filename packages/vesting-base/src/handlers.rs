@@ -260,11 +260,19 @@ pub(crate) fn set_vesting_token(
     if info.sender != config.owner && info.sender != config.token_info_manager {
         return Err(ContractError::Unauthorized {});
     }
-    token.check(deps.api)?;
-    config.vesting_token = Some(token);
+    if config.vesting_token.is_some() {
+        return Err(ContractError::VestingTokenAlreadySet {});
+    }
 
+    token.check(deps.api)?;
+    config.vesting_token = Some(token.clone());
     CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new())
+
+    let response = Response::new();
+    Ok(response.add_attributes(vec![
+        attr("action", "set_vesting_token"),
+        attr("vesting_token", token.to_string()),
+    ]))
 }
 
 pub(crate) fn get_vesting_token(config: &Config) -> Result<AssetInfo, ContractError> {
