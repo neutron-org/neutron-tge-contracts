@@ -25,7 +25,6 @@ use cosmwasm_std::{
 };
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use cw_utils::must_pay;
-use std::borrow::Borrow;
 
 /// Exposes execute functions available in the contract.
 pub fn execute(
