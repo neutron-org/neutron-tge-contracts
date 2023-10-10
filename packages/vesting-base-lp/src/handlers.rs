@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use crate::error::ContractError;
 use crate::ext_historical::{handle_execute_historical_msg, handle_query_historical_msg};
 use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
@@ -26,6 +25,7 @@ use cosmwasm_std::{
 };
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use cw_utils::must_pay;
+use std::borrow::Borrow;
 
 /// Exposes execute functions available in the contract.
 pub fn execute(
