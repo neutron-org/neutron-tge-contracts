@@ -22,4 +22,4 @@ thiserror = { version = "1.0" }
 cw-utils = "0.15"
 cosmwasm-schema = { version = "1.1", default-features = false  }
 vesting-base = {path = "../vesting-base"}
-astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v2.8.0" }
+astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v3.6.0" }
