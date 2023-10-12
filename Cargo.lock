@@ -1029,7 +1029,7 @@ dependencies = [
 
 [[package]]
 name = "neutron-lockdrop"
-version = "1.2.1"
+version = "2.0.0"
 dependencies = [
  "astroport 3.6.0",
  "astroport-periphery",
@@ -1785,7 +1785,7 @@ dependencies = [
 
 [[package]]
 name = "vesting-investors"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "astroport 2.0.0",
  "astroport-token",
@@ -1801,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "vesting-lp"
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
  "astroport 3.6.0",
  "astroport-token",
@@ -1818,7 +1818,7 @@ dependencies = [
 
 [[package]]
 name = "vesting-lti"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "astroport 2.0.0",
  "astroport-token",

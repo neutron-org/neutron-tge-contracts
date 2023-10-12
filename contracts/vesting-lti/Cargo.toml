@@ -1,6 +1,6 @@
 [package]
 name = "vesting-lti"
-version = "1.1.0"
+version = "1.2.0"
 authors = ["andrei.z@p2p.org"]
 edition = "2021"
 
