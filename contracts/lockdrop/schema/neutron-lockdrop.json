@@ -1,6 +1,6 @@
 {
   "contract_name": "neutron-lockdrop",
-  "contract_version": "1.2.1",
+  "contract_version": "2.0.0",
   "idl_version": "1.0.0",
   "instantiate": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -553,18 +553,22 @@
               "migrate_pair_step2": {
                 "type": "object",
                 "required": [
-                  "current_ntrn_balance",
                   "pool_type",
-                  "reward_amount"
+                  "prev_ntrn_balance",
+                  "prev_reward_amount",
+                  "prev_token_balance"
                 ],
                 "properties": {
-                  "current_ntrn_balance": {
-                    "$ref": "#/definitions/Uint128"
-                  },
                   "pool_type": {
                     "$ref": "#/definitions/PoolType"
                   },
-                  "reward_amount": {
+                  "prev_ntrn_balance": {
+                    "$ref": "#/definitions/Uint128"
+                  },
+                  "prev_reward_amount": {
+                    "$ref": "#/definitions/Uint128"
+                  },
+                  "prev_token_balance": {
                     "$ref": "#/definitions/Uint128"
                   },
                   "slippage_tolerance": {

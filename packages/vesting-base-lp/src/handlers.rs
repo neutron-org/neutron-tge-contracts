@@ -281,11 +281,19 @@ pub(crate) fn set_vesting_token(
     if info.sender != config.owner && info.sender != config.token_info_manager {
         return Err(ContractError::Unauthorized {});
     }
-    token.check(deps.api)?;
-    config.vesting_token = Some(token);
+    if config.vesting_token.is_some() {
+        return Err(ContractError::VestingTokenAlreadySet {});
+    }
 
+    token.check(deps.api)?;
+    config.vesting_token = Some(token.clone());
     CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new())
+
+    let response = Response::new();
+    Ok(response.add_attributes(vec![
+        attr("action", "set_vesting_token"),
+        attr("vesting_token", token.to_string()),
+    ]))
 }
 
 pub(crate) fn get_vesting_token(config: &Config) -> Result<AssetInfo, ContractError> {
@@ -327,21 +335,6 @@ fn execute_migrate_liquidity(
     let pair_info: PairInfo = deps
         .querier
         .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
-
-    // query max available amounts to be withdrawn from pool
-    let max_available_amount = {
-        let resp: BalanceResponse = deps.querier.query_wasm_smart(
-            pair_info.liquidity_token.clone(),
-            &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
-            },
-        )?;
-        resp.balance
-    };
-
-    if max_available_amount.is_zero() {
-        return Ok(resp);
-    }
 
     for user in vesting_accounts.into_iter() {
         let user_amount = compute_share(&user.info)?;
@@ -737,6 +730,7 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
         |s| {
             let mut state = s.unwrap_or_default();
             state.total_granted = Uint128::zero();
+            state.total_released = Uint128::zero();
             Ok(state)
         },
     )?;
