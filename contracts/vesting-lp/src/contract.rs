@@ -2,12 +2,9 @@ use crate::msg::InstantiateMsg;
 use cosmwasm_std::{entry_point, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
 use vesting_base::builder::VestingBaseBuilder;
-use vesting_base_lp::error::ContractError;
-use vesting_base_lp::handlers::execute as base_execute;
-use vesting_base_lp::handlers::migrate as base_migrate;
-use vesting_base_lp::handlers::query as base_query;
-use vesting_base_lp::msg::QueryMsg;
-use vesting_base_lp::msg::{ExecuteMsg, MigrateMsg};
+use vesting_base::error::ContractError;
+use vesting_base::handlers::{execute as base_execute, query as base_query};
+use vesting_base::msg::{ExecuteMsg, QueryMsg};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "neutron-vesting-lp";
@@ -46,10 +43,4 @@ pub fn execute(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     base_query(deps, env, msg)
-}
-
-/// Exposes migrate functions available in the contract.
-#[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
-    base_migrate(deps, env, msg)
 }

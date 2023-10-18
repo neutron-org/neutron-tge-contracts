@@ -1,7 +1,6 @@
 use crate::contract::{execute, instantiate, query, UNTRN_DENOM};
-use crate::state::MIGRATION_STATUS;
 use astroport_periphery::lockdrop::{
-    Config, ExecuteMsg, InstantiateMsg, LockupRewardsInfo, MigrationState, QueryMsg,
+    Config, ExecuteMsg, InstantiateMsg, LockupRewardsInfo, QueryMsg,
 };
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
 use cosmwasm_std::{coin, from_binary, Addr, Decimal256, StdError, Uint128};
@@ -10,9 +9,7 @@ use cosmwasm_std::{coin, from_binary, Addr, Decimal256, StdError, Uint128};
 fn update_owner() {
     let mut deps = mock_dependencies();
     let info = mock_info("addr0000", &[]);
-    MIGRATION_STATUS
-        .save(&mut deps.storage, &MigrationState::Completed)
-        .unwrap();
+
     let owner = Addr::unchecked("owner");
     let token_info_manager = Addr::unchecked("token_info_manager");
 
@@ -103,9 +100,7 @@ fn increase_ntrn_incentives() {
 
     let owner = Addr::unchecked("owner");
     let token_info_manager = Addr::unchecked("token_info_manager");
-    MIGRATION_STATUS
-        .save(&mut deps.storage, &MigrationState::Completed)
-        .unwrap();
+
     let env = mock_env();
 
     let msg = InstantiateMsg {

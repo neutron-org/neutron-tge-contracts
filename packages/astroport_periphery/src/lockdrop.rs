@@ -149,8 +149,6 @@ pub enum ExecuteMsg {
         duration: u64,
         withdraw_lp_stake: bool,
     },
-    /// Migrations
-    MigrateFromXykToCl(MigrateExecuteMsg),
     /// Callbacks; only callable by the contract itself.
     Callback(CallbackMsg),
     /// ProposeNewOwner creates a proposal to change contract ownership.
@@ -165,13 +163,6 @@ pub enum ExecuteMsg {
     DropOwnershipProposal {},
     /// Used to claim contract ownership.
     ClaimOwnership {},
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum MigrateExecuteMsg {
-    MigrateLiquidity { slippage_tolerance: Option<Decimal> },
-    MigrateUsers { limit: Option<u32> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -201,20 +192,12 @@ pub enum CallbackMsg {
         duration: u64,
         withdraw_lp_stake: bool,
     },
-    MigratePairStep1 {
-        pool_type: PoolType,
-        slippage_tolerance: Option<Decimal>,
-    },
-    MigratePairStep2 {
-        prev_ntrn_balance: Uint128,
-        prev_token_balance: Uint128,
-        prev_reward_amount: Uint128,
-        pool_type: PoolType,
-        slippage_tolerance: Option<Decimal>,
-    },
-    MigratePairStep3 {
-        pool_type: PoolType,
-    },
+    // WithdrawLiquidityFromTerraswapCallback {
+    //     terraswap_lp_token: Addr,
+    //     astroport_pool: Addr,
+    //     prev_assets: [terraswap::asset::Asset; 2],
+    //     slippage_tolerance: Option<Decimal>,
+    // },
 }
 
 // Modified from
@@ -259,11 +242,7 @@ pub enum QueryMsg {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct MigrateMsg {
-    pub new_atom_token: String,
-    pub new_usdc_token: String,
-    pub max_slippage: Decimal,
-}
+pub struct MigrateMsg {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub struct MigrationInfo {
@@ -313,19 +292,6 @@ pub struct State {
     pub total_incentives_share: Uint128,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
-pub enum MigrationState {
-    #[default]
-    /// Migration is started
-    Started,
-    ///
-    MigrateLiquidity,
-    /// Liquidity is migrated, can migrate users with pagination
-    MigrateUsers,
-    /// Migration is completed
-    Completed,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct PoolInfo {
     pub lp_token: Addr,
@@ -341,12 +307,6 @@ pub struct PoolInfo {
     pub generator_proxy_per_share: RestrictedVector<AssetInfo, Decimal>,
     /// Boolean value indicating if the LP Tokens are staked with the Generator contract or not
     pub is_staked: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct PoolInfoV2 {
-    pub lp_token: Addr,
-    pub amount_in_lockups: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]

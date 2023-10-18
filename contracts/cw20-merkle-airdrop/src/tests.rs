@@ -145,7 +145,7 @@ fn claim() {
                 recipient: test_data.account.clone(),
                 amount: test_data.amount,
             })
-            .unwrap(),
+                .unwrap(),
         })),
         SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: "credits0000".to_string(),
@@ -155,7 +155,7 @@ fn claim() {
                 start_time: vesting_start,
                 duration: vesting_duration_seconds,
             })
-            .unwrap(),
+                .unwrap(),
             funds: vec![],
         })),
     ];
@@ -175,8 +175,8 @@ fn claim() {
         from_binary::<TotalClaimedResponse>(
             &query(deps.as_ref(), env.clone(), QueryMsg::TotalClaimed {},).unwrap()
         )
-        .unwrap()
-        .total_claimed,
+            .unwrap()
+            .total_claimed,
         test_data.amount
     );
 
@@ -190,10 +190,10 @@ fn claim() {
                     address: test_data.account,
                 },
             )
-            .unwrap()
+                .unwrap()
         )
-        .unwrap()
-        .is_claimed
+            .unwrap()
+            .is_claimed
     );
 
     // check error on double claim
@@ -259,7 +259,7 @@ fn multiple_claim() {
                     recipient: account.account.clone(),
                     amount: account.amount,
                 })
-                .unwrap(),
+                    .unwrap(),
             })),
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: "credits0000".to_string(),
@@ -269,7 +269,7 @@ fn multiple_claim() {
                     start_time: vesting_start,
                     duration: vesting_duration_seconds,
                 })
-                .unwrap(),
+                    .unwrap(),
                 funds: vec![],
             })),
         ];
@@ -291,8 +291,8 @@ fn multiple_claim() {
         from_binary::<TotalClaimedResponse>(
             &query(deps.as_ref(), env, QueryMsg::TotalClaimed {}).unwrap()
         )
-        .unwrap()
-        .total_claimed,
+            .unwrap()
+            .total_claimed,
         test_data.total_claimed_amount
     );
 }
@@ -369,7 +369,7 @@ fn update_reserve_address() {
         mock_info("regularaddress", &[]),
         msg.clone(),
     )
-    .unwrap_err();
+        .unwrap_err();
     assert_eq!(res, ContractError::Unauthorized {});
 
     let res = execute(
@@ -378,7 +378,7 @@ fn update_reserve_address() {
         mock_info("owner0000", &[]),
         msg.clone(),
     )
-    .unwrap();
+        .unwrap();
     assert_eq!(
         res.attributes,
         vec![
@@ -394,7 +394,7 @@ fn update_reserve_address() {
         mock_info("reserve0000", &[]),
         msg,
     )
-    .unwrap_err();
+        .unwrap_err();
     assert_eq!(res, ContractError::Unauthorized {});
 
     let res = execute(
@@ -405,7 +405,7 @@ fn update_reserve_address() {
             address: "reserve0002".to_string(),
         },
     )
-    .unwrap();
+        .unwrap();
     assert_eq!(
         res.attributes,
         vec![
