@@ -1057,7 +1057,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
                     prev_ntrn_balance: reward_token_balance,
                     prev_proxy_reward_balances,
                 }
-                    .to_cosmos_msg(&env)?,
+                .to_cosmos_msg(&env)?,
             );
         }
     } else if user_info.ntrn_transferred && !withdraw_lp_stake {
@@ -1071,7 +1071,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             duration,
             withdraw_lp_stake,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
@@ -1283,7 +1283,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             .lp_units_locked
             .full_mul(balance)
             .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-            .try_into()?
+        .try_into()?
     };
 
     // If Astro LP tokens are staked with Astro generator
@@ -1650,7 +1650,7 @@ pub fn query_lockup_info(
                 .lp_units_locked
                 .full_mul(pool_astroport_lp_units)
                 .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-                .try_into()?
+            .try_into()?
         };
         lockup_astroport_lp_units_opt = Some(lockup_astroport_lp_units);
         astroport_lp_token_opt = astroport_lp_token.clone();
@@ -1765,7 +1765,7 @@ pub fn calculate_astro_incentives_for_lockup(
             Uint256::from(pool_incentives_share).checked_mul(lockup_weighted_balance)?,
             Uint256::from(total_incentives_share).checked_mul(total_weighted_amount)?,
         )
-            .checked_mul_uint256(total_lockdrop_incentives.into())?)
+        .checked_mul_uint256(total_lockdrop_incentives.into())?)
     }
 }
 

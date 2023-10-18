@@ -76,7 +76,7 @@ fn claim() {
                 ],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(300u128),
     };
 
@@ -124,7 +124,7 @@ fn claim() {
                 ],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(300u128),
     };
 
@@ -230,7 +230,7 @@ fn claim_native() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(300u128),
     };
 
@@ -283,7 +283,7 @@ fn claim_native() {
         &msg,
         &coins(300, VESTING_TOKEN),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -400,7 +400,7 @@ fn register_vesting_accounts() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(100u128),
     };
 
@@ -426,7 +426,7 @@ fn register_vesting_accounts() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(100u128),
     };
 
@@ -512,7 +512,7 @@ fn register_vesting_accounts() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(200u128),
     };
 
@@ -559,7 +559,7 @@ fn register_vesting_accounts() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(10u128),
     };
 
@@ -653,7 +653,7 @@ fn register_vesting_accounts_native() {
                 }],
             }],
         })
-            .unwrap(),
+        .unwrap(),
         amount: Uint128::from(100u128),
     };
 
@@ -698,7 +698,7 @@ fn register_vesting_accounts_native() {
         &native_msg,
         &coins(100u128, VESTING_TOKEN),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -743,7 +743,7 @@ fn register_vesting_accounts_native() {
         &msg,
         &coins(200, VESTING_TOKEN),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user2.to_string(),
@@ -791,7 +791,7 @@ fn register_vesting_accounts_native() {
         &msg,
         &coins(10, VESTING_TOKEN),
     )
-        .unwrap();
+    .unwrap();
 
     let msg = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -917,7 +917,7 @@ fn query_at_height() {
         &native_msg,
         &coins(1200, VESTING_TOKEN),
     )
-        .unwrap();
+    .unwrap();
 
     let query = QueryMsg::AvailableAmount {
         address: user1.to_string(),
@@ -1179,7 +1179,7 @@ fn instantiate_token(app: &mut App, token_code_id: u64, name: &str, cap: Option<
         name,
         None,
     )
-        .unwrap()
+    .unwrap()
 }
 
 fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
@@ -1217,7 +1217,7 @@ fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
         &set_vesting_token_msg,
         &[],
     )
-        .unwrap();
+    .unwrap();
 
     let res: Config = app
         .wrap()
