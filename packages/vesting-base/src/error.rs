@@ -28,6 +28,9 @@ pub enum ContractError {
 
     #[error("Vesting token is not set!")]
     VestingTokenIsNotSet {},
+
+    #[error("Vesting token is already set!")]
+    VestingTokenAlreadySet {},
 }
 
 impl From<OverflowError> for ContractError {
