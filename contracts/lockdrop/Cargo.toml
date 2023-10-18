@@ -1,6 +1,6 @@
 [package]
 name = "neutron-lockdrop"
-version = "1.2.1"
+version = "2.0.0"
 authors = ["_astromartian"]
 edition = "2021"
 
@@ -24,7 +24,7 @@ library = []
 
 
 [dependencies]
-astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v2.5.0" }
+astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v3.6.0" }
 credits = {path = "../credits"}
 astroport-periphery = { path = "../../packages/astroport_periphery" }
 terraswap = "2.6"
