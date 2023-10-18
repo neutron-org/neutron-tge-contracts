@@ -413,7 +413,8 @@
         "sender": {
           "type": "string"
         }
-      }
+      },
+      "additionalProperties": false
     },
     "PoolType": {
       "type": "string",

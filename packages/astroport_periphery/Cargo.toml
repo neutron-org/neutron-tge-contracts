@@ -12,15 +12,11 @@ edition = "2021"
 backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
-cw20 = { version = "0.13" }
+cw20 = { workspace = true }
+# we have to keep it at 0.15.1 instead of latest version for the lockdrop contract
 cw-storage-plus = "0.15.1"
-cosmwasm-std = { version = "1.0" }
-cosmwasm-schema = "1.2.1"
-terraswap = "2.6"
+cosmwasm-std = { workspace = true }
+cosmwasm-schema = { workspace = true }
 astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v2.5.0" }
-
-schemars = "0.8"
-serde = { version = "1.0.103", default-features = false, features = ["derive"] }
-
-[dev-dependencies]
-cosmwasm-schema = "1.0"
+schemars = { workspace = true }
+serde = { workspace = true }
