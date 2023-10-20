@@ -31,7 +31,16 @@ pub fn instantiate(
     Ok(Response::default())
 }
 
-/// Exposes execute functions available in the contract.
+/// ## Description
+/// Exposes all the execute functions available in the contract.
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
+///
+/// * **msg** is an object of type [`ExecuteMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -43,6 +52,12 @@ pub fn execute(
 }
 
 /// Exposes all the queries available in the contract.
+/// ## Params
+/// * **deps** is an object of type [`Deps`].
+///
+/// * **_env** is an object of type [`Env`].
+///
+/// * **msg** is an object of type [`QueryMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     base_query(deps, env, msg)

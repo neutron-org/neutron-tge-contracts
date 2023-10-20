@@ -129,29 +129,6 @@ pub fn instantiate(
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **msg** is an object of type [`ExecuteMsg`].
-///
-/// ## Execute messages
-///
-/// * **ExecuteMsg::Receive(msg)** Parse incoming messages from the cNTRN token.
-///
-/// * **ExecuteMsg::UpdateConfig { new_config }** Admin function to update configuration parameters.
-///
-/// * **ExecuteMsg::InitializePool {
-///     pool_type,
-///     incentives_share,
-/// }** Facilitates addition of new Pool (axlrUSDC/NTRN or ATOM/NTRN) whose LP tokens can then be locked in the lockdrop contract.
-///
-/// * **ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-///             terraswap_lp_token,
-///             duration,
-///             withdraw_lp_stake,
-///         }** Claims user Rewards for a particular Lockup position.
-///
-/// * **ExecuteMsg::ProposeNewOwner { owner, expires_in }** Creates a request to change contract ownership.
-///
-/// * **ExecuteMsg::DropOwnershipProposal {}** Removes a request to change contract ownership.
-///
-/// * **ExecuteMsg::ClaimOwnership {}** Claims contract ownership.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
@@ -376,40 +353,6 @@ struct MigratePairStep2Data {
 /// * **_env** is an object of type [`Env`].
 ///
 /// * **msg** is an object of type [`QueryMsg`].
-///
-/// ## Queries
-/// * **QueryMsg::Config {}** Returns the config info.
-///
-/// * **QueryMsg::State {}** Returns the contract's state info.
-///
-/// * **QueryMsg::Pool { terraswap_lp_token }** Returns info regarding a certain supported LP token pool.
-///
-/// * **QueryMsg::UserInfo { address }** Returns info regarding a user (total NTRN rewards, list of lockup positions).
-///
-/// * **QueryMsg::UserInfoWithLockupsList { address }** Returns info regarding a user with lockups.
-///
-/// * **QueryMsg::LockUpInfo {
-///             user_address,
-///             terraswap_lp_token,
-///             duration,
-///         }** Returns info regarding a particular lockup position with a given duration and identifer for the LP tokens locked.
-///
-/// * **QueryMsg::PendingAssetReward {
-///             user_address,
-///             terraswap_lp_token,
-///             duration,
-///         }** Returns the amount of pending asset rewards for the specified recipient and for a specific lockup position.
-///
-/// * **QueryUserLockupTotalAtHeight {
-///         pool_type: PoolType,
-///         user_address: String,
-///         height: u64,
-///     }** Returns locked amount of LP tokens for the specified user for the specified pool at a specific height.
-///
-/// * **QueryLockupTotalAtHeight {
-///         pool_type: PoolType,
-///         height: u64,
-///     }** Returns a total amount of LP tokens for the specified pool at a specific height.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
