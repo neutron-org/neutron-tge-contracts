@@ -313,12 +313,9 @@ pub struct State {
     pub total_incentives_share: Uint128,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub enum MigrationState {
-    #[default]
-    /// Migration is started
-    Started,
-    ///
+    /// Migration is started, the first step is liquidity migration
     MigrateLiquidity,
     /// Liquidity is migrated, can migrate users with pagination
     MigrateUsers,
