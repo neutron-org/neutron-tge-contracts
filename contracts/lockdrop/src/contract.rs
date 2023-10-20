@@ -493,6 +493,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
 
     MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateLiquidity)?;
 
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     Ok(Response::default().add_attributes(attrs))
 }
 
