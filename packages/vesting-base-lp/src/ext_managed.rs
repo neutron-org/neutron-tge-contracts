@@ -3,9 +3,7 @@ use crate::handlers::get_vesting_token;
 use crate::msg::{ExecuteMsgManaged, QueryMsgManaged};
 use crate::state::{vesting_info, vesting_state, CONFIG};
 use astroport::asset::AssetInfoExt;
-use cosmwasm_std::{
-    attr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, SubMsg, Uint128,
-};
+use cosmwasm_std::{attr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128};
 
 /// Contains the managed extension check and routing of the message.
 pub(crate) fn handle_execute_managed_msg(
@@ -86,7 +84,7 @@ fn remove_vesting_accounts(
             let transfer_msg = vesting_token
                 .with_balance(amount_to_claw_back)
                 .into_msg(clawback_address.clone())?;
-            response = response.add_submessage(SubMsg::new(transfer_msg));
+            response = response.add_message(transfer_msg);
 
             vesting_state(config.extensions.historical).update::<_, ContractError>(
                 deps.storage,
