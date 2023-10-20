@@ -882,7 +882,7 @@ fn migrate_users(
         attrs.push(attr("users_count", users.len().to_string()));
         for user in users {
             for pool_type in &pool_types {
-                let mut total_lokups = Uint128::zero();
+                let mut total_lockups = Uint128::zero();
                 let lookup_infos: Vec<(u64, LockupInfoV2)> = LOCKUP_INFO
                     .prefix((*pool_type, &user))
                     .range(deps.storage, None, None, Order::Ascending)
@@ -896,14 +896,14 @@ fn migrate_users(
                     lockup_info.lp_units_locked =
                         (*kf).checked_mul_uint128(lockup_info.lp_units_locked)?;
                     LOCKUP_INFO.save(deps.storage, (*pool_type, &user, duration), &lockup_info)?;
-                    total_lokups += lockup_info.lp_units_locked;
+                    total_lockups += lockup_info.lp_units_locked;
                 }
                 // update user's total lockup amount
                 TOTAL_USER_LOCKUP_AMOUNT.update(
                     deps.storage,
                     (*pool_type, &user),
                     env.block.height,
-                    |_lockup_amount| -> StdResult<Uint128> { Ok(total_lokups) },
+                    |_lockup_amount| -> StdResult<Uint128> { Ok(total_lockups) },
                 )?;
             }
         }
