@@ -13,7 +13,7 @@
     "@oclif/plugin-help": "^3",
     "@types/crypto-js": "^4.0.2",
     "ethereumjs-util": "^7.1.0",
-    "merkletreejs": "^0.2.23",
+    "merkletreejs": "^0.3.11",
     "tslib": "^1"
   },
   "devDependencies": {
