@@ -129,29 +129,6 @@ pub fn instantiate(
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **msg** is an object of type [`ExecuteMsg`].
-///
-/// ## Execute messages
-///
-/// * **ExecuteMsg::Receive(msg)** Parse incoming messages from the cNTRN token.
-///
-/// * **ExecuteMsg::UpdateConfig { new_config }** Admin function to update configuration parameters.
-///
-/// * **ExecuteMsg::InitializePool {
-///     pool_type,
-///     incentives_share,
-/// }** Facilitates addition of new Pool (axlrUSDC/NTRN or ATOM/NTRN) whose LP tokens can then be locked in the lockdrop contract.
-///
-/// * **ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-///             terraswap_lp_token,
-///             duration,
-///             withdraw_lp_stake,
-///         }** Claims user Rewards for a particular Lockup position.
-///
-/// * **ExecuteMsg::ProposeNewOwner { owner, expires_in }** Creates a request to change contract ownership.
-///
-/// * **ExecuteMsg::DropOwnershipProposal {}** Removes a request to change contract ownership.
-///
-/// * **ExecuteMsg::ClaimOwnership {}** Claims contract ownership.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
@@ -376,40 +353,6 @@ struct MigratePairStep2Data {
 /// * **_env** is an object of type [`Env`].
 ///
 /// * **msg** is an object of type [`QueryMsg`].
-///
-/// ## Queries
-/// * **QueryMsg::Config {}** Returns the config info.
-///
-/// * **QueryMsg::State {}** Returns the contract's state info.
-///
-/// * **QueryMsg::Pool { terraswap_lp_token }** Returns info regarding a certain supported LP token pool.
-///
-/// * **QueryMsg::UserInfo { address }** Returns info regarding a user (total NTRN rewards, list of lockup positions).
-///
-/// * **QueryMsg::UserInfoWithLockupsList { address }** Returns info regarding a user with lockups.
-///
-/// * **QueryMsg::LockUpInfo {
-///             user_address,
-///             terraswap_lp_token,
-///             duration,
-///         }** Returns info regarding a particular lockup position with a given duration and identifer for the LP tokens locked.
-///
-/// * **QueryMsg::PendingAssetReward {
-///             user_address,
-///             terraswap_lp_token,
-///             duration,
-///         }** Returns the amount of pending asset rewards for the specified recipient and for a specific lockup position.
-///
-/// * **QueryUserLockupTotalAtHeight {
-///         pool_type: PoolType,
-///         user_address: String,
-///         height: u64,
-///     }** Returns locked amount of LP tokens for the specified user for the specified pool at a specific height.
-///
-/// * **QueryLockupTotalAtHeight {
-///         pool_type: PoolType,
-///         height: u64,
-///     }** Returns a total amount of LP tokens for the specified pool at a specific height.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
@@ -493,6 +436,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response>
 
     MIGRATION_STATUS.save(deps.storage, &MigrationState::MigrateLiquidity)?;
 
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     Ok(Response::default().add_attributes(attrs))
 }
 
@@ -881,7 +825,7 @@ fn migrate_users(
         attrs.push(attr("users_count", users.len().to_string()));
         for user in users {
             for pool_type in &pool_types {
-                let mut total_lokups = Uint128::zero();
+                let mut total_lockups = Uint128::zero();
                 let lookup_infos: Vec<(u64, LockupInfoV2)> = LOCKUP_INFO
                     .prefix((*pool_type, &user))
                     .range(deps.storage, None, None, Order::Ascending)
@@ -895,14 +839,14 @@ fn migrate_users(
                     lockup_info.lp_units_locked =
                         (*kf).checked_mul_uint128(lockup_info.lp_units_locked)?;
                     LOCKUP_INFO.save(deps.storage, (*pool_type, &user, duration), &lockup_info)?;
-                    total_lokups += lockup_info.lp_units_locked;
+                    total_lockups += lockup_info.lp_units_locked;
                 }
                 // update user's total lockup amount
                 TOTAL_USER_LOCKUP_AMOUNT.update(
                     deps.storage,
                     (*pool_type, &user),
                     env.block.height,
-                    |_lockup_amount| -> StdResult<Uint128> { Ok(total_lokups) },
+                    |_lockup_amount| -> StdResult<Uint128> { Ok(total_lockups) },
                 )?;
             }
         }

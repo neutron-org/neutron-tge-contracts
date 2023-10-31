@@ -113,11 +113,6 @@ pub fn instantiate(
 /// * **info** is an object of type [`MessageInfo`].
 ///
 /// * **msg** is an object of type [`ExecuteMsg`].
-///
-/// ## Execute messages
-///
-/// * **ExecuteMsg::Receive(msg)** Parse incoming messages from the NTRN token.
-///
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -229,13 +224,6 @@ pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Res
 /// * **_env** is an object of type [`Env`].
 ///
 /// * **msg** is an object of type [`QueryMsg`].
-///
-/// ## Queries
-/// * **QueryMsg::Config {}** Returns the config info.
-///
-/// * **QueryMsg::State {}** Returns state of the contract.
-///
-/// * **QueryMsg::UserInfo { address }** Returns user position details.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {

@@ -13,7 +13,7 @@ use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfo
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use cosmwasm_std::{
     attr, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdError, StdResult, Storage, SubMsg, Uint128,
+    StdError, StdResult, Storage, Uint128,
 };
 use cw20::Cw20ReceiveMsg;
 use cw_utils::must_pay;
@@ -220,7 +220,7 @@ fn claim(
             &deps.querier,
             recipient.unwrap_or_else(|| info.sender.to_string()),
         )?;
-        response = response.add_submessage(SubMsg::new(transfer_msg));
+        response = response.add_message(transfer_msg);
 
         sender_vesting_info.released_amount = sender_vesting_info
             .released_amount

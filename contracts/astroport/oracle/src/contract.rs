@@ -42,10 +42,16 @@ pub fn instantiate(
     Ok(Response::default())
 }
 
+/// ## Description
 /// Exposes all the execute functions available in the contract.
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
 ///
-/// ## Variants
-/// * **ExecuteMsg::Update {}** Updates the local TWAP values for the assets in the Astroport pool.
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
+///
+/// * **msg** is an object of type [`ExecuteMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -174,10 +180,12 @@ pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
 }
 
 /// Exposes all the queries available in the contract.
+/// ## Params
+/// * **deps** is an object of type [`Deps`].
 ///
-/// ## Queries
-/// * **QueryMsg::Consult { token, amount }** Validates assets and calculates a new average
-/// amount with updated precision
+/// * **_env** is an object of type [`Env`].
+///
+/// * **msg** is an object of type [`QueryMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
     match msg {

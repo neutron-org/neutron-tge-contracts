@@ -21,7 +21,7 @@ use astroport::pair::{
 };
 use cosmwasm_std::{
     attr, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, Storage, SubMsg, Uint128, WasmMsg,
+    MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use cw_utils::must_pay;
@@ -241,7 +241,7 @@ fn claim(
         let transfer_msg = vesting_token
             .with_balance(claim_amount)
             .into_msg(recipient.unwrap_or_else(|| info.sender.to_string()))?;
-        response = response.add_submessage(SubMsg::new(transfer_msg));
+        response = response.add_message(transfer_msg);
 
         sender_vesting_info.released_amount = sender_vesting_info
             .released_amount
