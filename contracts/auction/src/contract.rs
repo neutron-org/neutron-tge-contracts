@@ -3,7 +3,7 @@ use astroport::U256;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
+    attr, to_json_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Order, Response, StdError, StdResult, Uint128, WasmMsg,
 };
 use std::str::FromStr;
@@ -227,9 +227,9 @@ pub fn execute_deposit(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Res
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&CONFIG.load(deps.storage)?),
-        QueryMsg::State {} => to_binary(&STATE.load(deps.storage)?),
-        QueryMsg::UserInfo { address } => to_binary(&query_user_info(deps, _env, address)?),
+        QueryMsg::Config {} => to_json_binary(&CONFIG.load(deps.storage)?),
+        QueryMsg::State {} => to_json_binary(&STATE.load(deps.storage)?),
+        QueryMsg::UserInfo { address } => to_json_binary(&query_user_info(deps, _env, address)?),
     }
 }
 
@@ -708,7 +708,7 @@ pub fn execute_finalize_init_pool(
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_usdc_lp_token_address.to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: config.reserve_contract_address.to_string(),
                     amount: usdc_lp_to_reserve,
                 })?,
@@ -716,7 +716,7 @@ pub fn execute_finalize_init_pool(
             CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_atom_lp_token_address.to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: config.reserve_contract_address.to_string(),
                     amount: atom_lp_to_reserve,
                 })?,
@@ -728,10 +728,10 @@ pub fn execute_finalize_init_pool(
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_atom_lp_token_address,
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Send {
+                msg: to_json_binary(&Cw20ExecuteMsg::Send {
                     contract: lockdrop_address.to_string(),
                     amount: state.atom_lp_locked,
-                    msg: to_binary(&LockDropCw20HookMsg::InitializePool {
+                    msg: to_json_binary(&LockDropCw20HookMsg::InitializePool {
                         pool_type: LockDropPoolType::ATOM,
                         incentives_share: state.atom_ntrn_size,
                     })?,
@@ -742,10 +742,10 @@ pub fn execute_finalize_init_pool(
             msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: ntrn_usdc_lp_token_address,
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Send {
+                msg: to_json_binary(&Cw20ExecuteMsg::Send {
                     contract: lockdrop_address.to_string(),
                     amount: state.usdc_lp_locked,
-                    msg: to_binary(&LockDropCw20HookMsg::InitializePool {
+                    msg: to_json_binary(&LockDropCw20HookMsg::InitializePool {
                         pool_type: LockDropPoolType::USDC,
                         incentives_share: state.usdc_ntrn_size,
                     })?,
@@ -847,10 +847,10 @@ fn execute_migrate_to_vesting(
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: pool_info.ntrn_atom_lp_token_address,
             funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Send {
+            msg: to_json_binary(&Cw20ExecuteMsg::Send {
                 contract: config.vesting_atom_contract_address.to_string(),
                 amount: atom_lp_amount,
-                msg: to_binary(&VestingExecuteMsg::RegisterVestingAccounts {
+                msg: to_json_binary(&VestingExecuteMsg::RegisterVestingAccounts {
                     vesting_accounts: atom_users,
                 })?,
             })?,
@@ -860,10 +860,10 @@ fn execute_migrate_to_vesting(
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: pool_info.ntrn_usdc_lp_token_address,
             funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Send {
+            msg: to_json_binary(&Cw20ExecuteMsg::Send {
                 contract: config.vesting_usdc_contract_address.to_string(),
                 amount: usdc_lp_amount,
-                msg: to_binary(&VestingExecuteMsg::RegisterVestingAccounts {
+                msg: to_json_binary(&VestingExecuteMsg::RegisterVestingAccounts {
                     vesting_accounts: usdc_users,
                 })?,
             })?,
@@ -920,7 +920,7 @@ fn build_provide_liquidity_to_lp_pool_msg(
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: pool_address,
         funds,
-        msg: to_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
+        msg: to_json_binary(&astroport::pair::ExecuteMsg::ProvideLiquidity {
             assets: vec![base, other],
             slippage_tolerance: None,
             auto_stake: None,
@@ -1021,7 +1021,7 @@ pub fn execute_lock_lp_tokens(
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lockdrop_address.to_string(),
         funds: vec![],
-        msg: to_binary(&LockDropExecuteMsg::IncreaseLockupFor {
+        msg: to_json_binary(&LockDropExecuteMsg::IncreaseLockupFor {
             user_address: info.sender.to_string(),
             pool_type: asset,
             amount,
@@ -1086,7 +1086,7 @@ pub fn execute_withdraw_lp_tokens(
     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lockdrop_address.to_string(),
         funds: vec![],
-        msg: to_binary(&LockDropExecuteMsg::WithdrawFromLockup {
+        msg: to_json_binary(&LockDropExecuteMsg::WithdrawFromLockup {
             user_address: info.sender.to_string(),
             pool_type: asset,
             amount,

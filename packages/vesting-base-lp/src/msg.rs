@@ -3,7 +3,7 @@ use crate::types::{
 };
 use astroport::asset::AssetInfo;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_binary, Addr, Binary, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg};
+use cosmwasm_std::{to_json_binary, Addr, Binary, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg};
 use cw20::Cw20ReceiveMsg;
 
 /// This structure describes the execute messages available in a vesting contract.
@@ -202,7 +202,7 @@ impl CallbackMsg {
     pub fn to_cosmos_msg(self, env: &Env) -> StdResult<CosmosMsg> {
         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: env.contract.address.to_string(),
-            msg: to_binary(&ExecuteMsg::Callback(self))?,
+            msg: to_json_binary(&ExecuteMsg::Callback(self))?,
             funds: vec![],
         }))
     }

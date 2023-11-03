@@ -1,5 +1,5 @@
 use cosmwasm_std::{
-    to_binary, Addr, Binary, CosmosMsg, QuerierWrapper, QueryRequest, StdResult, Uint128, WasmMsg,
+    to_json_binary, Addr, Binary, CosmosMsg, QuerierWrapper, QueryRequest, StdResult, Uint128, WasmMsg,
     WasmQuery,
 };
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
@@ -15,7 +15,7 @@ pub fn build_transfer_cw20_token_msg(
 ) -> StdResult<CosmosMsg> {
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: token_contract_address,
-        msg: to_binary(&Cw20ExecuteMsg::Transfer {
+        msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
             recipient: recipient.into(),
             amount,
         })?,
@@ -36,7 +36,7 @@ pub fn build_send_cw20_token_msg(
 ) -> StdResult<CosmosMsg> {
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: token_contract_address,
-        msg: to_binary(&Cw20ExecuteMsg::Send {
+        msg: to_json_binary(&Cw20ExecuteMsg::Send {
             contract: recipient_contract_addr,
             amount,
             msg: msg_,
@@ -59,7 +59,7 @@ pub fn cntrn_get_balance(
 ) -> StdResult<Uint128> {
     let query: BalanceResponse = querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
         contract_addr: token_address.into(),
-        msg: to_binary(&Cw20QueryMsg::Balance {
+        msg: to_json_binary(&Cw20QueryMsg::Balance {
             address: account_addr.into(),
         })?,
     }))?;
@@ -82,7 +82,7 @@ pub fn build_approve_cntrn_msg(
 ) -> StdResult<CosmosMsg> {
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: token_contract_address,
-        msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
+        msg: to_json_binary(&Cw20ExecuteMsg::IncreaseAllowance {
             spender: spender_address,
             amount: allowance_amount,
             expires: Some(cw20::Expiration::AtHeight(expiration_block)),

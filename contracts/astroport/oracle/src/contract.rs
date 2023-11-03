@@ -7,7 +7,7 @@ use astroport::oracle::{Config, ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::query_pair_info;
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response, Uint128,
+    entry_point, to_json_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response, Uint128,
     Uint256, Uint64,
 };
 use cw2::set_contract_version;
@@ -189,12 +189,12 @@ pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
     match msg {
-        QueryMsg::Consult { token, amount } => Ok(to_binary(&consult(deps, token, amount)?)?),
+        QueryMsg::Consult { token, amount } => Ok(to_json_binary(&consult(deps, token, amount)?)?),
         QueryMsg::TWAPAtHeight { token, height } => {
-            Ok(to_binary(&twap_at_height(deps, token, height)?)?)
+            Ok(to_json_binary(&twap_at_height(deps, token, height)?)?)
         }
-        QueryMsg::Config {} => Ok(to_binary(&query_config(deps)?)?),
-        QueryMsg::LastUpdateTimestamp {} => Ok(to_binary(&query_last_update_ts(deps)?)?),
+        QueryMsg::Config {} => Ok(to_json_binary(&query_config(deps)?)?),
+        QueryMsg::LastUpdateTimestamp {} => Ok(to_json_binary(&query_last_update_ts(deps)?)?),
     }
 }
 

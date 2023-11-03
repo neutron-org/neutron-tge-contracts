@@ -4,7 +4,7 @@ use astroport_periphery::lockdrop::{
     Config, ExecuteMsg, InstantiateMsg, LockupRewardsInfo, MigrationState, QueryMsg,
 };
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-use cosmwasm_std::{coin, from_binary, Addr, Decimal256, StdError, Uint128};
+use cosmwasm_std::{coin, from_json, Addr, Decimal256, StdError, Uint128};
 
 #[test]
 fn update_owner() {
@@ -92,7 +92,7 @@ fn update_owner() {
 
     // Let's query the state
     let config: Config =
-        from_binary(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap();
+        from_json(query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap();
     assert_eq!(new_owner, config.owner);
 }
 
@@ -137,7 +137,7 @@ fn increase_ntrn_incentives() {
     assert!(res.is_ok());
 
     let config: Config =
-        from_binary(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap();
+        from_json(query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap();
     assert_eq!(Uint128::new(100u128), config.lockdrop_incentives);
 
     // invalid coin

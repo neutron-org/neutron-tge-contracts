@@ -1,7 +1,7 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, from_slice, Binary, DepsMut, Env, Ibc3ChannelOpenResponse, IbcBasicResponse, IbcChannel,
+    attr, from_json, Binary, DepsMut, Env, Ibc3ChannelOpenResponse, IbcBasicResponse, IbcChannel,
     IbcChannelCloseMsg, IbcChannelConnectMsg, IbcChannelOpenMsg, IbcChannelOpenResponse, IbcOrder,
     IbcPacket, IbcPacketAckMsg, IbcPacketReceiveMsg, IbcPacketTimeoutMsg, IbcReceiveResponse,
     StdResult, Uint64,
@@ -95,7 +95,7 @@ fn do_ibc_packet_receive(
     env: Env,
     packet: &IbcPacket,
 ) -> Result<IbcReceiveResponse, ContractError> {
-    let resp: OracleResponsePacketData = from_slice(&packet.data)?;
+    let resp: OracleResponsePacketData = from_json(&packet.data)?;
     let config = CONFIG.load(deps.storage)?;
     let symbols = config.symbols;
     deps.api
@@ -153,6 +153,6 @@ fn ttt() {
     let res: Vec<u64> = OBIDecode::decode(&mut b.as_slice()).unwrap();
 
     println!("{:?}\n{:?}", res, b.len());
-    // let result: Result<Vec<i128>, _> = from_slice(b.as_slice());
+    // let result: Result<Vec<i128>, _> = from_json(b.as_slice());
     // println!("{:?}", result);
 }

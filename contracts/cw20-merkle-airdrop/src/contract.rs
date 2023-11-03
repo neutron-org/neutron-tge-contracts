@@ -2,7 +2,7 @@ use crate::enumerable::query_all_address_map;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    attr, coin, to_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
+    attr, coin, to_json_binary, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response,
     StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
@@ -156,7 +156,7 @@ pub fn execute_claim(
         hex::decode_to_slice(p, &mut proof_buf)?;
         let mut hashes = [hash, proof_buf];
         hashes.sort_unstable();
-        sha2::Sha256::digest(&hashes.concat())
+        sha2::Sha256::digest(hashes.concat())
             .as_slice()
             .try_into()
             .map_err(|_| ContractError::WrongLength {})
@@ -184,7 +184,7 @@ pub fn execute_claim(
         .map_err(ContractError::Std)?;
     let vesting_message = WasmMsg::Execute {
         contract_addr: config.credits_address.to_string(),
-        msg: to_binary(&AddVesting {
+        msg: to_json_binary(&AddVesting {
             address: info.sender.to_string(),
             amount,
             start_time: vesting_start,
@@ -246,7 +246,7 @@ pub fn execute_withdraw_all(
     // Generate burn submessage and return a response
     let burn_message = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: cfg.credits_address.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::Burn {
+        msg: to_json_binary(&Cw20ExecuteMsg::Burn {
             amount: amount_to_withdraw,
         })?,
         funds: vec![],
@@ -352,16 +352,16 @@ pub fn execute_resume(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&query_config(deps)?),
-        QueryMsg::MerkleRoot {} => to_binary(&query_merkle_root(deps)?),
-        QueryMsg::IsClaimed { address } => to_binary(&query_is_claimed(deps, address)?),
-        QueryMsg::IsPaused {} => to_binary(&query_is_paused(deps)?),
-        QueryMsg::TotalClaimed {} => to_binary(&query_total_claimed(deps)?),
+        QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
+        QueryMsg::MerkleRoot {} => to_json_binary(&query_merkle_root(deps)?),
+        QueryMsg::IsClaimed { address } => to_json_binary(&query_is_claimed(deps, address)?),
+        QueryMsg::IsPaused {} => to_json_binary(&query_is_paused(deps)?),
+        QueryMsg::TotalClaimed {} => to_json_binary(&query_total_claimed(deps)?),
         QueryMsg::AccountMap { external_address } => {
-            to_binary(&query_address_map(deps, external_address)?)
+            to_json_binary(&query_address_map(deps, external_address)?)
         }
         QueryMsg::AllAccountMaps { start_after, limit } => {
-            to_binary(&query_all_address_map(deps, start_after, limit)?)
+            to_json_binary(&query_all_address_map(deps, start_after, limit)?)
         }
     }
 }

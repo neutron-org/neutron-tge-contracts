@@ -20,7 +20,7 @@ use astroport::pair::{
     Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
 };
 use cosmwasm_std::{
-    attr, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
+    attr, from_json, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
@@ -130,7 +130,7 @@ fn receive_cw20(
         return Err(ContractError::Unauthorized {});
     }
 
-    match from_binary(&cw20_msg.msg)? {
+    match from_json(&cw20_msg.msg)? {
         Cw20HookMsg::RegisterVestingAccounts { vesting_accounts } => {
             register_vesting_accounts(deps, vesting_accounts, cw20_msg.amount, env.block.height)
         }
@@ -453,10 +453,10 @@ fn migrate_liquidity_to_cl_pair_callback(
     if !amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: xyk_lp_token.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Send {
+            msg: to_json_binary(&Cw20ExecuteMsg::Send {
                 contract: xyk_pair.to_string(),
                 amount,
-                msg: to_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
+                msg: to_json_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
             })?,
             funds: vec![],
         }))
@@ -509,7 +509,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     if !withdrawn_ntrn_amount.is_zero() && !withdrawn_paired_asset_amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: cl_pair_address.to_string(),
-            msg: to_binary(&PairExecuteMsg::ProvideLiquidity {
+            msg: to_json_binary(&PairExecuteMsg::ProvideLiquidity {
                 assets: vec![
                     native_asset(ntrn_denom.clone(), withdrawn_ntrn_amount),
                     native_asset(paired_asset_denom.clone(), withdrawn_paired_asset_amount),
@@ -609,25 +609,25 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 
     match msg {
-        QueryMsg::Config {} => Ok(to_binary(&query_config(deps)?)?),
+        QueryMsg::Config {} => Ok(to_json_binary(&query_config(deps)?)?),
         QueryMsg::VestingAccount { address } => {
-            Ok(to_binary(&query_vesting_account(deps, address)?)?)
+            Ok(to_json_binary(&query_vesting_account(deps, address)?)?)
         }
         QueryMsg::VestingAccounts {
             start_after,
             limit,
             order_by,
-        } => Ok(to_binary(&query_vesting_accounts(
+        } => Ok(to_json_binary(&query_vesting_accounts(
             deps,
             start_after,
             limit,
             order_by,
         )?)?),
-        QueryMsg::AvailableAmount { address } => Ok(to_binary(&query_vesting_available_amount(
+        QueryMsg::AvailableAmount { address } => Ok(to_json_binary(&query_vesting_available_amount(
             deps, env, address,
         )?)?),
-        QueryMsg::VestingState {} => Ok(to_binary(&query_vesting_state(deps)?)?),
-        QueryMsg::Timestamp {} => Ok(to_binary(&query_timestamp(env)?)?),
+        QueryMsg::VestingState {} => Ok(to_json_binary(&query_vesting_state(deps)?)?),
+        QueryMsg::Timestamp {} => Ok(to_json_binary(&query_timestamp(env)?)?),
         QueryMsg::ManagedExtension { msg } => handle_query_managed_msg(deps, env, msg),
         QueryMsg::WithManagersExtension { msg } => handle_query_managers_msg(deps, env, msg),
         QueryMsg::HistoricalExtension { msg } => handle_query_historical_msg(deps, env, msg),

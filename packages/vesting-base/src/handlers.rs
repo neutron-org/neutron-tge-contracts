@@ -12,7 +12,7 @@ use crate::types::{
 use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfoExt};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use cosmwasm_std::{
-    attr, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
+    attr, from_json, to_json_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
     StdError, StdResult, Storage, Uint128,
 };
 use cw20::Cw20ReceiveMsg;
@@ -108,7 +108,7 @@ fn receive_cw20(
         return Err(ContractError::Unauthorized {});
     }
 
-    match from_binary(&cw20_msg.msg)? {
+    match from_json(&cw20_msg.msg)? {
         Cw20HookMsg::RegisterVestingAccounts { vesting_accounts } => {
             register_vesting_accounts(deps, vesting_accounts, cw20_msg.amount, env.block.height)
         }
@@ -285,25 +285,25 @@ pub(crate) fn get_vesting_token(config: &Config) -> Result<AssetInfo, ContractEr
 /// Exposes all the queries available in the contract.
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => Ok(to_binary(&query_config(deps)?)?),
+        QueryMsg::Config {} => Ok(to_json_binary(&query_config(deps)?)?),
         QueryMsg::VestingAccount { address } => {
-            Ok(to_binary(&query_vesting_account(deps, address)?)?)
+            Ok(to_json_binary(&query_vesting_account(deps, address)?)?)
         }
         QueryMsg::VestingAccounts {
             start_after,
             limit,
             order_by,
-        } => Ok(to_binary(&query_vesting_accounts(
+        } => Ok(to_json_binary(&query_vesting_accounts(
             deps,
             start_after,
             limit,
             order_by,
         )?)?),
-        QueryMsg::AvailableAmount { address } => Ok(to_binary(&query_vesting_available_amount(
+        QueryMsg::AvailableAmount { address } => Ok(to_json_binary(&query_vesting_available_amount(
             deps, env, address,
         )?)?),
-        QueryMsg::VestingState {} => Ok(to_binary(&query_vesting_state(deps)?)?),
-        QueryMsg::Timestamp {} => Ok(to_binary(&query_timestamp(env)?)?),
+        QueryMsg::VestingState {} => Ok(to_json_binary(&query_vesting_state(deps)?)?),
+        QueryMsg::Timestamp {} => Ok(to_json_binary(&query_timestamp(env)?)?),
         QueryMsg::ManagedExtension { msg } => handle_query_managed_msg(deps, env, msg),
         QueryMsg::WithManagersExtension { msg } => handle_query_managers_msg(deps, env, msg),
         QueryMsg::HistoricalExtension { msg } => handle_query_historical_msg(deps, env, msg),
