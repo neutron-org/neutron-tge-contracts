@@ -4,7 +4,7 @@ use cosmwasm_std::{Binary, Deps};
 use ripemd::{Digest as RipDigest, Ripemd160};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest as ShaDigest, Sha256};
+use sha2::Sha256;
 use std::convert::TryInto;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]

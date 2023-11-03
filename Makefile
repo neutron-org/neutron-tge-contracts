@@ -12,7 +12,11 @@ fmt:
 	@cargo fmt -- --check
 
 compile:
-	@./build_release.sh
+	@docker run --rm -v "$(CURDIR)":/code \
+	    --mount type=volume,source="$(notdir $(CURDIR))_cache",target=/target \
+	    --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+	    --platform linux/amd64 \
+	    cosmwasm/workspace-optimizer:0.14.0
 
 check_contracts:
 	@cargo install cosmwasm-check --locked

@@ -1,7 +1,49 @@
 [workspace]
-members = ["contracts/auction", "contracts/lockdrop", "contracts/credits", "contracts/vesting-lp", "contracts/vesting-lti", "contracts/vesting-investors", "contracts/cw20-merkle-airdrop", "contracts/price-feed", "contracts/astroport/*"]
+members = [
+    "contracts/auction",
+    "contracts/lockdrop",
+    "contracts/credits",
+    "contracts/vesting-lp",
+    "contracts/vesting-lti",
+    "contracts/vesting-investors",
+    "contracts/cw20-merkle-airdrop",
+    "contracts/price-feed",
+    "contracts/astroport/*"
+]
 
 [profile.release]
+opt-level = 3
+debug = false
 rpath = false
 lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
 overflow-checks = true
+
+[workspace.dependencies]
+cosmwasm-std = { version = "1.4.1", default-features = false }
+cw-storage-plus = "1.1.0"
+thiserror = "1.0.49"
+anyhow = "1.0.75"
+cw2 = "1.1.1"
+cw20 = "1.1.1"
+cosmwasm-schema = { version = "1.4.1", default-features = false }
+astroport = { path = "packages/astroport", default-features = false }
+astroport-periphery = { path = "packages/astroport_periphery" }
+vesting-base = { path = "packages/vesting-base" }
+# setting cw-multi-test to 0.17.0 enables cosmwasm_1_1, we don't want that
+cw-multi-test = "0.16.5"
+itertools = "0.11.0"
+schemars = "0.8.15"
+serde = { version = "1.0.189", default-features = false }
+sha2 = { version = "0.10.8", default-features = false }
+hex = "0.4.3"
+bech32 = "0.9.1"
+ripemd = "0.1.3"
+cw20-base = { version = "1.1.1", features = ["library"] }
+semver = "1.0.20"
+obi = "0.0.2"
+cw-band = "0.1.1"
+uint = "0.9.5"
