@@ -2,8 +2,8 @@ use crate::error::{ext_unsupported_err, ContractError};
 use crate::msg::{ExecuteMsgWithManagers, QueryMsgWithManagers};
 use crate::state::{CONFIG, VESTING_MANAGERS};
 use cosmwasm_std::{
-    attr, to_json_binary, Addr, Attribute, Binary, Deps, DepsMut, Env, MessageInfo, Order, Response,
-    StdError, StdResult,
+    attr, to_json_binary, Addr, Attribute, Binary, Deps, DepsMut, Env, MessageInfo, Order,
+    Response, StdError, StdResult,
 };
 
 /// Contains the with_managers extension check and routing of the message.

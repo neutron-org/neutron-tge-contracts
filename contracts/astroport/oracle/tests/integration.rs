@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cosmwasm_std::{
-    attr, to_json_binary, Addr, BlockInfo, Coin, Decimal, Decimal256, QueryRequest, StdResult, Uint128,
-    Uint64, WasmQuery,
+    attr, to_json_binary, Addr, BlockInfo, Coin, Decimal, Decimal256, QueryRequest, StdResult,
+    Uint128, Uint64, WasmQuery,
 };
 use cw20::{BalanceResponse, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, AppResponse, ContractWrapper, Executor};

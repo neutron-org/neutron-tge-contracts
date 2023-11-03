@@ -3,7 +3,9 @@ use crate::types::{
 };
 use astroport::asset::AssetInfo;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_json_binary, Addr, Binary, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg};
+use cosmwasm_std::{
+    to_json_binary, Addr, Binary, CosmosMsg, Decimal, Env, StdResult, Uint128, WasmMsg,
+};
 use cw20::Cw20ReceiveMsg;
 
 /// This structure describes the execute messages available in a vesting contract.

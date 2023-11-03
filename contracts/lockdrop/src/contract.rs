@@ -582,7 +582,9 @@ fn migrate_pair_step_1(
         msg: to_json_binary(&Cw20ExecuteMsg::Send {
             contract: pool_addr,
             amount: pool.amount_in_lockups,
-            msg: to_json_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
+            msg: to_json_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity {
+                assets: vec![],
+            })?,
         })?,
     }));
     attrs.push(attr(
