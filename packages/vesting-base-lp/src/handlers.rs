@@ -340,8 +340,7 @@ fn execute_migrate_liquidity(
         let user_amount = compute_share(&user.info)?;
         let debug_msg = format!(
             "DEBUG: execute_migrate_liquidity: user={}, user_amount={}",
-            user.address.to_string(),
-            user_amount.to_string()
+            user.address, user_amount
         );
         deps.api.debug(&debug_msg);
 
@@ -454,7 +453,7 @@ fn migrate_liquidity_to_cl_pair_callback(
         .amount;
 
     let mut msgs: Vec<CosmosMsg> = vec![];
-    let debug_msg = format!("DEBUG: migrate_liquidity_to_cl_pair_callback: ntrn_init_balance={}, paired_asset_init_balance={}, amount={}, ntrn_denom={}, paired_denom={}", ntrn_init_balance.to_string(), paired_asset_init_balance.to_string(), amount.to_string(), ntrn_denom, paired_asset_denom);
+    let debug_msg = format!("DEBUG: migrate_liquidity_to_cl_pair_callback: ntrn_init_balance={}, paired_asset_init_balance={}, amount={}, ntrn_denom={}, paired_denom={}", ntrn_init_balance, paired_asset_init_balance, amount, ntrn_denom, paired_asset_denom);
     deps.api.debug(&debug_msg);
     // push message to withdraw liquidity from the xyk pair
     if !amount.is_zero() {
@@ -510,7 +509,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     let withdrawn_ntrn_amount = ntrn_balance_after_withdrawal.checked_sub(ntrn_init_balance)?;
     let withdrawn_paired_asset_amount =
         paired_asset_balance_after_withdrawal.checked_sub(paired_asset_init_balance)?;
-    let debug_msg = format!("DEBUG: provide_liquidity_to_cl_pair_after_withdrawal_callback: ntrn_init_balance={}, paired_asset_init_balance={}, ntrn_balance_after_withdrawal={}, paired_asset_balance_after_withdrawal={}, withdrawn_ntrn_amount={}, withdrawn_paired_asset_amount={}, ntrn_denom={}, paired_asset_denom={}", ntrn_init_balance.to_string(), paired_asset_init_balance.to_string(), ntrn_balance_after_withdrawal.to_string(), paired_asset_balance_after_withdrawal.to_string(), withdrawn_ntrn_amount.to_string(), withdrawn_paired_asset_amount.to_string(), ntrn_denom, paired_asset_denom);
+    let debug_msg = format!("DEBUG: provide_liquidity_to_cl_pair_after_withdrawal_callback: ntrn_init_balance={}, paired_asset_init_balance={}, ntrn_balance_after_withdrawal={}, paired_asset_balance_after_withdrawal={}, withdrawn_ntrn_amount={}, withdrawn_paired_asset_amount={}, ntrn_denom={}, paired_asset_denom={}", ntrn_init_balance, paired_asset_init_balance, ntrn_balance_after_withdrawal, paired_asset_balance_after_withdrawal, withdrawn_ntrn_amount, withdrawn_paired_asset_amount, ntrn_denom, paired_asset_denom);
     deps.api.debug(&debug_msg);
     let mut msgs: Vec<CosmosMsg> = vec![];
 
