@@ -164,6 +164,7 @@ pub struct MigrateMsg {
     pub cl_pair: String,
     pub new_lp_token: String,
     pub batch_size: u32,
+    pub dust_threshold: Uint128,
 }
 /// This structure describes a CW20 hook message.
 #[cw_serde]

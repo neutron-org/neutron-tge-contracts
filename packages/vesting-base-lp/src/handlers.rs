@@ -337,7 +337,13 @@ fn execute_migrate_liquidity(
         .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
 
     for user in vesting_accounts.into_iter() {
-        let user_amount = compute_share(&user.info)?;
+        let user_share = compute_share(&user.info)?;
+        let user_amount = if user_share < migration_config.dust_threshold {
+            Uint128::zero()
+        } else {
+            user_share
+        };
+
         let debug_msg = format!(
             "DEBUG: execute_migrate_liquidity: user={}, user_amount={}",
             user.address, user_amount
@@ -723,6 +729,7 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
             batch_size: msg.batch_size,
             last_processed_user: None,
             new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
+            dust_threshold: msg.dust_threshold,
         },
     )?;
     config.vesting_token = Some(AssetInfo::Token {
