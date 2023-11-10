@@ -101,7 +101,7 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
-        ExecuteMsg::MigrateLiquidity { slippage_tolerance } => {
+        ExecuteMsg::MigrateLiquidity { slippage_tolerance, batch_size } => {
             execute_migrate_liquidity(deps, env, slippage_tolerance)
         }
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
@@ -299,6 +299,7 @@ fn execute_migrate_liquidity(
     deps: DepsMut,
     env: Env,
     slippage_tolerance: Option<Decimal>,
+    batch_size: Option<u32>,
 ) -> Result<Response, ContractError> {
     let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
     if migration_state == MigrationState::Completed {
@@ -306,10 +307,15 @@ fn execute_migrate_liquidity(
     }
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
 
+    batch = if Some(batch_size) {
+        batch_size
+    } else {
+        migration_config.batch_size
+    };
     let vesting_infos = read_vesting_infos(
         deps.as_ref(),
         migration_config.last_processed_user,
-        Some(migration_config.batch_size),
+        Some(batch),
         None,
     )?;
 

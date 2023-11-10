@@ -50,7 +50,7 @@ pub enum ExecuteMsg {
     /// Contains messages associated with the historical extension for vesting contracts.
     HistoricalExtension { msg: ExecuteMsgHistorical },
     ///
-    MigrateLiquidity { slippage_tolerance: Option<Decimal> },
+    MigrateLiquidity { slippage_tolerance: Option<Decimal>, batch_size: Option<u32> },
     /// Callbacks; only callable by the contract itself.
     Callback(CallbackMsg),
 }
