@@ -19,6 +19,7 @@ use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_ow
 use astroport::pair::{
     Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
 };
+
 use cosmwasm_std::{
     attr, from_binary, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Storage, SubMsg, Uint128, WasmMsg,
@@ -339,6 +340,15 @@ fn execute_migrate_liquidity(
     for user in vesting_accounts.into_iter() {
         let user_share = compute_share(&user.info)?;
         let user_amount = if user_share < migration_config.dust_threshold {
+            resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: pair_info.liquidity_token.to_string(),
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: user.address.to_string(),
+                    amount: user_share,
+                })?,
+                funds: vec![],
+            }));
+
             Uint128::zero()
         } else {
             user_share
