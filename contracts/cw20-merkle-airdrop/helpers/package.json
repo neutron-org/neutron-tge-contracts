@@ -10,7 +10,7 @@
     "@cosmjs/encoding": "^0.25.5",
     "@oclif/command": "^1",
     "@oclif/config": "^1",
-    "@oclif/plugin-help": "^3",
+    "@oclif/plugin-help": "^3.2.4",
     "@types/crypto-js": "^4.0.2",
     "ethereumjs-util": "^7.1.0",
     "merkletreejs": "^0.2.23",
