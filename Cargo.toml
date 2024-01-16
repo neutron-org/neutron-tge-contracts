@@ -2,13 +2,14 @@
 members = [
     "contracts/auction",
     "contracts/lockdrop",
+    "contracts/lockdrop-pcl",
     "contracts/credits",
     "contracts/vesting-lp",
     "contracts/vesting-lti",
     "contracts/vesting-investors",
     "contracts/cw20-merkle-airdrop",
     "contracts/price-feed",
-    "contracts/astroport/*"
+    "contracts/astroport/*",
 ]
 
 [profile.release]
