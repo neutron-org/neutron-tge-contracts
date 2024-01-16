@@ -2,9 +2,8 @@ use astroport::common::OwnershipProposal;
 use astroport::generator::PoolInfoResponse;
 use astroport::generator::QueryMsg as GenQueryMsg;
 use astroport::restricted_vector::RestrictedVector;
-use astroport_periphery::lockdrop::PoolType;
-use astroport_periphery::lockdrop::{
-    Config, LockupInfoV1, LockupInfoV2, PoolInfo, State, UserInfo,
+use astroport_periphery::lockdrop_pcl::{
+    Config, LockupInfoV1, LockupInfoV2, PoolInfo, PoolType, State, UserInfo,
 };
 use astroport_periphery::U64Key;
 use cosmwasm_std::{Addr, Deps, StdError, StdResult, Uint128};
@@ -39,14 +38,9 @@ pub const OLD_LOCKUP_INFO: Map<(PoolType, &Addr, U64Key), LockupInfoV1> =
     Map::new("lockup_position");
 
 pub trait CompatibleLoader<K, R> {
-    fn compatible_load(&self, deps: Deps, key: K, generator: &Option<Addr>) -> StdResult<R>;
+    fn compatible_load(&self, deps: Deps, key: K, generator: &Addr) -> StdResult<R>;
 
-    fn compatible_may_load(
-        &self,
-        deps: Deps,
-        key: K,
-        generator: &Option<Addr>,
-    ) -> StdResult<Option<R>>;
+    fn compatible_may_load(&self, deps: Deps, key: K, generator: &Addr) -> StdResult<Option<R>>;
 }
 
 impl CompatibleLoader<(PoolType, &Addr, U64Key), LockupInfoV2>
@@ -56,12 +50,11 @@ impl CompatibleLoader<(PoolType, &Addr, U64Key), LockupInfoV2>
         &self,
         deps: Deps,
         key: (PoolType, &Addr, U64Key),
-        generator: &Option<Addr>,
+        generator: &Addr,
     ) -> StdResult<LockupInfoV2> {
         self.load(deps.storage, key).or_else(|_| {
             let old_lockup_info = OLD_LOCKUP_INFO.load(deps.storage, key)?;
             let mut generator_proxy_debt = RestrictedVector::default();
-            let generator = generator.as_ref().expect("Generator should be set!");
 
             if !old_lockup_info.generator_proxy_debt.is_zero() {
                 let asset = ASSET_POOLS.load(deps.storage, key.0)?;
@@ -101,7 +94,7 @@ impl CompatibleLoader<(PoolType, &Addr, U64Key), LockupInfoV2>
         &self,
         deps: Deps,
         key: (PoolType, &Addr, U64Key),
-        generator: &Option<Addr>,
+        generator: &Addr,
     ) -> StdResult<Option<LockupInfoV2>> {
         if !OLD_LOCKUP_INFO.has(deps.storage, key) {
             return Ok(None);

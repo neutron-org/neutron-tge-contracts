@@ -5,7 +5,6 @@ use cosmwasm_std::{
     to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
     WasmMsg,
 };
-use cw20::Cw20ReceiveMsg;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -70,32 +69,20 @@ impl<'a> Prefixer<'a> for PoolType {
 pub struct InstantiateMsg {
     /// Account which can update config
     pub owner: Option<String>,
-    /// Account which can update token addresses and generator
-    pub token_info_manager: String,
+    /// Original XYK lockdrop contract address
+    pub xyk_lockdrop_contract: String,
     /// Credits contract address
     pub credits_contract: String,
     /// Auction contract address
     pub auction_contract: String,
-    /// Timestamp when Contract will start accepting LP Token deposits
-    pub init_timestamp: u64,
-    /// Number of seconds during which lockup deposits will be accepted
-    pub lock_window: u64,
-    /// Withdrawal Window Length :: Post the deposit window
-    pub withdrawal_window: u64,
-    /// Min. no. of weeks allowed for lockup
-    pub min_lock_duration: u64,
-    /// Max. no. of weeks allowed for lockup
-    pub max_lock_duration: u64,
-    /// Max lockup positions a user can have
-    pub max_positions_per_user: u32,
+    /// Generator (Staking for dual rewards) contract address
+    pub generator: String,
     /// Describes rewards coefficients for each lockup duration
     pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
-    /// Bootstrap Auction contract address
-    pub auction_contract_address: Option<String>,
     /// Generator (Staking for dual rewards) contract address
     pub generator_address: Option<String>,
 }
@@ -103,43 +90,10 @@ pub struct UpdateConfigMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    IncreaseLockupFor {
-        user_address: String,
-        pool_type: PoolType,
-        amount: Uint128,
-        duration: u64,
-    },
-    // Receive hook used to accept LP Token deposits
-    Receive(Cw20ReceiveMsg),
-    #[serde(rename = "increase_ntrn_incentives")]
-    IncreaseNTRNIncentives {},
     // ADMIN Function ::: To update configuration
     UpdateConfig {
         new_config: UpdateConfigMsg,
     },
-    SetTokenInfo {
-        atom_token: String,
-        usdc_token: String,
-        generator: String,
-    },
-    // Function to facilitate LP Token withdrawals from lockups
-    WithdrawFromLockup {
-        user_address: String,
-        pool_type: PoolType,
-        duration: u64,
-        amount: Uint128,
-    },
-
-    // ADMIN Function ::: To Migrate liquidity from terraswap to astroport
-    // MigrateLiquidity {
-    //     terraswap_lp_token: String,
-    //     astroport_pool_addr: String,
-    //     slippage_tolerance: Option<Decimal>,
-    // },
-    // ADMIN Function ::: To stake LP Tokens with the generator contract
-    // StakeLpTokens {
-    //     pool_type: PoolType,
-    // },
     // Facilitates ASTRO reward withdrawal which have not been delegated to bootstrap auction along with optional Unlock (can be forceful)
     // If withdraw_lp_stake is true and force_unlock is false, it Unlocks the lockup position if its lockup duration has concluded
     // If both withdraw_lp_stake and force_unlock are true, it forcefully unlocks the positon. user needs to approve ASTRO Token to
@@ -244,12 +198,6 @@ pub enum QueryMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct MigrateMsg {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
-pub struct MigrationInfo {
-    pub terraswap_migrated_amount: Uint128,
-    pub astroport_lp_token: Addr,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct LockupRewardsInfo {
     pub duration: u64,
@@ -260,28 +208,16 @@ pub struct LockupRewardsInfo {
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
-    /// Account which can update the generator and token addresses
-    pub token_info_manager: Addr,
+    /// Original XYK lockdrop contract address
+    pub xyk_lockdrop_contract: Addr,
     /// Credits contract address
     pub credits_contract: Addr,
     /// Bootstrap Auction contract address
     pub auction_contract: Addr,
     /// Generator (Staking for dual rewards) contract address
-    pub generator: Option<Addr>,
-    /// Timestamp when Contract will start accepting LP Token deposits
-    pub init_timestamp: u64,
-    /// Number of seconds during which lockup positions be accepted
-    pub lock_window: u64,
-    /// Withdrawal Window Length :: Post the deposit window
-    pub withdrawal_window: u64,
-    /// Min. no. of weeks allowed for lockup
-    pub min_lock_duration: u64,
-    /// Max. no. of weeks allowed for lockup
-    pub max_lock_duration: u64,
+    pub generator: Addr,
     /// Total NTRN lockdrop incentives to be distributed among the users
     pub lockdrop_incentives: Uint128,
-    /// Max lockup positions a user can have
-    pub max_positions_per_user: u32,
     /// Describes rewards coefficients for each lockup duration
     pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
@@ -418,9 +354,4 @@ pub struct LockUpInfoResponse {
     pub astroport_lp_units: Option<Uint128>,
     pub astroport_lp_token: Addr,
     pub astroport_lp_transferred: Option<Uint128>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct PendingAssetRewardResponse {
-    pub amount: Uint128,
 }

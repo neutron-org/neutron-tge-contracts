@@ -995,7 +995,7 @@ dependencies = [
 
 [[package]]
 name = "neutron-lockdrop-pcl"
-version = "1.2.1"
+version = "1.0.0"
 dependencies = [
  "astroport 2.5.0 (git+https://github.com/astroport-fi/astroport-core.git?tag=v2.5.0)",
  "astroport-periphery",

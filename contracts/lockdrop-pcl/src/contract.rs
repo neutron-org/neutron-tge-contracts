@@ -12,18 +12,18 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
-    Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
-    Uint128, Uint256, WasmMsg,
+    attr, coins, entry_point, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal,
+    Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult, Uint128,
+    Uint256, WasmMsg,
 };
 use cw2::set_contract_version;
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
-use astroport_periphery::lockdrop::{
-    CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
-    LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolType, QueryMsg, State,
-    StateResponse, UpdateConfigMsg, UserInfoResponse, UserInfoWithListResponse,
+use astroport_periphery::lockdrop_pcl::{
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockUpInfoResponse, LockUpInfoSummary,
+    MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
+    UserInfoResponse, UserInfoWithListResponse,
 };
 
 use crate::state::{
@@ -36,43 +36,19 @@ const AIRDROP_REWARDS_MULTIPLIER: &str = "1.0";
 pub const UNTRN_DENOM: &str = "untrn";
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "neutron_lockdrop";
+const CONTRACT_NAME: &str = "neutron_lockdrop_pcl";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Minimum lockup positions for user.
-const MIN_POSITIONS_PER_USER: u32 = 1;
-
 /// Creates a new contract with the specified parameters packed in the `msg` variable.
-/// Returns a [`Response`] with the specified attributes if the operation was successful, or a [`ContractError`] if the contract was not created
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **msg**  is a message of type [`InstantiateMsg`] which contains the parameters used for creating the contract.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    // CHECK :: init_timestamp needs to be valid
-    if env.block.time.seconds() > msg.init_timestamp {
-        return Err(StdError::generic_err(format!(
-            "Invalid init_timestamp. Current timestamp : {}",
-            env.block.time.seconds()
-        )));
-    }
-
-    // CHECK :: min_lock_duration , max_lock_duration need to be valid (min_lock_duration < max_lock_duration)
-    if msg.max_lock_duration < msg.min_lock_duration || msg.min_lock_duration == 0u64 {
-        return Err(StdError::generic_err("Invalid Lockup durations"));
-    }
 
     if msg.lockup_rewards_info.is_empty() {
         return Err(StdError::generic_err("Invalid lockup rewards info"));
@@ -85,29 +61,17 @@ pub fn instantiate(
         }
     }
 
-    if msg.max_positions_per_user < MIN_POSITIONS_PER_USER {
-        return Err(StdError::generic_err(
-            "The maximum number of locked positions per user cannot be lower than a minimum acceptable value."
-        ));
-    }
-
     let config = Config {
         owner: msg
             .owner
             .map(|v| deps.api.addr_validate(&v))
             .transpose()?
             .unwrap_or(info.sender),
-        token_info_manager: deps.api.addr_validate(&msg.token_info_manager)?,
+        xyk_lockdrop_contract: deps.api.addr_validate(&msg.xyk_lockdrop_contract)?,
         credits_contract: deps.api.addr_validate(&msg.credits_contract)?,
         auction_contract: deps.api.addr_validate(&msg.auction_contract)?,
-        generator: None,
-        init_timestamp: msg.init_timestamp,
-        lock_window: msg.lock_window,
-        withdrawal_window: msg.withdrawal_window,
-        min_lock_duration: msg.min_lock_duration,
-        max_lock_duration: msg.max_lock_duration,
+        generator: deps.api.addr_validate(&msg.generator)?,
         lockdrop_incentives: Uint128::zero(),
-        max_positions_per_user: msg.max_positions_per_user,
         lockup_rewards_info: msg.lockup_rewards_info,
     };
 
@@ -116,43 +80,10 @@ pub fn instantiate(
     Ok(Response::default())
 }
 
-/// ## Description
 /// Exposes all the execute functions available in the contract.
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **msg** is an object of type [`ExecuteMsg`].
-///
-/// ## Execute messages
-///
-/// * **ExecuteMsg::Receive(msg)** Parse incoming messages from the cNTRN token.
-///
-/// * **ExecuteMsg::UpdateConfig { new_config }** Admin function to update configuration parameters.
-///
-/// * **ExecuteMsg::InitializePool {
-///     pool_type,
-///     incentives_share,
-/// }** Facilitates addition of new Pool (axlrUSDC/NTRN or ATOM/NTRN) whose LP tokens can then be locked in the lockdrop contract.
-///
-/// * **ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
-///             terraswap_lp_token,
-///             duration,
-///             withdraw_lp_stake,
-///         }** Claims user Rewards for a particular Lockup position.
-///
-/// * **ExecuteMsg::ProposeNewOwner { owner, expires_in }** Creates a request to change contract ownership.
-///
-/// * **ExecuteMsg::DropOwnershipProposal {}** Removes a request to change contract ownership.
-///
-/// * **ExecuteMsg::ClaimOwnership {}** Claims contract ownership.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     match msg {
-        ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
         ExecuteMsg::ClaimRewardsAndOptionallyUnlock {
             pool_type,
             duration,
@@ -191,81 +122,11 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
                 Ok(())
             })
         }
-        ExecuteMsg::IncreaseNTRNIncentives {} => handle_increasing_ntrn_incentives(deps, env, info),
-        ExecuteMsg::IncreaseLockupFor {
-            user_address,
-            pool_type,
-            amount,
-            duration,
-        } => handle_increase_lockup(deps, env, info, user_address, pool_type, duration, amount),
-        ExecuteMsg::WithdrawFromLockup {
-            user_address,
-            pool_type,
-            duration,
-            amount,
-        } => {
-            handle_withdraw_from_lockup(deps, env, info, user_address, pool_type, duration, amount)
-        }
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
-        ExecuteMsg::SetTokenInfo {
-            usdc_token,
-            atom_token,
-            generator,
-        } => handle_set_token_info(deps, env, info, usdc_token, atom_token, generator),
     }
 }
 
-/// Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template.
-/// If the template is not found in the received message, then an [`StdError`] is returned,
-/// otherwise it returns the [`Response`] with the specified attributes if the operation was successful.
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **cw20_msg** is an object of type [`Cw20ReceiveMsg`]. This is the CW20 message that has to be processed.
-pub fn receive_cw20(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    cw20_msg: Cw20ReceiveMsg,
-) -> Result<Response, StdError> {
-    let cw20_sender_addr = deps.api.addr_validate(&cw20_msg.sender)?;
-    // CHECK :: Tokens sent > 0
-    if cw20_msg.amount == Uint128::zero() {
-        return Err(StdError::generic_err(
-            "Number of tokens sent should be > 0 ",
-        ));
-    }
-
-    match from_binary(&cw20_msg.msg)? {
-        Cw20HookMsg::InitializePool {
-            pool_type,
-            incentives_share,
-        } => handle_initialize_pool(
-            deps,
-            env,
-            info,
-            pool_type,
-            cw20_sender_addr,
-            incentives_share,
-            cw20_msg.amount,
-        ),
-    }
-}
-
-/// ## Description
-/// Handles callback. Returns a [`ContractError`] on failure.
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **msg** is an object of type [`CallbackMsg`].
+/// Handles callback.
 fn _handle_callback(
     deps: DepsMut,
     env: Env,
@@ -307,46 +168,6 @@ fn _handle_callback(
 }
 
 /// Exposes all the queries available in the contract.
-/// ## Params
-/// * **deps** is an object of type [`Deps`].
-///
-/// * **_env** is an object of type [`Env`].
-///
-/// * **msg** is an object of type [`QueryMsg`].
-///
-/// ## Queries
-/// * **QueryMsg::Config {}** Returns the config info.
-///
-/// * **QueryMsg::State {}** Returns the contract's state info.
-///
-/// * **QueryMsg::Pool { terraswap_lp_token }** Returns info regarding a certain supported LP token pool.
-///
-/// * **QueryMsg::UserInfo { address }** Returns info regarding a user (total NTRN rewards, list of lockup positions).
-///
-/// * **QueryMsg::UserInfoWithLockupsList { address }** Returns info regarding a user with lockups.
-///
-/// * **QueryMsg::LockUpInfo {
-///             user_address,
-///             terraswap_lp_token,
-///             duration,
-///         }** Returns info regarding a particular lockup position with a given duration and identifer for the LP tokens locked.
-///
-/// * **QueryMsg::PendingAssetReward {
-///             user_address,
-///             terraswap_lp_token,
-///             duration,
-///         }** Returns the amount of pending asset rewards for the specified recipient and for a specific lockup position.
-///
-/// * **QueryUserLockupTotalAtHeight {
-///         pool_type: PoolType,
-///         user_address: String,
-///         height: u64,
-///     }** Returns locked amount of LP tokens for the specified user for the specified pool at a specific height.
-///
-/// * **QueryLockupTotalAtHeight {
-///         pool_type: PoolType,
-///         height: u64,
-///     }** Returns a total amount of LP tokens for the specified pool at a specific height.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
@@ -384,13 +205,7 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-/// Used for contract migration. Returns a default object of type [`Response`].
-/// ## Params
-/// * **_deps** is an object of type [`DepsMut`].
-///
-/// * **_env** is an object of type [`Env`].
-///
-/// * **_msg** is an object of type [`MigrateMsg`].
+/// Used for contract migration.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
     Ok(Response::default())
@@ -416,506 +231,27 @@ pub fn handle_update_config(
         return Err(StdError::generic_err("Unauthorized"));
     }
 
-    if let Some(auction) = new_config.auction_contract_address {
-        config.auction_contract = deps.api.addr_validate(&auction)?;
-        attributes.push(attr("auction_contract", auction));
-    };
-
     if let Some(generator) = new_config.generator_address {
         // If generator is set, we check is any LP tokens are currently staked before updating generator address
-        if config.generator.is_some() {
-            for pool_type in ASSET_POOLS
-                .keys(deps.storage, None, None, Order::Ascending)
-                .collect::<Result<Vec<PoolType>, StdError>>()?
-            {
-                let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
-                if pool_info.is_staked {
-                    return Err(StdError::generic_err(format!(
-                        "{:?} astro LP tokens already staked. Unstake them before updating generator",
-                        pool_type
-                    )));
-                }
+        for pool_type in ASSET_POOLS
+            .keys(deps.storage, None, None, Order::Ascending)
+            .collect::<Result<Vec<PoolType>, StdError>>()?
+        {
+            let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
+            if pool_info.is_staked {
+                return Err(StdError::generic_err(format!(
+                    "{:?} astro LP tokens already staked. Unstake them before updating generator",
+                    pool_type
+                )));
             }
         }
 
-        config.generator = Some(deps.api.addr_validate(&generator)?);
+        config.generator = deps.api.addr_validate(&generator)?;
         attributes.push(attr("new_generator", generator))
     }
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attributes(attributes))
-}
-
-pub fn handle_set_token_info(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    usdc_token: String,
-    atom_token: String,
-    generator: String,
-) -> Result<Response, StdError> {
-    let mut config = CONFIG.load(deps.storage)?;
-
-    // CHECK :: Only owner and token info manager can call this function
-    if info.sender != config.owner && info.sender != config.token_info_manager {
-        return Err(StdError::generic_err("Unauthorized"));
-    }
-
-    // POOL INFO :: Initialize new pool
-    let pool_info = PoolInfo {
-        lp_token: deps.api.addr_validate(&atom_token)?,
-        amount_in_lockups: Default::default(),
-        incentives_share: Uint128::zero(),
-        weighted_amount: Default::default(),
-        generator_ntrn_per_share: Default::default(),
-        generator_proxy_per_share: RestrictedVector::default(),
-        is_staked: false,
-    };
-    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
-
-    // POOL INFO :: Initialize new pool
-    let pool_info = PoolInfo {
-        lp_token: deps.api.addr_validate(&usdc_token)?,
-        amount_in_lockups: Default::default(),
-        incentives_share: Uint128::zero(),
-        weighted_amount: Default::default(),
-        generator_ntrn_per_share: Default::default(),
-        generator_proxy_per_share: RestrictedVector::default(),
-        is_staked: false,
-    };
-    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
-
-    config.generator = Some(deps.api.addr_validate(&generator)?);
-    CONFIG.save(deps.storage, &config)?;
-
-    let attributes = vec![
-        attr("action", "update_config"),
-        attr("usdc_token", usdc_token),
-        attr("atom_token", atom_token),
-        attr("generator", generator),
-    ];
-
-    Ok(Response::new().add_attributes(attributes))
-}
-
-/// Facilitates increasing NTRN incentives that are to be distributed as Lockdrop participation reward. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-pub fn handle_increasing_ntrn_incentives(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-) -> Result<Response, StdError> {
-    let mut config = CONFIG.load(deps.storage)?;
-
-    if env.block.time.seconds()
-        >= config.init_timestamp + config.lock_window + config.withdrawal_window
-    {
-        return Err(StdError::generic_err("Lock window is closed"));
-    };
-
-    let incentive = info.funds.iter().find(|c| c.denom == UNTRN_DENOM);
-    let amount = if let Some(coin) = incentive {
-        coin.amount
-    } else {
-        return Err(StdError::generic_err(format!(
-            "{} is not found",
-            UNTRN_DENOM
-        )));
-    };
-    // Anyone can increase ntrn incentives
-    config.lockdrop_incentives = config.lockdrop_incentives.checked_add(amount)?;
-
-    CONFIG.save(deps.storage, &config)?;
-    Ok(Response::new()
-        .add_attribute("action", "ntrn_incentives_increased")
-        .add_attribute("amount", amount))
-}
-
-/// Admin function to initialize new LP Pool. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **pool_type** is an object of type [`PoolType`]. LiquidPool type - USDC or ATOM
-///
-/// * **cw20_sender_addr** is an object of type [`Addr`]. Address caller cw20 contract
-///
-/// * **incentives_share** is an object of type [`u64`]. Parameter defining share of total NTRN incentives are allocated for this pool
-///
-/// * **amount** amount of LP tokens of `pool_type` to be staked in the Generator Contract.
-pub fn handle_initialize_pool(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    pool_type: PoolType,
-    cw20_sender_addr: Addr,
-    incentives_share: Uint128,
-    amount: Uint128,
-) -> StdResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-    let mut state = STATE.load(deps.storage)?;
-
-    // CHECK ::: Only auction can call this function
-    if cw20_sender_addr != config.auction_contract {
-        return Err(StdError::generic_err("Unauthorized"));
-    }
-
-    // CHECK ::: Is LP Token Pool initialized
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
-
-    if info.sender != pool_info.lp_token {
-        return Err(StdError::generic_err("Unknown cw20 token address"));
-    }
-
-    // Set Pool Incentives
-    pool_info.incentives_share = incentives_share;
-
-    let stake_msgs = stake_messages(
-        config,
-        env.block.height + 1u64,
-        pool_info.lp_token.clone(),
-        amount,
-    )?;
-    pool_info.is_staked = true;
-
-    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
-
-    state.total_incentives_share = state.total_incentives_share.checked_add(incentives_share)?;
-    STATE.save(deps.storage, &state)?;
-
-    Ok(Response::new()
-        .add_messages(stake_msgs)
-        .add_attributes(vec![
-            attr("action", "initialize_pool"),
-            attr("pool_type", format!("{:?}", pool_type)),
-            attr("lp_token", info.sender),
-            attr("lp_amount", amount),
-            attr("incentives_share", incentives_share.to_string()),
-        ]))
-}
-
-fn stake_messages(
-    config: Config,
-    height: u64,
-    lp_token_address: Addr,
-    amount: Uint128,
-) -> StdResult<Vec<CosmosMsg>> {
-    let mut cosmos_msgs = vec![];
-
-    let generator = config
-        .generator
-        .as_ref()
-        .ok_or_else(|| StdError::generic_err("Generator address hasn't set yet!"))?;
-
-    // TODO: why do we need allowance here, when next message is "send" to a pool
-    cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: lp_token_address.to_string(),
-        funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
-            spender: generator.to_string(),
-            amount,
-            expires: Some(cw20::Expiration::AtHeight(height)),
-        })?,
-    }));
-
-    cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: lp_token_address.to_string(),
-        funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Send {
-            contract: generator.to_string(),
-            msg: to_binary(&astroport::generator::Cw20HookMsg::Deposit {})?,
-            amount,
-        })?,
-    }));
-
-    Ok(cosmos_msgs)
-}
-
-/// Hook function to increase Lockup position size when any of the supported LP Tokens are sent to the contract by the user. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **user_address_raw** is an object of type [`Addr`]. User we increase lockup position for
-///
-/// * **pool_type** is an object of type [`PoolType`]. LiquidPool type - USDC or ATOM
-///
-/// * **duration** is an object of type [`u64`]. Number of seconds the LP token is locked for (lockup period begins post the withdrawal window closure).
-///
-/// * **amount** is an object of type [`Uint128`]. Number of LP tokens sent by the user.
-pub fn handle_increase_lockup(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    user_address_raw: String,
-    pool_type: PoolType,
-    duration: u64,
-    amount: Uint128,
-) -> StdResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-
-    if info.sender != config.auction_contract {
-        return Err(StdError::generic_err("Unauthorized"));
-    }
-
-    if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
-        return Err(StdError::generic_err("Lock window is closed"));
-    };
-
-    let user_address = deps.api.addr_validate(&user_address_raw)?;
-
-    if !config
-        .lockup_rewards_info
-        .iter()
-        .any(|i| i.duration == duration)
-    {
-        return Err(StdError::generic_err("invalid duration"));
-    }
-
-    // CHECK ::: LP Token supported or not ?
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
-    let mut user_info = USER_INFO
-        .may_load(deps.storage, &user_address)?
-        .unwrap_or_default();
-
-    // CHECK :: Valid Lockup Duration
-    if duration > config.max_lock_duration || duration < config.min_lock_duration {
-        return Err(StdError::generic_err(format!(
-            "Lockup duration needs to be between {} and {}",
-            config.min_lock_duration, config.max_lock_duration
-        )));
-    }
-
-    pool_info.weighted_amount = pool_info
-        .weighted_amount
-        .checked_add(calculate_weight(amount, duration, &config)?)?;
-    pool_info.amount_in_lockups = pool_info.amount_in_lockups.checked_add(amount)?;
-
-    let lockup_key = (pool_type, &user_address, duration);
-
-    let lockup_info =
-        match LOCKUP_INFO.compatible_may_load(deps.as_ref(), lockup_key, &config.generator)? {
-            Some(mut li) => {
-                li.lp_units_locked = li.lp_units_locked.checked_add(amount)?;
-                li
-            }
-            None => {
-                if config.max_positions_per_user == user_info.lockup_positions_index {
-                    return Err(StdError::generic_err(format!(
-                        "Users can only have max {} lockup positions",
-                        config.max_positions_per_user
-                    )));
-                }
-                // Update number of lockup positions the user is having
-                user_info.lockup_positions_index += 1;
-
-                LockupInfoV2 {
-                    lp_units_locked: amount,
-                    astroport_lp_transferred: None,
-                    ntrn_rewards: Uint128::zero(),
-                    unlock_timestamp: config.init_timestamp
-                        + config.lock_window
-                        + duration
-                        + config.withdrawal_window,
-                    generator_ntrn_debt: Uint128::zero(),
-                    generator_proxy_debt: Default::default(),
-                    withdrawal_flag: false,
-                }
-            }
-        };
-
-    // SAVE UPDATED STATE
-    LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
-
-    TOTAL_USER_LOCKUP_AMOUNT.update(
-        deps.storage,
-        (pool_type, &user_address),
-        env.block.height,
-        |lockup_amount| -> StdResult<Uint128> {
-            if let Some(la) = lockup_amount {
-                Ok(la.checked_add(amount)?)
-            } else {
-                Ok(amount)
-            }
-        },
-    )?;
-
-    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
-    USER_INFO.save(deps.storage, &user_address, &user_info)?;
-
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "increase_lockup_position"),
-        attr("pool_type", format!("{:?}", pool_type)),
-        attr("user", user_address),
-        attr("duration", duration.to_string()),
-        attr("amount", amount),
-    ]))
-}
-
-/// Withdraws LP Tokens from an existing Lockup position. Returns a default object of type [`Response`].
-/// ## Params
-/// * **deps** is an object of type [`DepsMut`].
-///
-/// * **env** is an object of type [`Env`].
-///
-/// * **info** is an object of type [`MessageInfo`].
-///
-/// * **pool_type** is an object of type [`PoolType`]. LiquidPool type - USDC or ATOM
-///
-/// * **duration** is an object of type [`u64`]. Duration of the lockup position from which withdrawal is to be made.
-///
-/// * **amount** is an object of type [`Uint128`]. Number of LP tokens to be withdrawn.
-pub fn handle_withdraw_from_lockup(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    user_address: String,
-    pool_type: PoolType,
-    duration: u64,
-    amount: Uint128,
-) -> StdResult<Response> {
-    let config = CONFIG.load(deps.storage)?;
-
-    if info.sender != config.auction_contract {
-        return Err(StdError::generic_err("Unauthorized"));
-    }
-
-    if env.block.time.seconds()
-        >= config.init_timestamp + config.lock_window + config.withdrawal_window
-    {
-        return Err(StdError::generic_err("Withdrawal window is closed"));
-    };
-
-    // CHECK :: Valid Withdraw Amount
-    if amount.is_zero() {
-        return Err(StdError::generic_err("Invalid withdrawal request"));
-    }
-
-    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
-
-    let user_address = deps.api.addr_validate(&user_address)?;
-
-    // Retrieve Lockup position
-    let lockup_key = (pool_type, &user_address, duration);
-    let mut lockup_info =
-        LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key, &config.generator)?;
-
-    // CHECK :: Has user already withdrawn LP tokens once post the deposit window closure state
-    if lockup_info.withdrawal_flag {
-        return Err(StdError::generic_err(
-            "Withdrawal already happened. No more withdrawals accepted",
-        ));
-    }
-
-    // Check :: Amount should be within the allowed withdrawal limit bounds
-    let max_withdrawal_percent =
-        calculate_max_withdrawal_percent_allowed(env.block.time.seconds(), &config);
-    let max_withdrawal_allowed = lockup_info
-        .lp_units_locked
-        .to_decimal()
-        .checked_mul(max_withdrawal_percent)?
-        .to_uint_floor();
-    if amount > max_withdrawal_allowed {
-        return Err(StdError::generic_err(format!(
-            "Amount exceeds maximum allowed withdrawal limit of {}",
-            max_withdrawal_allowed
-        )));
-    }
-
-    // Update withdrawal flag after the deposit window
-    if env.block.time.seconds() >= config.init_timestamp + config.lock_window {
-        lockup_info.withdrawal_flag = true;
-    }
-
-    // STATE :: RETRIEVE --> UPDATE
-    lockup_info.lp_units_locked = lockup_info.lp_units_locked.checked_sub(amount)?;
-    pool_info.weighted_amount = pool_info
-        .weighted_amount
-        .checked_sub(calculate_weight(amount, duration, &config)?)?;
-    pool_info.amount_in_lockups = pool_info.amount_in_lockups.checked_sub(amount)?;
-
-    // Remove Lockup position from the list of user positions if Lp_Locked balance == 0
-    if lockup_info.lp_units_locked.is_zero() {
-        LOCKUP_INFO.remove(deps.storage, lockup_key);
-        // decrement number of user's lockup positions
-        let mut user_info = USER_INFO
-            .may_load(deps.storage, &user_address)?
-            .unwrap_or_default();
-        user_info.lockup_positions_index -= 1;
-        USER_INFO.save(deps.storage, &user_address, &user_info)?;
-    } else {
-        LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
-    }
-    TOTAL_USER_LOCKUP_AMOUNT.update(
-        deps.storage,
-        (pool_type, &user_address),
-        env.block.height,
-        |lockup_amount| -> StdResult<Uint128> {
-            if let Some(la) = lockup_amount {
-                Ok(la.checked_sub(amount)?)
-            } else {
-                Ok(Uint128::zero())
-            }
-        },
-    )?;
-
-    // SAVE Updated States
-    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
-
-    Ok(Response::new().add_attributes(vec![
-        attr("action", "withdraw_from_lockup"),
-        attr("pool_type", pool_type),
-        attr("user_address", user_address),
-        attr("duration", duration.to_string()),
-        attr("amount", amount),
-    ]))
-}
-
-/// Calculates maximum % of LP balances deposited that can be withdrawn
-/// ## Params
-/// * **current_timestamp** is an object of type [`u64`]. Current block timestamp
-///
-/// * **config** is an object of type [`Config`]. Contract configuration
-fn calculate_max_withdrawal_percent_allowed(current_timestamp: u64, config: &Config) -> Decimal {
-    let withdrawal_cutoff_init_point = config.init_timestamp + config.lock_window;
-
-    // Deposit window :: 100% withdrawals allowed
-    if current_timestamp < withdrawal_cutoff_init_point {
-        return Decimal::from_ratio(100u32, 100u32);
-    }
-
-    let withdrawal_cutoff_second_point =
-        withdrawal_cutoff_init_point + (config.withdrawal_window / 2u64);
-    // Deposit window closed, 1st half of withdrawal window :: 50% withdrawals allowed
-    if current_timestamp <= withdrawal_cutoff_second_point {
-        return Decimal::from_ratio(50u32, 100u32);
-    }
-
-    // max withdrawal allowed decreasing linearly from 50% to 0% vs time elapsed
-    let withdrawal_cutoff_final = withdrawal_cutoff_init_point + config.withdrawal_window;
-    //  Deposit window closed, 2nd half of withdrawal window :: max withdrawal allowed decreases linearly from 50% to 0% vs time elapsed
-    if current_timestamp < withdrawal_cutoff_final {
-        let time_left = withdrawal_cutoff_final - current_timestamp;
-        Decimal::from_ratio(
-            50u64 * time_left,
-            100u64 * (withdrawal_cutoff_final - withdrawal_cutoff_second_point),
-        )
-    }
-    // Withdrawals not allowed
-    else {
-        Decimal::from_ratio(0u32, 100u32)
-    }
 }
 
 /// Claims user Rewards for a particular Lockup position. Returns a default object of type [`Response`].
@@ -941,14 +277,6 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
     let state = STATE.load(deps.storage)?;
-
-    if env.block.time.seconds()
-        < config.init_timestamp + config.lock_window + config.withdrawal_window
-    {
-        return Err(StdError::generic_err(
-            "Lock/withdrawal window is still open",
-        ));
-    }
 
     let user_address = info.sender;
 
@@ -994,10 +322,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     let astroport_lp_token = pool_info.lp_token;
 
     if pool_info.is_staked {
-        let generator = config
-            .generator
-            .as_ref()
-            .ok_or_else(|| StdError::generic_err("Generator should be set at this moment!"))?;
+        let generator = &config.generator;
 
         // QUERY :: Check if there are any pending staking rewards
         let pending_rewards: PendingTokenResponse = deps.querier.query_wasm_smart(
@@ -1151,11 +476,7 @@ pub fn update_pool_on_dual_rewards_claim(
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
-
-    let generator = config
-        .generator
-        .as_ref()
-        .ok_or_else(|| StdError::generic_err("Generator hasn't been set yet!"))?;
+    let generator = &config.generator;
     let astroport_lp_token = pool_info.lp_token.clone();
 
     let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
@@ -1253,11 +574,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     ];
 
     let astroport_lp_token = pool_info.lp_token.clone();
-
-    let generator = config
-        .generator
-        .as_ref()
-        .ok_or_else(|| StdError::generic_err("Generator should be set"))?;
+    let generator = &config.generator;
 
     // Calculate Astro LP share for the lockup position
     let astroport_lp_amount: Uint128 = {
@@ -1631,10 +948,7 @@ pub fn query_lockup_info(
             pool_astroport_lp_units = if pool_info.is_staked {
                 raw_generator_deposit(
                     deps.querier,
-                    config
-                        .generator
-                        .as_ref()
-                        .ok_or_else(|| StdError::generic_err("Should be set!"))?,
+                    &config.generator,
                     astroport_lp_token.as_bytes(),
                     env.contract.address.as_bytes(),
                 )?
@@ -1656,14 +970,10 @@ pub fn query_lockup_info(
         astroport_lp_token_opt = astroport_lp_token.clone();
         // If LP tokens are staked, calculate the rewards claimable by the user for this lockup position
         if pool_info.is_staked && !lockup_astroport_lp_units.is_zero() {
-            let generator = config
-                .generator
-                .clone()
-                .ok_or_else(|| StdError::generic_err("Generator should be set at this moment!"))?;
-
+            let generator = &config.generator;
             // QUERY :: Check if there are any pending staking rewards
             let pending_rewards: PendingTokenResponse = deps.querier.query_wasm_smart(
-                &generator,
+                generator,
                 &GenQueryMsg::PendingToken {
                     lp_token: astroport_lp_token.to_string(),
                     user: env.contract.address.to_string(),
