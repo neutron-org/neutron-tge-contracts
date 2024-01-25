@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::convert::TryInto;
+use std::ops::Sub;
 use std::str::FromStr;
 
 use astroport::asset::{Asset, AssetInfo};
@@ -8,22 +9,27 @@ use astroport::cosmwasm_ext::IntegerToDecimal;
 use astroport::generator::{
     ExecuteMsg as GenExecuteMsg, PendingTokenResponse, QueryMsg as GenQueryMsg, RewardInfoResponse,
 };
+use astroport::pair::ExecuteMsg::ProvideLiquidity;
 use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
     attr, coins, entry_point, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Decimal,
-    Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult, Uint128,
-    Uint256, WasmMsg,
+    Decimal256, Deps, DepsMut, Empty, Env, MessageInfo, Order, Response, StdError, StdResult,
+    Uint128, Uint256, WasmMsg,
 };
 use cw2::set_contract_version;
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
+use astroport_periphery::lockdrop::{
+    LockupInfoV2 as LockdropXYKLockupInfoV2, PoolType as LockdropXYKPoolType,
+    UserInfo as LockdropXYKUserInfo,
+};
 use astroport_periphery::lockdrop_pcl::{
     CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockUpInfoResponse, LockUpInfoSummary,
-    MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
-    UserInfoResponse, UserInfoWithListResponse,
+    LockupInfoV2, MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
+    UserInfo, UserInfoResponse, UserInfoWithListResponse,
 };
 
 use crate::state::{
@@ -44,7 +50,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> StdResult<Response> {
@@ -71,11 +77,35 @@ pub fn instantiate(
         credits_contract: deps.api.addr_validate(&msg.credits_contract)?,
         auction_contract: deps.api.addr_validate(&msg.auction_contract)?,
         generator: deps.api.addr_validate(&msg.generator)?,
-        lockdrop_incentives: Uint128::zero(),
+        lockdrop_incentives: msg.lockdrop_incentives,
         lockup_rewards_info: msg.lockup_rewards_info,
     };
-
     CONFIG.save(deps.storage, &config)?;
+
+    // Initialize NTRN/ATOM pool
+    let pool_info = PoolInfo {
+        lp_token: deps.api.addr_validate(&msg.atom_token)?,
+        amount_in_lockups: Default::default(),
+        incentives_share: msg.atom_incentives_share,
+        weighted_amount: msg.atom_weighted_amount,
+        generator_ntrn_per_share: Default::default(),
+        generator_proxy_per_share: RestrictedVector::default(),
+        is_staked: true,
+    };
+    ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
+
+    // Initialize NTRN/USDC pool
+    let pool_info = PoolInfo {
+        lp_token: deps.api.addr_validate(&msg.usdc_token)?,
+        amount_in_lockups: Default::default(),
+        incentives_share: msg.usdc_incentives_share,
+        weighted_amount: msg.usdc_weighted_amount,
+        generator_ntrn_per_share: Default::default(),
+        generator_proxy_per_share: RestrictedVector::default(),
+        is_staked: true,
+    };
+    ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
+
     STATE.save(deps.storage, &State::default())?;
     Ok(Response::default())
 }
@@ -123,6 +153,22 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             })
         }
         ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
+        ExecuteMsg::MigrateXYKLiquidity {
+            pool_type,
+            user_address_raw,
+            duration,
+            user_info,
+            lockup_info,
+        } => handle_migrate_xyk_liquidity(
+            deps,
+            env,
+            info,
+            pool_type,
+            user_address_raw,
+            duration,
+            user_info,
+            lockup_info,
+        ),
     }
 }
 
@@ -163,6 +209,25 @@ fn _handle_callback(
             user_address,
             duration,
             withdraw_lp_stake,
+        ),
+        CallbackMsg::FinishLockupMigrationCallback {
+            pool_type,
+            user_address,
+            duration,
+            lp_token,
+            lp_token_balance,
+            user_info,
+            lockup_info,
+        } => callback_finish_lockup_migration(
+            deps,
+            env,
+            pool_type,
+            user_address,
+            duration,
+            lp_token,
+            lp_token_balance,
+            user_info,
+            lockup_info,
         ),
     }
 }
@@ -252,6 +317,93 @@ pub fn handle_update_config(
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attributes(attributes))
+}
+
+#[allow(clippy::too_many_arguments)]
+/// Creates a lockup position based on the provided parameters and XYK lockdrop contract's state. No
+/// validation is performed on the lockup parameters, they are expected to be valid ones because the
+/// only valid sender of the message is the XYK lockdrop contract which has already validated them
+/// in the beginning of the TGE.
+///
+/// Exactly two **Coin**s are expected to be attached to the message as funds. These **Coin**s are
+/// used in ProvideLiquidity message sent to the PCL pool, the minted LP tokens are staked to the
+/// generator.
+pub fn handle_migrate_xyk_liquidity(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    pool_type: LockdropXYKPoolType,
+    user_address_raw: String,
+    duration: u64,
+    user_info: LockdropXYKUserInfo,
+    lockup_info: LockdropXYKLockupInfoV2,
+) -> StdResult<Response> {
+    let config = CONFIG.load(deps.storage)?;
+    if info.sender != config.xyk_lockdrop_contract {
+        return Err(StdError::generic_err(
+            "only the XYK lockdrop contract is authorized to call the liquidity migration handler",
+        ));
+    }
+    if info.funds.len() != 2 {
+        return Err(StdError::generic_err(
+            "exactly two assets are expected to be attached to the message",
+        ));
+    }
+
+    // determine the PCL pool address and the current lp token balance
+    let pool_info = ASSET_POOLS.load(deps.storage, pool_type.into())?;
+    let astroport_pool: String = deps
+        .querier
+        .query_wasm_smart::<MinterResponse>(
+            pool_info.lp_token.to_string(),
+            &cw20::Cw20QueryMsg::Minter {},
+        )?
+        .minter;
+    let astroport_lp_token_balance = deps
+        .querier
+        .query_wasm_smart::<BalanceResponse>(
+            pool_info.lp_token.to_string(),
+            &Cw20QueryMsg::Balance {
+                address: env.contract.address.to_string(),
+            },
+        )?
+        .balance;
+
+    // provide the transferred liquidity to the PCL pool
+    let mut cosmos_msgs: Vec<CosmosMsg<Empty>> = vec![CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: astroport_pool.to_string(),
+        funds: info.funds.clone(),
+        msg: to_binary(&ProvideLiquidity {
+            assets: info
+                .funds
+                .iter()
+                .map(|f| Asset {
+                    info: AssetInfo::NativeToken {
+                        denom: f.denom.clone(),
+                    },
+                    amount: f.amount,
+                })
+                .collect(),
+            slippage_tolerance: None,
+            auto_stake: Some(true),
+            receiver: None,
+        })?,
+    })];
+    // invoke callback that creates a lockup entry for the provided liquidity
+    cosmos_msgs.push(
+        CallbackMsg::FinishLockupMigrationCallback {
+            pool_type: pool_type.into(),
+            user_address: deps.api.addr_validate(&user_address_raw)?,
+            duration,
+            lp_token: pool_info.lp_token.to_string(),
+            lp_token_balance: astroport_lp_token_balance,
+            user_info,
+            lockup_info,
+        }
+        .to_cosmos_msg(&env)?,
+    );
+
+    Ok(Response::default().add_messages(cosmos_msgs))
 }
 
 /// Claims user Rewards for a particular Lockup position. Returns a default object of type [`Response`].
@@ -758,6 +910,68 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     Ok(Response::new()
         .add_messages(cosmos_msgs)
         .add_attributes(attributes))
+}
+
+#[allow(clippy::too_many_arguments)]
+/// Completes the liquidity migration process by making all necessary state updates for the lockup
+/// position.
+pub fn callback_finish_lockup_migration(
+    deps: DepsMut,
+    env: Env,
+    pool_type: PoolType,
+    user_address: Addr,
+    duration: u64,
+    lp_token: String,
+    lp_token_balance: Uint128,
+    user_info: LockdropXYKUserInfo,
+    lockup_info: LockdropXYKLockupInfoV2,
+) -> StdResult<Response> {
+    let astroport_lp_tokens_minted = deps
+        .querier
+        .query_wasm_smart::<BalanceResponse>(
+            lp_token,
+            &Cw20QueryMsg::Balance {
+                address: env.contract.address.to_string(),
+            },
+        )?
+        .balance
+        .sub(lp_token_balance);
+
+    let user_info: UserInfo = user_info.into();
+    let lockup_info: LockupInfoV2 =
+        LockupInfoV2::from_xyk_lockup_info(lockup_info, astroport_lp_tokens_minted);
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
+    let config = CONFIG.load(deps.storage)?;
+
+    pool_info.weighted_amount = pool_info.weighted_amount.checked_add(calculate_weight(
+        astroport_lp_tokens_minted,
+        duration,
+        &config,
+    )?)?;
+    pool_info.amount_in_lockups = pool_info
+        .amount_in_lockups
+        .checked_add(astroport_lp_tokens_minted)?;
+
+    let lockup_key = (pool_type, &user_address, duration);
+    LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
+
+    TOTAL_USER_LOCKUP_AMOUNT.update(
+        deps.storage,
+        (pool_type, &user_address),
+        env.block.height,
+        |lockup_amount| -> StdResult<Uint128> {
+            if let Some(la) = lockup_amount {
+                Ok(la.checked_add(astroport_lp_tokens_minted)?)
+            } else {
+                Ok(astroport_lp_tokens_minted)
+            }
+        },
+    )?;
+
+    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
+    USER_INFO.save(deps.storage, &user_address, &user_info)?;
+
+    Ok(Response::default())
 }
 
 /// Returns the contract's State.
