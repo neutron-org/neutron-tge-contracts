@@ -52,7 +52,10 @@ pub enum ExecuteMsg {
     /// Contains messages associated with the historical extension for vesting contracts.
     HistoricalExtension { msg: ExecuteMsgHistorical },
     ///
-    MigrateLiquidity { slippage_tolerance: Option<Decimal> },
+    MigrateLiquidity {
+        slippage_tolerance: Option<Decimal>,
+        batch_size: Option<u32>,
+    },
     /// Callbacks; only callable by the contract itself.
     Callback(CallbackMsg),
 }
@@ -163,6 +166,7 @@ pub struct MigrateMsg {
     pub cl_pair: String,
     pub new_lp_token: String,
     pub batch_size: u32,
+    pub dust_threshold: Uint128,
 }
 /// This structure describes a CW20 hook message.
 #[cw_serde]

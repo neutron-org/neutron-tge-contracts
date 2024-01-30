@@ -19,6 +19,7 @@ use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_ow
 use astroport::pair::{
     Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
 };
+
 use cosmwasm_std::{
     attr, from_json, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
@@ -38,6 +39,7 @@ pub fn execute(
         match msg {
             ExecuteMsg::MigrateLiquidity {
                 slippage_tolerance: _,
+                batch_size: _,
             } => {}
             ExecuteMsg::Callback(..) => {}
             _ => return Err(ContractError::MigrationIncomplete {}),
@@ -101,9 +103,10 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
-        ExecuteMsg::MigrateLiquidity { slippage_tolerance } => {
-            execute_migrate_liquidity(deps, env, slippage_tolerance)
-        }
+        ExecuteMsg::MigrateLiquidity {
+            slippage_tolerance,
+            batch_size,
+        } => execute_migrate_liquidity(deps, env, slippage_tolerance, batch_size),
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
     }
 }
@@ -307,6 +310,7 @@ fn execute_migrate_liquidity(
     deps: DepsMut,
     env: Env,
     slippage_tolerance: Option<Decimal>,
+    batch_size: Option<u32>,
 ) -> Result<Response, ContractError> {
     let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
     if migration_state == MigrationState::Completed {
@@ -314,10 +318,15 @@ fn execute_migrate_liquidity(
     }
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
 
+    let batch = if Some(batch_size).is_some() {
+        batch_size
+    } else {
+        Some(migration_config.batch_size)
+    };
     let vesting_infos = read_vesting_infos(
         deps.as_ref(),
         migration_config.last_processed_user,
-        Some(migration_config.batch_size),
+        batch,
         None,
     )?;
 
@@ -337,7 +346,23 @@ fn execute_migrate_liquidity(
         .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
 
     for user in vesting_accounts.into_iter() {
-        let user_amount = compute_share(&user.info)?;
+        let user_share = compute_share(&user.info)?;
+        let user_amount = if user_share < migration_config.dust_threshold {
+            if !user_share.is_zero() {
+                resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: pair_info.liquidity_token.to_string(),
+                    msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                        recipient: user.address.to_string(),
+                        amount: user_share,
+                    })?,
+                    funds: vec![],
+                }));
+            }
+
+            Uint128::zero()
+        } else {
+            user_share
+        };
 
         if let Some(slippage_tolerance) = slippage_tolerance {
             if slippage_tolerance.gt(&migration_config.max_slippage) {
@@ -448,7 +473,6 @@ fn migrate_liquidity_to_cl_pair_callback(
         .amount;
 
     let mut msgs: Vec<CosmosMsg> = vec![];
-
     // push message to withdraw liquidity from the xyk pair
     if !amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -503,7 +527,6 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     let withdrawn_ntrn_amount = ntrn_balance_after_withdrawal.checked_sub(ntrn_init_balance)?;
     let withdrawn_paired_asset_amount =
         paired_asset_balance_after_withdrawal.checked_sub(paired_asset_init_balance)?;
-
     let mut msgs: Vec<CosmosMsg> = vec![];
 
     if !withdrawn_ntrn_amount.is_zero() && !withdrawn_paired_asset_amount.is_zero() {
@@ -716,6 +739,7 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
             batch_size: msg.batch_size,
             last_processed_user: None,
             new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
+            dust_threshold: msg.dust_threshold,
         },
     )?;
     config.vesting_token = Some(AssetInfo::Token {
