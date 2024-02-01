@@ -101,14 +101,6 @@ pub struct XykToClMigrationConfig {
     pub pcl_vesting: Addr,
 }
 
-#[cw_serde]
-pub enum MigrationState {
-    /// Migration is started
-    Started,
-
-    Completed,
-}
-
 /// This enum describes the types of sorting that can be applied to some piece of data
 #[cw_serde]
 pub enum OrderBy {

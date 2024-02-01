@@ -29,6 +29,7 @@ pub fn instantiate(
             msg.owner,
             msg.token_info_manager,
             msg.xyk_vesting_lp_contract,
+            msg.vesting_token,
         )?;
     Ok(Response::default())
 }

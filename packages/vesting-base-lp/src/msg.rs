@@ -51,7 +51,7 @@ pub enum ExecuteMsg {
     HistoricalExtension { msg: ExecuteMsgHistorical },
     /// TODO: detailed decription
     #[serde(rename = "migrate_liquidity_to_pcl_pool")]
-    MigrateLiquidityToPCLPool {},
+    MigrateLiquidityToPCLPool { user: Option<String> },
     /// Callbacks; only callable by the contract itself.
     Callback(CallbackMsg),
 }

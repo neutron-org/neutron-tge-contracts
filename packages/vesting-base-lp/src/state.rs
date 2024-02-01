@@ -1,13 +1,11 @@
 use crate::types::{
-    Config, MigrationState, OrderBy, VestingInfo, VestingState, XykToClMigrationConfig,
+    Config, OrderBy, VestingInfo, VestingState, XykToClMigrationConfig,
 };
 use astroport::common::OwnershipProposal;
 use cosmwasm_std::{Addr, Deps, StdResult};
 use cw_storage_plus::{Bound, Item, Map, SnapshotItem, SnapshotMap, Strategy};
 
 pub(crate) const CONFIG: Item<Config> = Item::new("config");
-/// Migration status
-pub(crate) const MIGRATION_STATUS: Item<MigrationState> = Item::new("migration_status");
 pub(crate) const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
 pub(crate) const VESTING_MANAGERS: Map<Addr, ()> = Map::new("vesting_managers");
 pub(crate) const VESTING_STATE: SnapshotItem<VestingState> = SnapshotItem::new(

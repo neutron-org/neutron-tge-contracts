@@ -2,7 +2,6 @@
 members = [
     "contracts/auction",
     "contracts/lockdrop",
-    "contracts/lockdrop-pcl",
     "contracts/credits",
     "contracts/vesting-lp",
     "contracts/vesting-lp-pcl",

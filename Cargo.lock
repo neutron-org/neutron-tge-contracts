@@ -1027,21 +1027,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "neutron-lockdrop-pcl"
-version = "1.2.1"
-dependencies = [
- "astroport 2.5.0 (git+https://github.com/astroport-fi/astroport-core.git?tag=v2.5.0)",
- "astroport-periphery",
- "cosmwasm-schema",
- "cosmwasm-std",
- "credits",
- "cw-storage-plus 0.15.1",
- "cw2 1.1.1",
- "cw20 1.1.1",
- "serde",
-]
-
-[[package]]
 name = "neutron-price-feed"
 version = "0.1.0"
 dependencies = [
@@ -1599,7 +1584,7 @@ dependencies = [
  "cw-utils 0.15.1",
  "cw2 1.1.1",
  "cw20 1.1.1",
- "vesting-base",
+ "vesting-base-pcl",
 ]
 
 [[package]]

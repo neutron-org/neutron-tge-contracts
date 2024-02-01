@@ -1,4 +1,5 @@
 use cosmwasm_schema::cw_serde;
+use astroport::asset::AssetInfo;
 
 /// This structure describes the parameters used for creating a contract.
 #[cw_serde]
@@ -10,4 +11,5 @@ pub struct InstantiateMsg {
     /// Token info manager address
     pub token_info_manager: String,
     pub xyk_vesting_lp_contract: String,
+    pub vesting_token: AssetInfo,
 }

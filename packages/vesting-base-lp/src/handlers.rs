@@ -4,11 +4,11 @@ use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
 use crate::ext_with_managers::{handle_execute_with_managers_msg, handle_query_managers_msg};
 use crate::msg::{CallbackMsg, Cw20HookMsg, ExecuteMsg, MigrateMsg, QueryMsg};
 use crate::state::{
-    read_vesting_infos, vesting_info, vesting_state, MIGRATION_STATUS, XYK_TO_CL_MIGRATION_CONFIG,
+    read_vesting_infos, vesting_info, vesting_state, XYK_TO_CL_MIGRATION_CONFIG,
 };
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS};
 use crate::types::{
-    Config, MigrationState, OrderBy, VestingAccount, VestingAccountResponse,
+    Config, OrderBy, VestingAccount, VestingAccountResponse,
     VestingAccountsResponse, VestingInfo, VestingSchedule, VestingState, XykToClMigrationConfig,
 };
 use astroport::asset::{
@@ -33,14 +33,6 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
-    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
-    if migration_state != MigrationState::Completed {
-        match msg {
-            ExecuteMsg::MigrateLiquidityToPCLPool {} => {}
-            ExecuteMsg::Callback(..) => {}
-            _ => return Err(ContractError::MigrationIncomplete {}),
-        }
-    }
     match msg {
         ExecuteMsg::Claim { recipient, amount } => claim(deps, env, info, recipient, amount),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
@@ -99,8 +91,8 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
-        ExecuteMsg::MigrateLiquidityToPCLPool {} => {
-            execute_migrate_liquidity(deps, info, env, None)
+        ExecuteMsg::MigrateLiquidityToPCLPool { user } => {
+            execute_migrate_liquidity(deps, info, env, None, user)
         }
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
     }
@@ -298,14 +290,14 @@ fn execute_migrate_liquidity(
     info: MessageInfo,
     env: Env,
     slippage_tolerance: Option<Decimal>,
+    user: Option<String>
 ) -> Result<Response, ContractError> {
-    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
-    if migration_state == MigrationState::Completed {
-        return Err(ContractError::MigrationComplete {});
-    }
     let config = CONFIG.load(deps.storage)?;
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
-    let address = info.sender;
+    let address = match user {
+        Some(val) => deps.api.addr_validate(&val)?,
+        None => info.sender,
+    };
     let info = vesting_info(config.extensions.historical).load(deps.storage, address.clone())?;
     let mut resp = Response::default();
     let user = VestingAccountResponse { address, info };
@@ -606,10 +598,6 @@ fn post_migration_vesting_reschedule_callback(
 
 /// Exposes all the queries available in the contract.
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
-    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
-    if migration_state != MigrationState::Completed {
-        return Err(ContractError::MigrationIncomplete {}.into());
-    }
 
     match msg {
         QueryMsg::Config {} => Ok(to_binary(&query_config(deps)?)?),
@@ -735,8 +723,6 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
             Ok(state)
         },
     )?;
-
-    MIGRATION_STATUS.save(deps.storage, &MigrationState::Started)?;
 
     Ok(Response::default())
 }
