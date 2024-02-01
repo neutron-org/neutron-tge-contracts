@@ -443,6 +443,16 @@ fn migrate_liquidity_to_cl_pair_callback(
             funds: vec![],
         }))
     }
+    let config = CONFIG.load(deps.storage)?;
+    vesting_state(config.extensions.historical).update::<_, ContractError>(
+        deps.storage,
+        env.block.height,
+        |s| {
+            let mut state = s.unwrap_or_default();
+            state.total_released = state.total_released.checked_add(amount)?;
+            Ok(state)
+        },
+    )?;
     // push the next migration step as a callback message
     msgs.push(
         CallbackMsg::ProvideLiquidityToClPairAfterWithdrawal {
@@ -525,14 +535,7 @@ fn post_migration_vesting_reschedule_callback(
             address: env.contract.address.to_string(),
         },
     )?;
-    let state = vesting_state(config.extensions.historical).load(deps.storage)?;
     let current_balance = balance_response.balance;
-
-    let balance_diff: Uint128 = if !current_balance.is_zero() {
-        current_balance.checked_sub(state.total_granted)?
-    } else {
-        Uint128::zero()
-    };
 
     let schedule = user.info.schedules.last().unwrap();
 
@@ -540,7 +543,7 @@ fn post_migration_vesting_reschedule_callback(
     if let Some(end_point) = &schedule.end_point {
         new_end_point = Option::from(vesting_base_pcl::types::VestingSchedulePoint {
             time: end_point.time,
-            amount: balance_diff,
+            amount: current_balance,
         })
     } else {
         new_end_point = None
@@ -564,16 +567,6 @@ fn post_migration_vesting_reschedule_callback(
             released_amount: Uint128::zero(),
         },
         env.block.height,
-    )?;
-
-    vesting_state(config.extensions.historical).update::<_, ContractError>(
-        deps.storage,
-        env.block.height,
-        |s| {
-            let mut state = s.unwrap_or_default();
-            state.total_granted = state.total_granted.checked_add(balance_diff)?;
-            Ok(state)
-        },
     )?;
     let msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: migration_config.new_lp_token.to_string(),
@@ -691,8 +684,7 @@ fn query_vesting_available_amount(deps: Deps, env: Env, address: String) -> StdR
 }
 
 /// Manages contract migration.
-pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
-    let mut config = CONFIG.load(deps.storage)?;
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
     XYK_TO_CL_MIGRATION_CONFIG.save(
         deps.storage,
         &XykToClMigrationConfig {
@@ -703,21 +695,6 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
             cl_pair: deps.api.addr_validate(msg.cl_pair.as_str())?,
             new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
             pcl_vesting: deps.api.addr_validate(msg.pcl_vesting.as_str())?,
-        },
-    )?;
-    config.vesting_token = Some(AssetInfo::Token {
-        contract_addr: deps.api.addr_validate(msg.new_lp_token.as_str())?,
-    });
-
-    CONFIG.save(deps.storage, &config)?;
-
-    vesting_state(config.extensions.historical).update::<_, ContractError>(
-        deps.storage,
-        env.block.height,
-        |s| {
-            let mut state = s.unwrap_or_default();
-            state.total_granted = Uint128::zero();
-            Ok(state)
         },
     )?;
 

@@ -1189,7 +1189,6 @@ fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
         crate::contract::query,
     ));
     let owner = Addr::unchecked(OWNER1);
-    let token_manager = Addr::unchecked(TOKEN_MANAGER);
     let vesting_code_id = app.store_code(vesting_contract);
 
     let init_msg = InstantiateMsg {
@@ -1233,7 +1232,6 @@ fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
         crate::contract::query,
     ));
     let owner = Addr::unchecked(OWNER1);
-    let token_manager = Addr::unchecked(TOKEN_MANAGER);
     let vesting_code_id = app.store_code(vesting_contract);
 
     let init_msg = InstantiateMsg {
@@ -1244,10 +1242,8 @@ fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
         xyk_vesting_lp_contract: "test".to_string(),
     };
 
-    let res = app
-        .instantiate_contract(vesting_code_id, owner, &init_msg, &[], "Vesting", None)
-        .unwrap();
-    res
+    app.instantiate_contract(vesting_code_id, owner, &init_msg, &[], "Vesting", None)
+        .unwrap()
 }
 
 fn mint_tokens(app: &mut App, token: &Addr, recipient: &Addr, amount: u128) {
