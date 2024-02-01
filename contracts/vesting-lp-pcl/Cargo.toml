@@ -18,7 +18,7 @@ library = []
 cw2 = { workspace = true }
 cw20 = { workspace = true }
 astroport = { workspace = true }
-vesting-base = { workspace = true }
+vesting-base-pcl = { workspace = true }
 cosmwasm-schema = { workspace = true }
 cosmwasm-std = { workspace = true }
 

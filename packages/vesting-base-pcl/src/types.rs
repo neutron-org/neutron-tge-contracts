@@ -9,8 +9,11 @@ pub struct Config {
     pub owner: Addr,
     /// [`AssetInfo`] of the vested token
     pub vesting_token: Option<AssetInfo>,
+    /// Address that's allowed to change vesting token
+    pub token_info_manager: Addr,
     /// Contains extensions information of the contract
     pub extensions: Extensions,
+    pub xyk_vesting_lp_contract: Addr,
 }
 
 /// Contains extensions information for the contract.

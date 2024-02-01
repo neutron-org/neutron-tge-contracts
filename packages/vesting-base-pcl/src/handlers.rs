@@ -4,17 +4,19 @@ use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
 use crate::ext_with_managers::{handle_execute_with_managers_msg, handle_query_managers_msg};
 use crate::msg::{Cw20HookMsg, ExecuteMsg, MigrateMsg, QueryMsg};
 use crate::state::{read_vesting_infos, vesting_info, vesting_state};
-use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS, PCL_VESTING_LP_CONTRACT};
+use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS};
 use crate::types::{
     Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo,
     VestingSchedule, VestingState,
 };
-use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfoExt, Asset};
+use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfoExt};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
-use cosmwasm_std::{attr, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Storage, SubMsg, Uint128, CosmosMsg, Empty, WasmMsg};
+use cosmwasm_std::{
+    attr, from_binary, to_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
+    StdError, StdResult, Storage, SubMsg, Uint128,
+};
 use cw20::Cw20ReceiveMsg;
 use cw_utils::must_pay;
-use astroport::pair::ExecuteMsg::ProvideLiquidity;
 
 /// Exposes execute functions available in the contract.
 pub fn execute(
@@ -81,9 +83,6 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
-        ExecuteMsg::MigrateXYKLiquidity { user_address_raw, user_vesting_info } => {
-            handle_migrate_xyk_liquidity(deps, info, env, user_address_raw, user_vesting_info)
-        }
     }
 }
 
@@ -113,6 +112,10 @@ fn receive_cw20(
         Cw20HookMsg::RegisterVestingAccounts { vesting_accounts } => {
             register_vesting_accounts(deps, vesting_accounts, cw20_msg.amount, env.block.height)
         }
+        Cw20HookMsg::MigrateXYKLiquidity {
+            user_address_raw,
+            user_vesting_info,
+        } => handle_migrate_xyk_liquidity(deps, env, user_address_raw, user_vesting_info),
     }
 }
 
@@ -254,34 +257,15 @@ fn claim(
 fn handle_migrate_xyk_liquidity(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
     user_addr_raw: Addr,
     user_vesting_info: VestingInfo,
 ) -> Result<Response, ContractError> {
     let height = env.block.height;
+    let config = CONFIG.load(deps.storage)?;
 
-    let account_address = deps.api.addr_validate(&user_addr_raw.address)?;
+    let account_address = user_addr_raw;
 
     assert_vesting_schedules(&account_address, &user_vesting_info.schedules)?;
-
-    for sch in &user_vesting_info.schedules {
-        let amount = if let Some(end_point) = &sch.end_point {
-            end_point.amount
-        } else {
-            sch.start_point.amount
-        };
-        to_deposit = to_deposit.checked_add(amount)?;
-    }
-
-
-    let vesting_info = vesting_info(config.extensions.historical);
-
-    vesting_info.save(
-        deps.storage,
-        account_address,
-        &user_vesting_info,
-        height,
-    )?;
 
     let mut to_deposit = Uint128::zero();
     for sch in &user_vesting_info.schedules {
@@ -293,10 +277,23 @@ fn handle_migrate_xyk_liquidity(
         to_deposit = to_deposit.checked_add(amount)?;
     }
 
+    let vesting_info = vesting_info(config.extensions.historical);
+
+    vesting_info.save(deps.storage, account_address, &user_vesting_info, height)?;
+
+    let mut to_deposit = Uint128::zero();
+    for sch in &user_vesting_info.schedules {
+        let amount = if let Some(end_point) = &sch.end_point {
+            end_point.amount
+        } else {
+            sch.start_point.amount
+        };
+        to_deposit = to_deposit.checked_add(amount)?;
+    }
 
     vesting_state(config.extensions.historical).update::<_, ContractError>(
         deps.storage,
-        height.clone(),
+        height,
         |s| {
             let mut state = s.unwrap_or_default();
             state.total_granted = state.total_granted.checked_add(to_deposit)?;
@@ -305,7 +302,6 @@ fn handle_migrate_xyk_liquidity(
     )?;
 
     Ok(Response::default())
-
 }
 
 pub(crate) fn set_vesting_token(
@@ -445,9 +441,13 @@ fn is_sender_whitelisted(store: &mut dyn Storage, config: &Config, sender: &Addr
     if *sender == config.owner {
         return true;
     }
+    if *sender == config.xyk_vesting_lp_contract {
+        return true;
+    }
     if VESTING_MANAGERS.has(store, sender.clone()) {
         return true;
     }
+
     false
 }
 

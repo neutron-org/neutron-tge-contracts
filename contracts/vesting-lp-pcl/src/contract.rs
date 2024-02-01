@@ -24,7 +24,12 @@ pub fn instantiate(
     VestingBaseBuilder::default()
         .historical()
         .with_managers(msg.vesting_managers)
-        .build(deps, msg.owner, msg.token_info_manager)?;
+        .build(
+            deps,
+            msg.owner,
+            msg.token_info_manager,
+            msg.xyk_vesting_lp_contract,
+        )?;
     Ok(Response::default())
 }
 

@@ -9,4 +9,5 @@ pub struct InstantiateMsg {
     pub vesting_managers: Vec<String>,
     /// Token info manager address
     pub token_info_manager: String,
+    pub xyk_vesting_lp_contract: String,
 }

@@ -1,4 +1,7 @@
-use crate::types::{Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo, VestingState};
+use crate::types::{
+    Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo,
+    VestingState,
+};
 use astroport::asset::AssetInfo;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Addr, Binary, Uint128};
@@ -47,14 +50,6 @@ pub enum ExecuteMsg {
     WithManagersExtension { msg: ExecuteMsgWithManagers },
     /// Contains messages associated with the historical extension for vesting contracts.
     HistoricalExtension { msg: ExecuteMsgHistorical },
-    /// A handler to receive vesting liquidity migrated from xyl pools to PCL ones. Only callable
-    /// by the original vesting-lp contract.
-    #[serde(rename = "migrate_xyk_liquidity")]
-    MigrateXYKLiquidity {
-        /// The address of the user which owns the lockup.
-        user_address_raw: String,
-        user_vesting_info: VestingInfo,
-    },
 }
 
 /// This structure describes the execute messages available in a managed vesting contract.
@@ -162,5 +157,11 @@ pub enum Cw20HookMsg {
     /// RegisterVestingAccounts registers vesting targets/accounts
     RegisterVestingAccounts {
         vesting_accounts: Vec<VestingAccount>,
+    },
+    #[serde(rename = "migrate_xyk_liquidity")]
+    MigrateXYKLiquidity {
+        /// The address of the user which owns the vested tokens.
+        user_address_raw: Addr,
+        user_vesting_info: VestingInfo,
     },
 }

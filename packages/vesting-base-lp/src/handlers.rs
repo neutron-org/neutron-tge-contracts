@@ -9,8 +9,7 @@ use crate::state::{
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS};
 use crate::types::{
     Config, MigrationState, OrderBy, VestingAccount, VestingAccountResponse,
-    VestingAccountsResponse, VestingInfo, VestingSchedule, VestingSchedulePoint, VestingState,
-    XykToClMigrationConfig,
+    VestingAccountsResponse, VestingInfo, VestingSchedule, VestingState, XykToClMigrationConfig,
 };
 use astroport::asset::{
     addr_opt_validate, native_asset, token_asset_info, AssetInfo, AssetInfoExt, PairInfo,
@@ -51,11 +50,11 @@ pub fn execute(
 
             match &vesting_token {
                 AssetInfo::NativeToken { denom }
-                if is_sender_whitelisted(deps.storage, &config, &info.sender) =>
-                    {
-                        let amount = must_pay(&info, denom)?;
-                        register_vesting_accounts(deps, vesting_accounts, amount, env.block.height)
-                    }
+                    if is_sender_whitelisted(deps.storage, &config, &info.sender) =>
+                {
+                    let amount = must_pay(&info, denom)?;
+                    register_vesting_accounts(deps, vesting_accounts, amount, env.block.height)
+                }
                 _ => Err(ContractError::Unauthorized {}),
             }
         }
@@ -71,7 +70,7 @@ pub fn execute(
                 config.owner,
                 OWNERSHIP_PROPOSAL,
             )
-                .map_err(Into::into)
+            .map_err(Into::into)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
@@ -88,7 +87,7 @@ pub fn execute(
 
                 Ok(())
             })
-                .map_err(Into::into)
+            .map_err(Into::into)
         }
         ExecuteMsg::SetVestingToken { vesting_token } => {
             set_vesting_token(deps, env, info, vesting_token)
@@ -100,7 +99,9 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
-        ExecuteMsg::MigrateLiquidityToPCLPool {} => execute_migrate_liquidity(deps, info, env, None),
+        ExecuteMsg::MigrateLiquidityToPCLPool {} => {
+            execute_migrate_liquidity(deps, info, env, None)
+        }
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
     }
 }
@@ -302,11 +303,12 @@ fn execute_migrate_liquidity(
     if migration_state == MigrationState::Completed {
         return Err(ContractError::MigrationComplete {});
     }
+    let config = CONFIG.load(deps.storage)?;
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
     let address = info.sender;
     let info = vesting_info(config.extensions.historical).load(deps.storage, address.clone())?;
     let mut resp = Response::default();
-    let user = VestingAccountResponse{ address, info };
+    let user = VestingAccountResponse { address, info };
 
     // get pairs LP token addresses
     let pair_info: PairInfo = deps
@@ -352,7 +354,7 @@ fn execute_migrate_liquidity(
             paired_asset_denom: migration_config.paired_denom.clone(),
             user,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(resp)
@@ -462,7 +464,7 @@ fn migrate_liquidity_to_cl_pair_callback(
             slippage_tolerance,
             user,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::default().add_messages(msgs))
@@ -526,8 +528,7 @@ fn post_migration_vesting_reschedule_callback(
     user: &VestingAccountResponse,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
-    let mut migration_config: XykToClMigrationConfig =
-        XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
+    let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
     let balance_response: BalanceResponse = deps.querier.query_wasm_smart(
         &migration_config.new_lp_token,
         &Cw20QueryMsg::Balance {
@@ -563,7 +564,6 @@ fn post_migration_vesting_reschedule_callback(
         end_point: new_end_point,
     };
 
-
     let vesting_info = vesting_info(config.extensions.historical);
 
     vesting_info.save(
@@ -585,23 +585,23 @@ fn post_migration_vesting_reschedule_callback(
             Ok(state)
         },
     )?;
+    let msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: migration_config.new_lp_token.to_string(),
+        funds: vec![],
+        msg: to_binary(&Cw20ExecuteMsg::Send {
+            contract: migration_config.pcl_vesting.to_string(),
+            amount: current_balance,
+            msg: to_binary(&vesting_base_pcl::msg::Cw20HookMsg::MigrateXYKLiquidity {
+                user_address_raw: user.address.clone(),
+                user_vesting_info: vesting_base_pcl::types::VestingInfo {
+                    schedules: vec![new_schedule],
+                    released_amount: Uint128::zero(),
+                },
+            })?,
+        })?,
+    })];
 
-    migration_config.last_processed_user = Some(user.address.clone());
-    XYK_TO_CL_MIGRATION_CONFIG.save(deps.storage, &migration_config)?;
-
-    msgs.push(&Cw20ExecuteMsg::Send {
-        contract: migration_config.pcl_vesting.to_string(),
-        amount: current_balance,
-        msg: to_binary(&vesting_base_pcl::msg::ExecuteMsg::MigrateXYKLiquidity {
-            user_address_raw: user.address.to_string(),
-            user_vesting_info: vesting_base_pcl::types::VestingInfo {
-                schedules: vec![new_schedule],
-                released_amount: Uint128::zero()
-            }
-        })?
-    });
-
-    Ok(Response::default().add_messages(msgs))
+    Ok(Response::new().add_messages(msgs))
 }
 
 /// Exposes all the queries available in the contract.
@@ -717,7 +717,7 @@ pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, Con
             paired_denom: msg.paired_denom,
             cl_pair: deps.api.addr_validate(msg.cl_pair.as_str())?,
             new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
-            pcl_vesting: deps.api.addr_validate(msg.pcl_vesting.as_str())?
+            pcl_vesting: deps.api.addr_validate(msg.pcl_vesting.as_str())?,
         },
     )?;
     config.vesting_token = Some(AssetInfo::Token {
