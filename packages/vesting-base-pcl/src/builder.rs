@@ -1,7 +1,7 @@
 use crate::state::{CONFIG, VESTING_MANAGERS};
 use crate::types::{Config, Extensions};
-use cosmwasm_std::{DepsMut, StdResult};
 use astroport::asset::AssetInfo;
+use cosmwasm_std::{DepsMut, StdResult};
 
 /// A builder for vesting contracts with different extensions.
 #[derive(Default)]

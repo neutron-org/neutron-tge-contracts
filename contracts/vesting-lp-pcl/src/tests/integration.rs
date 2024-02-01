@@ -6,12 +6,12 @@ use cosmwasm_std::{coin, coins, to_binary, Addr, StdResult, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use cw_utils::PaymentError;
-use vesting_base::error::ContractError;
-use vesting_base::msg::{
+use vesting_base_pcl::error::ContractError;
+use vesting_base_pcl::msg::{
     Cw20HookMsg, ExecuteMsg, ExecuteMsgWithManagers, QueryMsg, QueryMsgHistorical,
     QueryMsgWithManagers,
 };
-use vesting_base::types::{
+use vesting_base_pcl::types::{
     Config, VestingAccount, VestingAccountResponse, VestingSchedule, VestingSchedulePoint,
 };
 
@@ -1195,7 +1195,9 @@ fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
     let init_msg = InstantiateMsg {
         owner: OWNER1.to_string(),
         token_info_manager: TOKEN_MANAGER.to_string(),
+        xyk_vesting_lp_contract: "test".to_string(),
         vesting_managers: vec![],
+        vesting_token: token_asset_info(cw20_token_instance.clone()),
     };
 
     let vesting_instance = app
@@ -1208,17 +1210,6 @@ fn instantiate_vesting(app: &mut App, cw20_token_instance: &Addr) -> Addr {
             None,
         )
         .unwrap();
-    let set_vesting_token_msg = ExecuteMsg::SetVestingToken {
-        vesting_token: token_asset_info(cw20_token_instance.clone()),
-    };
-    app.execute_contract(
-        token_manager,
-        vesting_instance.clone(),
-        &set_vesting_token_msg,
-        &[],
-    )
-    .unwrap();
-
     let res: Config = app
         .wrap()
         .query_wasm_smart(vesting_instance.clone(), &QueryMsg::Config {})
@@ -1249,15 +1240,12 @@ fn instantiate_vesting_remote_chain(app: &mut App) -> Addr {
         owner: OWNER1.to_string(),
         token_info_manager: TOKEN_MANAGER.to_string(),
         vesting_managers: vec![],
+        vesting_token: native_asset_info(VESTING_TOKEN.to_string()),
+        xyk_vesting_lp_contract: "test".to_string(),
     };
 
     let res = app
         .instantiate_contract(vesting_code_id, owner, &init_msg, &[], "Vesting", None)
-        .unwrap();
-    let msg = ExecuteMsg::SetVestingToken {
-        vesting_token: native_asset_info(VESTING_TOKEN.to_string()),
-    };
-    app.execute_contract(token_manager, res.clone(), &msg, &[])
         .unwrap();
     res
 }

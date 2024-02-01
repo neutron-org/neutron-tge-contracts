@@ -3,13 +3,11 @@ use crate::ext_historical::{handle_execute_historical_msg, handle_query_historic
 use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
 use crate::ext_with_managers::{handle_execute_with_managers_msg, handle_query_managers_msg};
 use crate::msg::{CallbackMsg, Cw20HookMsg, ExecuteMsg, MigrateMsg, QueryMsg};
-use crate::state::{
-    read_vesting_infos, vesting_info, vesting_state, XYK_TO_CL_MIGRATION_CONFIG,
-};
+use crate::state::{read_vesting_infos, vesting_info, vesting_state, XYK_TO_CL_MIGRATION_CONFIG};
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS};
 use crate::types::{
-    Config, OrderBy, VestingAccount, VestingAccountResponse,
-    VestingAccountsResponse, VestingInfo, VestingSchedule, VestingState, XykToClMigrationConfig,
+    Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo,
+    VestingSchedule, VestingState, XykToClMigrationConfig,
 };
 use astroport::asset::{
     addr_opt_validate, native_asset, token_asset_info, AssetInfo, AssetInfoExt, PairInfo,
@@ -290,7 +288,7 @@ fn execute_migrate_liquidity(
     info: MessageInfo,
     env: Env,
     slippage_tolerance: Option<Decimal>,
-    user: Option<String>
+    user: Option<String>,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
@@ -598,7 +596,6 @@ fn post_migration_vesting_reschedule_callback(
 
 /// Exposes all the queries available in the contract.
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
-
     match msg {
         QueryMsg::Config {} => Ok(to_binary(&query_config(deps)?)?),
         QueryMsg::VestingAccount { address } => {

@@ -1,6 +1,4 @@
-use crate::types::{
-    Config, OrderBy, VestingInfo, VestingState, XykToClMigrationConfig,
-};
+use crate::types::{Config, OrderBy, VestingInfo, VestingState, XykToClMigrationConfig};
 use astroport::common::OwnershipProposal;
 use cosmwasm_std::{Addr, Deps, StdResult};
 use cw_storage_plus::{Bound, Item, Map, SnapshotItem, SnapshotMap, Strategy};

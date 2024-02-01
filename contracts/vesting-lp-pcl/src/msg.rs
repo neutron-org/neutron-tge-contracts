@@ -1,5 +1,5 @@
-use cosmwasm_schema::cw_serde;
 use astroport::asset::AssetInfo;
+use cosmwasm_schema::cw_serde;
 
 /// This structure describes the parameters used for creating a contract.
 #[cw_serde]
