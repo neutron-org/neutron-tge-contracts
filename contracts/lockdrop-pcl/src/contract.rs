@@ -215,7 +215,7 @@ fn _handle_callback(
             user_address,
             duration,
             lp_token,
-            lp_token_balance,
+            staked_lp_token_amount,
             user_info,
             lockup_info,
         } => callback_finish_lockup_migration(
@@ -225,7 +225,7 @@ fn _handle_callback(
             user_address,
             duration,
             lp_token,
-            lp_token_balance,
+            staked_lp_token_amount,
             user_info,
             lockup_info,
         ),
@@ -328,6 +328,12 @@ pub fn handle_update_config(
 /// Exactly two **Coin**s are expected to be attached to the message as funds. These **Coin**s are
 /// used in ProvideLiquidity message sent to the PCL pool, the minted LP tokens are staked to the
 /// generator.
+///
+/// Liquidity migration process consists of several sequential messages invocation and from this
+/// contract's point of view it mostly mimics (and clones code of) the **IncreaseLockupFor** exec
+/// handler of the XYK lockdrop contract called for each lockup position. So, for this contract's
+/// state, liquidity migration looks like lockups creation just like it happened in the beginning
+/// of the token generation event (TGE).
 pub fn handle_migrate_xyk_liquidity(
     deps: DepsMut,
     env: Env,
@@ -350,7 +356,7 @@ pub fn handle_migrate_xyk_liquidity(
         ));
     }
 
-    // determine the PCL pool address and the current lp token balance
+    // determine the PCL pool info and the current staked lp token amount
     let pool_info = ASSET_POOLS.load(deps.storage, pool_type.into())?;
     let astroport_pool: String = deps
         .querier
@@ -359,15 +365,13 @@ pub fn handle_migrate_xyk_liquidity(
             &cw20::Cw20QueryMsg::Minter {},
         )?
         .minter;
-    let astroport_lp_token_balance = deps
-        .querier
-        .query_wasm_smart::<BalanceResponse>(
-            pool_info.lp_token.to_string(),
-            &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
-            },
-        )?
-        .balance;
+    let staked_lp_token_amount = deps.querier.query_wasm_smart::<Uint128>(
+        config.generator.to_string(),
+        &GenQueryMsg::Deposit {
+            lp_token: pool_info.lp_token.to_string(),
+            user: env.contract.address.to_string(),
+        },
+    )?;
 
     // provide the transferred liquidity to the PCL pool
     let mut cosmos_msgs: Vec<CosmosMsg<Empty>> = vec![CosmosMsg::Wasm(WasmMsg::Execute {
@@ -396,7 +400,7 @@ pub fn handle_migrate_xyk_liquidity(
             user_address: deps.api.addr_validate(&user_address_raw)?,
             duration,
             lp_token: pool_info.lp_token.to_string(),
-            lp_token_balance: astroport_lp_token_balance,
+            staked_lp_token_amount,
             user_info,
             lockup_info,
         }
@@ -922,35 +926,36 @@ pub fn callback_finish_lockup_migration(
     user_address: Addr,
     duration: u64,
     lp_token: String,
-    lp_token_balance: Uint128,
+    staked_lp_token_amount: Uint128,
     user_info: LockdropXYKUserInfo,
     lockup_info: LockdropXYKLockupInfoV2,
 ) -> StdResult<Response> {
-    let astroport_lp_tokens_minted = deps
+    let config = CONFIG.load(deps.storage)?;
+    let staked_lp_token_amount_diff = deps
         .querier
-        .query_wasm_smart::<BalanceResponse>(
-            lp_token,
-            &Cw20QueryMsg::Balance {
-                address: env.contract.address.to_string(),
+        .query_wasm_smart::<Uint128>(
+            config.generator.to_string(),
+            &GenQueryMsg::Deposit {
+                lp_token,
+                user: env.contract.address.to_string(),
             },
         )?
-        .balance
-        .sub(lp_token_balance);
+        .sub(staked_lp_token_amount);
 
     let user_info: UserInfo = user_info.into();
     let lockup_info: LockupInfoV2 =
-        LockupInfoV2::from_xyk_lockup_info(lockup_info, astroport_lp_tokens_minted);
+        LockupInfoV2::from_xyk_lockup_info(lockup_info, staked_lp_token_amount_diff);
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
     let config = CONFIG.load(deps.storage)?;
 
     pool_info.weighted_amount = pool_info.weighted_amount.checked_add(calculate_weight(
-        astroport_lp_tokens_minted,
+        staked_lp_token_amount_diff,
         duration,
         &config,
     )?)?;
     pool_info.amount_in_lockups = pool_info
         .amount_in_lockups
-        .checked_add(astroport_lp_tokens_minted)?;
+        .checked_add(staked_lp_token_amount_diff)?;
 
     let lockup_key = (pool_type, &user_address, duration);
     LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
@@ -961,9 +966,9 @@ pub fn callback_finish_lockup_migration(
         env.block.height,
         |lockup_amount| -> StdResult<Uint128> {
             if let Some(la) = lockup_amount {
-                Ok(la.checked_add(astroport_lp_tokens_minted)?)
+                Ok(la.checked_add(staked_lp_token_amount_diff)?)
             } else {
-                Ok(astroport_lp_tokens_minted)
+                Ok(staked_lp_token_amount_diff)
             }
         },
     )?;

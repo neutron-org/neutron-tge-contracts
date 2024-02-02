@@ -153,7 +153,7 @@ pub enum ExecuteMsg {
     /// Used to claim contract ownership.
     ClaimOwnership {},
     /// A handler to receive lockdrop liquidity migrated from xyl pools to PCL ones. Only callable
-    /// by the original lockdrop contract.
+    /// by the original lockdrop contract. Expects two **Coin**s to be attached as funds.
     #[serde(rename = "migrate_xyk_liquidity")]
     MigrateXYKLiquidity {
         /// The type of the pool the lockup is related to.
@@ -196,8 +196,10 @@ pub enum CallbackMsg {
         duration: u64,
         /// The address of the LP token of the pool.
         lp_token: String,
-        /// The balance in the LP token of the PCL lockdrop contract before liquidity provision.
-        lp_token_balance: Uint128,
+        /// The amount of staked LP token the PCL lockdrop contract possesses of before liquidity
+        /// provision and staking to the generator. Used to calculate LP token amount received for
+        /// liquidity provision.
+        staked_lp_token_amount: Uint128,
         /// The lockup owner's info from the XYK lockdrop contract. Is used to create a UserInfo
         /// entry on the PCL lockdrop contract's side.
         user_info: LockdropXYKUserInfo,

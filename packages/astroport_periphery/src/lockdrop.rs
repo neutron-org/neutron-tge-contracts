@@ -202,10 +202,11 @@ pub enum CallbackMsg {
         duration: u64,
         withdraw_lp_stake: bool,
     },
-    /// The first step in the lockup's XYK -> PCL liquidity migration process.
-    /// Handles withdrawal of staked liquidity from the generator contract and liquidity transfer to
-    /// the PCL lockdrop contract, and claims all possible rewards for the user.
-    WithdrawUserLockupCallback {
+    /// Entry point for a single lockup position migration to PCL lockdrop contract. Performs
+    /// generator rewards claiming and initializes liquidity withdrawal+transfer process by
+    /// invocation of the respective callback message.
+    #[serde(rename = "init_migrate_lockup_to_pcl_pools_callback")]
+    InitMigrateLockupToPCLPoolsCallback {
         /// The type of the pool the lockup is related to.
         pool_type: PoolType,
         /// The address of the user which owns the lockup.
@@ -214,6 +215,33 @@ pub enum CallbackMsg {
         duration: u64,
     },
     /// The second step in the lockup's XYK -> PCL liquidity migration process.
+    /// Claims all possible rewards that the user is eligible of and transfers them to the user.
+    TransferAllRewardsBeforeMigrationCallback {
+        /// The type of the pool the lockup is related to.
+        pool_type: PoolType,
+        /// The address of the user which owns the lockup.
+        user_address: Addr,
+        /// The duration of the lock period.
+        duration: u64,
+    },
+    /// The third step in the lockup's XYK -> PCL liquidity migration process.
+    /// Handles withdrawal of staked liquidity from the generator contract and liquidity transfer to
+    /// the PCL lockdrop contract.
+    WithdrawUserLockupCallback {
+        /// The type of the pool the lockup is related to.
+        pool_type: PoolType,
+        /// The address of the user which owns the lockup.
+        user_address: Addr,
+        /// The duration of the lock period.
+        duration: u64,
+        /// The address of the generator which possesses the staked liquidity.
+        generator: Addr,
+        /// The address of the pool's liquidity token.
+        astroport_lp_token: Addr,
+        /// The amount of LP token to be unstaked and withdrawn.
+        astroport_lp_amount: Uint128,
+    },
+    /// The fourth step in the lockup's XYK -> PCL liquidity migration process.
     /// Invokes the PCL lockdrop contract's MigrateXYKLiquidity handler which creates an LP position
     /// in the PCL pool and a lockup in the PCL lockdrop contract in accordance with the withdrawn
     /// user's lockup position.
@@ -225,12 +253,12 @@ pub enum CallbackMsg {
         user_address: Addr,
         /// The duration of the lock period.
         duration: u64,
-        /// The balance in untrn of the XYK lockdrop contract at the first migration step. Is used
+        /// The balance in untrn of the XYK lockdrop contract at the third migration step. Is used
         /// in the callback to calculate the amount of untrn been withdrawn from the XYK pool.
         ntrn_balance: Uint128,
         /// The denom of the paired asset (the asset paired with untrn in the pool).
         paired_asset_denom: String,
-        /// The balance in the paired denom of the XYK lockdrop contract at the first migration step.
+        /// The balance in the paired denom of the XYK lockdrop contract at the third migration step.
         /// Is used in the callback to calculate the amount of the paired asset been withdrawn
         /// from the XYK pool.
         paired_asset_balance: Uint128,
