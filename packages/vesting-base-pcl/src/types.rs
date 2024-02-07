@@ -13,7 +13,6 @@ pub struct Config {
     pub token_info_manager: Addr,
     /// Contains extensions information of the contract
     pub extensions: Extensions,
-    pub xyk_vesting_lp_contract: Addr,
 }
 
 /// Contains extensions information for the contract.

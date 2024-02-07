@@ -1,4 +1,4 @@
-use crate::state::{CONFIG, VESTING_MANAGERS};
+use crate::state::{CONFIG, VESTING_MANAGERS, XYK_VESTING_LP_CONTRACT};
 use crate::types::{Config, Extensions};
 use astroport::asset::AssetInfo;
 use cosmwasm_std::{DepsMut, StdResult};
@@ -53,8 +53,12 @@ impl VestingBaseBuilder {
                     managed: self.managed,
                     with_managers: self.with_managers,
                 },
-                xyk_vesting_lp_contract: deps.api.addr_validate(&xyk_vesting_lp_contract)?,
             },
+        )?;
+
+        XYK_VESTING_LP_CONTRACT.save(
+            deps.storage,
+            &deps.api.addr_validate(&xyk_vesting_lp_contract)?,
         )?;
 
         if self.with_managers {

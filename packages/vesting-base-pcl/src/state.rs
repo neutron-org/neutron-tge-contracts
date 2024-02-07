@@ -5,6 +5,7 @@ use cw_storage_plus::{Bound, Item, Map, SnapshotItem, SnapshotMap, Strategy};
 
 pub(crate) const CONFIG: Item<Config> = Item::new("config");
 pub(crate) const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
+pub(crate) const XYK_VESTING_LP_CONTRACT: Item<Addr> = Item::new("xyk_vesting_lp_contract");
 pub(crate) const VESTING_MANAGERS: Map<Addr, ()> = Map::new("vesting_managers");
 pub(crate) const VESTING_STATE: SnapshotItem<VestingState> = SnapshotItem::new(
     "vesting_state",

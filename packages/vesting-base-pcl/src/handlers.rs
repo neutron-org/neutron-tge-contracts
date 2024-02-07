@@ -3,7 +3,7 @@ use crate::ext_historical::{handle_execute_historical_msg, handle_query_historic
 use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
 use crate::ext_with_managers::{handle_execute_with_managers_msg, handle_query_managers_msg};
 use crate::msg::{Cw20HookMsg, ExecuteMsg, MigrateMsg, QueryMsg};
-use crate::state::{read_vesting_infos, vesting_info, vesting_state};
+use crate::state::{read_vesting_infos, vesting_info, vesting_state, XYK_VESTING_LP_CONTRACT};
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS};
 use crate::types::{
     Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo,
@@ -441,7 +441,8 @@ fn is_sender_whitelisted(store: &mut dyn Storage, config: &Config, sender: &Addr
     if *sender == config.owner {
         return true;
     }
-    if *sender == config.xyk_vesting_lp_contract {
+    let xyk_vesting_lp_contract = XYK_VESTING_LP_CONTRACT.load(store).unwrap();
+    if *sender == xyk_vesting_lp_contract {
         return true;
     }
     if VESTING_MANAGERS.has(store, sender.clone()) {
