@@ -6,7 +6,7 @@ use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
+    to_json_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
     WasmMsg,
 };
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
@@ -176,7 +176,6 @@ pub enum ExecuteMsg {
 pub enum CallbackMsg {
     UpdatePoolOnDualRewardsClaim {
         pool_type: PoolType,
-        prev_ntrn_balance: Uint128,
         prev_proxy_reward_balances: Vec<Asset>,
     },
     WithdrawUserLockupRewardsCallback {
@@ -215,7 +214,7 @@ impl CallbackMsg {
     pub fn to_cosmos_msg(self, env: &Env) -> StdResult<CosmosMsg> {
         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: env.contract.address.to_string(),
-            msg: to_binary(&ExecuteMsg::Callback(self))?,
+            msg: to_json_binary(&ExecuteMsg::Callback(self))?,
             funds: vec![],
         }))
     }
@@ -269,8 +268,8 @@ pub struct Config {
     pub credits_contract: Addr,
     /// Bootstrap Auction contract address
     pub auction_contract: Addr,
-    /// Generator (Staking for dual rewards) contract address
-    pub generator: Addr,
+    /// Incentives contract address
+    pub incentives: Addr,
     /// Total NTRN lockdrop incentives to be distributed among the users
     pub lockdrop_incentives: Uint128,
     /// Describes rewards coefficients for each lockup duration

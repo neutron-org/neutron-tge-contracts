@@ -2,7 +2,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use crate::asset::{Asset, AssetInfo, PairInfo};
 
-use cosmwasm_std::{from_slice, Addr, Binary, Decimal, QuerierWrapper, StdResult, Uint128};
+use cosmwasm_std::{Addr, Binary, Decimal, from_json, QuerierWrapper, StdResult, Uint128};
 use cw20::Cw20ReceiveMsg;
 
 /// The default swap slippage
@@ -208,7 +208,7 @@ pub fn migration_check(
     pair_addr: &Addr,
 ) -> StdResult<bool> {
     if let Some(res) = querier.query_wasm_raw(factory, b"pairs_to_migrate".as_slice())? {
-        let res: Vec<Addr> = from_slice(&res)?;
+        let res: Vec<Addr> = from_json(res)?;
         Ok(res.contains(pair_addr))
     } else {
         Ok(false)
@@ -219,7 +219,7 @@ pub fn migration_check(
 mod tests {
     use super::*;
     use crate::asset::native_asset_info;
-    use cosmwasm_std::{from_binary, to_binary};
+    use cosmwasm_std::{from_json, to_json_binary};
 
     #[cw_serde]
     pub struct LegacyInstantiateMsg {
@@ -247,17 +247,17 @@ mod tests {
             init_params: None,
         };
 
-        let ser_msg = to_binary(&inst_msg).unwrap();
+        let ser_msg = to_json_binary(&inst_msg).unwrap();
         // This .unwrap() is enough to make sure that [AssetInfo; 2] and Vec<AssetInfo> are compatible.
-        let _: InstantiateMsg = from_binary(&ser_msg).unwrap();
+        let _: InstantiateMsg = from_json(ser_msg).unwrap();
     }
 
     #[test]
     fn test_config_response_compatability() {
-        let ser_msg = to_binary(&LegacyConfigResponse {
+        let ser_msg = to_json_binary(&LegacyConfigResponse {
             block_time_last: 12,
             params: Some(
-                to_binary(&StablePoolConfig {
+                to_json_binary(&StablePoolConfig {
                     amp: Decimal::one(),
                 })
                 .unwrap(),
@@ -265,12 +265,12 @@ mod tests {
         })
         .unwrap();
 
-        let _: ConfigResponse = from_binary(&ser_msg).unwrap();
+        let _: ConfigResponse = from_json(ser_msg).unwrap();
     }
 
     #[test]
     fn check_empty_vec_deserialization() {
-        let variant: Cw20HookMsg = from_slice(br#"{"withdraw_liquidity": {} }"#).unwrap();
+        let variant: Cw20HookMsg = from_json(br#"{"withdraw_liquidity": {} }"#).unwrap();
         assert_eq!(variant, Cw20HookMsg::WithdrawLiquidity { assets: vec![] });
     }
 }

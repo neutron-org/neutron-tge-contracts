@@ -13,7 +13,7 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
+    attr, coins, entry_point, from_json, to_json_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
     Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
     Uint128, Uint256, WasmMsg,
 };
@@ -245,7 +245,7 @@ pub fn receive_cw20(
         ));
     }
 
-    match from_binary(&cw20_msg.msg)? {
+    match from_json(&cw20_msg.msg)? {
         Cw20HookMsg::InitializePool {
             pool_type,
             incentives_share,
@@ -407,18 +407,18 @@ fn _handle_callback(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&CONFIG.load(deps.storage)?),
-        QueryMsg::State {} => to_binary(&query_state(deps)?),
-        QueryMsg::Pool { pool_type } => to_binary(&query_pool(deps, pool_type)?),
-        QueryMsg::UserInfo { address } => to_binary(&query_user_info(deps, env, address)?),
+        QueryMsg::Config {} => to_json_binary(&CONFIG.load(deps.storage)?),
+        QueryMsg::State {} => to_json_binary(&query_state(deps)?),
+        QueryMsg::Pool { pool_type } => to_json_binary(&query_pool(deps, pool_type)?),
+        QueryMsg::UserInfo { address } => to_json_binary(&query_user_info(deps, env, address)?),
         QueryMsg::UserInfoWithLockupsList { address } => {
-            to_binary(&query_user_info_with_lockups_list(deps, env, address)?)
+            to_json_binary(&query_user_info_with_lockups_list(deps, env, address)?)
         }
         QueryMsg::LockUpInfo {
             user_address,
             pool_type,
             duration,
-        } => to_binary(&query_lockup_info(
+        } => to_json_binary(&query_lockup_info(
             deps,
             &env,
             &user_address,
@@ -429,14 +429,14 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             pool_type,
             user_address,
             height,
-        } => to_binary(&query_user_lockup_total_at_height(
+        } => to_json_binary(&query_user_lockup_total_at_height(
             deps,
             pool_type,
             deps.api.addr_validate(&user_address)?,
             height,
         )?),
         QueryMsg::QueryLockupTotalAtHeight { pool_type, height } => {
-            to_binary(&query_lockup_total_at_height(deps, pool_type, height)?)
+            to_json_binary(&query_lockup_total_at_height(deps, pool_type, height)?)
         }
     }
 }
@@ -654,7 +654,7 @@ fn callback_init_migrate_lockup_to_pcl_pools(
         cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: generator.to_string(),
             funds: vec![],
-            msg: to_binary(&GenExecuteMsg::ClaimRewards {
+            msg: to_json_binary(&GenExecuteMsg::ClaimRewards {
                 lp_tokens: vec![astroport_lp_token.to_string()],
             })?,
         }));
@@ -854,7 +854,7 @@ fn stake_messages(
     cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token_address.to_string(),
         funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
+        msg: to_json_binary(&Cw20ExecuteMsg::IncreaseAllowance {
             spender: generator.to_string(),
             amount,
             expires: Some(cw20::Expiration::AtHeight(height)),
@@ -864,9 +864,9 @@ fn stake_messages(
     cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token_address.to_string(),
         funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Send {
+        msg: to_json_binary(&Cw20ExecuteMsg::Send {
             contract: generator.to_string(),
-            msg: to_binary(&astroport::generator::Cw20HookMsg::Deposit {})?,
+            msg: to_json_binary(&astroport::generator::Cw20HookMsg::Deposit {})?,
             amount,
         })?,
     }));
@@ -1281,7 +1281,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: generator.to_string(),
                 funds: vec![],
-                msg: to_binary(&GenExecuteMsg::ClaimRewards {
+                msg: to_json_binary(&GenExecuteMsg::ClaimRewards {
                     lp_tokens: vec![astroport_lp_token.to_string()],
                 })?,
             }));
@@ -1358,7 +1358,7 @@ pub fn claim_airdrop_tokens_with_multiplier_msg(
 
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: credits_contract.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::BurnFrom {
+        msg: to_json_binary(&Cw20ExecuteMsg::BurnFrom {
             owner: user_addr.to_string(),
             amount: claimable_vested_amount.checked_add(unvested_tokens_amount.amount)?,
         })?,
@@ -1590,7 +1590,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
 
         // If claimable proxy staking rewards > 0, claim them
         for pending_proxy_reward in pending_proxy_rewards {
-            cosmos_msgs.push(pending_proxy_reward.into_msg(&deps.querier, user_address.clone())?);
+            cosmos_msgs.push(pending_proxy_reward.into_msg(user_address.clone())?);
         }
 
         //  COSMOSMSG :: If LP Tokens are staked, we unstake the amount which needs to be returned to the user
@@ -1598,7 +1598,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: generator.to_string(),
                 funds: vec![],
-                msg: to_binary(&GenExecuteMsg::Withdraw {
+                msg: to_json_binary(&GenExecuteMsg::Withdraw {
                     lp_token: astroport_lp_token.to_string(),
                     amount: astroport_lp_amount,
                 })?,
@@ -1610,7 +1610,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         // COSMOSMSG :: Returns LP units locked by the user in the current lockup position
         cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: astroport_lp_token.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+            msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                 recipient: user_address.to_string(),
                 amount: astroport_lp_amount,
             })?,
@@ -1792,7 +1792,7 @@ pub fn callback_transfer_all_rewards_before_migration(
 
     // If claimable proxy staking rewards > 0, claim them
     for pending_proxy_reward in pending_proxy_rewards {
-        cosmos_msgs.push(pending_proxy_reward.into_msg(&deps.querier, user_address.clone())?);
+        cosmos_msgs.push(pending_proxy_reward.into_msg(user_address.clone())?);
     }
 
     // Transfers claimable one time NTRN rewards to the user that the user gets for all his lock
@@ -1860,7 +1860,7 @@ pub fn callback_withdraw_user_lockup(
     cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: generator.to_string(),
         funds: vec![],
-        msg: to_binary(&GenExecuteMsg::Withdraw {
+        msg: to_json_binary(&GenExecuteMsg::Withdraw {
             lp_token: astroport_lp_token.to_string(),
             amount: astroport_lp_amount,
         })?,
@@ -1900,10 +1900,10 @@ pub fn callback_withdraw_user_lockup(
     cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: astroport_lp_token.to_string(),
         funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Send {
+        msg: to_json_binary(&Cw20ExecuteMsg::Send {
             contract: astroport_pool,
             amount: astroport_lp_amount,
-            msg: to_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
+            msg: to_json_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
         })?,
     }));
 
@@ -1996,7 +1996,7 @@ pub fn callback_migrate_user_lockup_to_pcl_pair(
                     amount: paired_asset_withdrawn,
                 },
             ],
-            msg: to_binary(&LockdropPCLExecuteMsg::MigrateXYKLiquidity {
+            msg: to_json_binary(&LockdropPCLExecuteMsg::MigrateXYKLiquidity {
                 pool_type,
                 user_address_raw: user_address.to_string(),
                 duration,
