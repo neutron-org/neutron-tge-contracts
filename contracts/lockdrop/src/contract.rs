@@ -1903,7 +1903,9 @@ pub fn callback_withdraw_user_lockup(
         msg: to_json_binary(&Cw20ExecuteMsg::Send {
             contract: astroport_pool,
             amount: astroport_lp_amount,
-            msg: to_json_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
+            msg: to_json_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity {
+                assets: vec![],
+            })?,
         })?,
     }));
 

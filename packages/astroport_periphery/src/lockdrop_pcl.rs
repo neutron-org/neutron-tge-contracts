@@ -6,8 +6,8 @@ use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{
-    to_json_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
-    WasmMsg,
+    to_json_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128,
+    Uint256, WasmMsg,
 };
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use schemars::JsonSchema;

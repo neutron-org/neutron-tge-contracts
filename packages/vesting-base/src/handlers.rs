@@ -299,9 +299,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             limit,
             order_by,
         )?)?),
-        QueryMsg::AvailableAmount { address } => Ok(to_json_binary(&query_vesting_available_amount(
-            deps, env, address,
-        )?)?),
+        QueryMsg::AvailableAmount { address } => Ok(to_json_binary(
+            &query_vesting_available_amount(deps, env, address)?,
+        )?),
         QueryMsg::VestingState {} => Ok(to_json_binary(&query_vesting_state(deps)?)?),
         QueryMsg::Timestamp {} => Ok(to_json_binary(&query_timestamp(env)?)?),
         QueryMsg::ManagedExtension { msg } => handle_query_managed_msg(deps, env, msg),

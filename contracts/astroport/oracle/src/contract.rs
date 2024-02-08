@@ -7,8 +7,8 @@ use astroport::oracle::{Config, ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::query_pair_info;
 use cosmwasm_std::{
-    entry_point, to_json_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response, Uint128,
-    Uint256, Uint64,
+    entry_point, to_json_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
+    Uint128, Uint256, Uint64,
 };
 use cw2::set_contract_version;
 use std::ops::Div;

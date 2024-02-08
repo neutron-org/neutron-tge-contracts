@@ -2,7 +2,9 @@ use crate::asset::{Asset, AssetInfo};
 use crate::factory::PairType;
 use crate::restricted_vector::RestrictedVector;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{to_json_binary, Addr, Decimal, Env, StdResult, SubMsg, Uint128, Uint64, WasmMsg};
+use cosmwasm_std::{
+    to_json_binary, Addr, Decimal, Env, StdResult, SubMsg, Uint128, Uint64, WasmMsg,
+};
 use cw20::Cw20ReceiveMsg;
 
 /// This structure describes the parameters used for creating a contract.

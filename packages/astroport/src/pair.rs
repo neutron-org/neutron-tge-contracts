@@ -2,7 +2,7 @@ use cosmwasm_schema::{cw_serde, QueryResponses};
 
 use crate::asset::{Asset, AssetInfo, PairInfo};
 
-use cosmwasm_std::{Addr, Binary, Decimal, from_json, QuerierWrapper, StdResult, Uint128};
+use cosmwasm_std::{from_json, Addr, Binary, Decimal, QuerierWrapper, StdResult, Uint128};
 use cw20::Cw20ReceiveMsg;
 
 /// The default swap slippage

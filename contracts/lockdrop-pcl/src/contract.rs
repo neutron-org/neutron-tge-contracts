@@ -6,9 +6,7 @@ use std::str::FromStr;
 use astroport::asset::{Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::cosmwasm_ext::IntegerToDecimal;
-use astroport::incentives::{
-    ExecuteMsg as IncentivesExecuteMsg, QueryMsg as IncentivesQueryMsg,
-};
+use astroport::incentives::{ExecuteMsg as IncentivesExecuteMsg, QueryMsg as IncentivesQueryMsg};
 use astroport::pair::ExecuteMsg::ProvideLiquidity;
 use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
@@ -189,12 +187,7 @@ fn _handle_callback(
         CallbackMsg::UpdatePoolOnDualRewardsClaim {
             pool_type,
             prev_proxy_reward_balances,
-        } => update_pool_on_dual_rewards_claim(
-            deps,
-            env,
-            pool_type,
-            prev_proxy_reward_balances,
-        ),
+        } => update_pool_on_dual_rewards_claim(deps, env, pool_type, prev_proxy_reward_balances),
         CallbackMsg::WithdrawUserLockupRewardsCallback {
             pool_type,
             user_address,
@@ -487,7 +480,9 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             },
         )?;
 
-        if pending_rewards_response.iter().any(|asset| !asset.amount.is_zero())
+        if pending_rewards_response
+            .iter()
+            .any(|asset| !asset.amount.is_zero())
         {
             let prev_pending_rewards_balances: Vec<Asset> = pending_rewards_response
                 .iter()
@@ -1153,7 +1148,6 @@ pub fn query_lockup_info(
 
                 claimable_generator_rewards_debt.update(&reward.info, debt)?;
             }
-
         }
     }
     // Calculate currently expected ASTRO Rewards if not finalized

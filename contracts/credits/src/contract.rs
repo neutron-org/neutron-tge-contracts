@@ -394,7 +394,9 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::WithdrawableAmount { address } => {
             to_json_binary(&query_withdrawable_amount(deps, env, address)?)
         }
-        QueryMsg::VestedAmount { address } => to_json_binary(&query_vested_amount(deps, env, address)?),
+        QueryMsg::VestedAmount { address } => {
+            to_json_binary(&query_vested_amount(deps, env, address)?)
+        }
         QueryMsg::Allocation { address } => to_json_binary(&query_allocation(deps, address)?),
         QueryMsg::Balance { address } => {
             to_json_binary(&::cw20_base::contract::query_balance(deps, address)?)

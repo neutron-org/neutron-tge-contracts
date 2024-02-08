@@ -1,6 +1,6 @@
 use cosmwasm_std::{
-    to_json_binary, Addr, Binary, CosmosMsg, QuerierWrapper, QueryRequest, StdResult, Uint128, WasmMsg,
-    WasmQuery,
+    to_json_binary, Addr, Binary, CosmosMsg, QuerierWrapper, QueryRequest, StdResult, Uint128,
+    WasmMsg, WasmQuery,
 };
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 
