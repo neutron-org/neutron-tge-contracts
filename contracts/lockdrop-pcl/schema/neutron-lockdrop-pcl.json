@@ -1,6 +1,6 @@
 {
-  "contract_name": "neutron-lockdrop",
-  "contract_version": "1.2.1",
+  "contract_name": "neutron-lockdrop-pcl",
+  "contract_version": "1.0.0",
   "idl_version": "1.0.0",
   "instantiate": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -347,6 +347,28 @@
           }
         },
         "additionalProperties": false
+      },
+      {
+        "description": "Migrates user's locked liquidity from XYK pools to PCL ones, transferring lockdrop participation rewards to the address which liquidity has been migrated.",
+        "type": "object",
+        "required": [
+          "migrate_liquidity_to_pcl_pools"
+        ],
+        "properties": {
+          "migrate_liquidity_to_pcl_pools": {
+            "type": "object",
+            "properties": {
+              "user_address_raw": {
+                "description": "The address which liquidity is supposed to be transferred. If no user address is provided, the message sender's address is used.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "additionalProperties": false
       }
     ],
     "definitions": {
@@ -437,6 +459,7 @@
       "CallbackMsg": {
         "oneOf": [
           {
+            "description": "Updates contract state after dual staking rewards are claimed from the generator contract.",
             "type": "object",
             "required": [
               "update_pool_on_dual_rewards_claim"
@@ -468,6 +491,7 @@
             "additionalProperties": false
           },
           {
+            "description": "Withdraws user rewards and LP Tokens after claims / unlocks.",
             "type": "object",
             "required": [
               "withdraw_user_lockup_rewards_callback"
@@ -495,6 +519,224 @@
                   },
                   "withdraw_lp_stake": {
                     "type": "boolean"
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Entry point for a single lockup position migration to PCL lockdrop contract. Performs generator rewards claiming and initializes liquidity withdrawal+transfer process by invocation of the respective callback message.",
+            "type": "object",
+            "required": [
+              "init_migrate_lockup_to_pcl_pools_callback"
+            ],
+            "properties": {
+              "init_migrate_lockup_to_pcl_pools_callback": {
+                "type": "object",
+                "required": [
+                  "duration",
+                  "pool_type",
+                  "user_address"
+                ],
+                "properties": {
+                  "duration": {
+                    "description": "The duration of the lock period.",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "pool_type": {
+                    "description": "The type of the pool the lockup is related to.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/PoolType"
+                      }
+                    ]
+                  },
+                  "user_address": {
+                    "description": "The address of the user which owns the lockup.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Addr"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "The second step in the lockup's XYK -> PCL liquidity migration process. Claims all possible rewards that the user is eligible of and transfers them to the user.",
+            "type": "object",
+            "required": [
+              "transfer_all_rewards_before_migration_callback"
+            ],
+            "properties": {
+              "transfer_all_rewards_before_migration_callback": {
+                "type": "object",
+                "required": [
+                  "duration",
+                  "pool_type",
+                  "user_address"
+                ],
+                "properties": {
+                  "duration": {
+                    "description": "The duration of the lock period.",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "pool_type": {
+                    "description": "The type of the pool the lockup is related to.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/PoolType"
+                      }
+                    ]
+                  },
+                  "user_address": {
+                    "description": "The address of the user which owns the lockup.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Addr"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "The third step in the lockup's XYK -> PCL liquidity migration process. Handles withdrawal of staked liquidity from the generator contract and liquidity transfer to the PCL lockdrop contract.",
+            "type": "object",
+            "required": [
+              "withdraw_user_lockup_callback"
+            ],
+            "properties": {
+              "withdraw_user_lockup_callback": {
+                "type": "object",
+                "required": [
+                  "astroport_lp_amount",
+                  "astroport_lp_token",
+                  "duration",
+                  "generator",
+                  "pool_type",
+                  "user_address"
+                ],
+                "properties": {
+                  "astroport_lp_amount": {
+                    "description": "The amount of LP token to be unstaked and withdrawn.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Uint128"
+                      }
+                    ]
+                  },
+                  "astroport_lp_token": {
+                    "description": "The address of the pool's liquidity token.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Addr"
+                      }
+                    ]
+                  },
+                  "duration": {
+                    "description": "The duration of the lock period.",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "generator": {
+                    "description": "The address of the generator which possesses the staked liquidity.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Addr"
+                      }
+                    ]
+                  },
+                  "pool_type": {
+                    "description": "The type of the pool the lockup is related to.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/PoolType"
+                      }
+                    ]
+                  },
+                  "user_address": {
+                    "description": "The address of the user which owns the lockup.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Addr"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "The fourth step in the lockup's XYK -> PCL liquidity migration process. Invokes the PCL lockdrop contract's MigrateXYKLiquidity handler which creates an LP position in the PCL pool and a lockup in the PCL lockdrop contract in accordance with the withdrawn user's lockup position.",
+            "type": "object",
+            "required": [
+              "migrate_user_lockup_to_pcl_pair_callback"
+            ],
+            "properties": {
+              "migrate_user_lockup_to_pcl_pair_callback": {
+                "type": "object",
+                "required": [
+                  "duration",
+                  "ntrn_balance",
+                  "paired_asset_balance",
+                  "paired_asset_denom",
+                  "pool_type",
+                  "user_address"
+                ],
+                "properties": {
+                  "duration": {
+                    "description": "The duration of the lock period.",
+                    "type": "integer",
+                    "format": "uint64",
+                    "minimum": 0.0
+                  },
+                  "ntrn_balance": {
+                    "description": "The balance in untrn of the XYK lockdrop contract at the third migration step. Is used in the callback to calculate the amount of untrn been withdrawn from the XYK pool.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Uint128"
+                      }
+                    ]
+                  },
+                  "paired_asset_balance": {
+                    "description": "The balance in the paired denom of the XYK lockdrop contract at the third migration step. Is used in the callback to calculate the amount of the paired asset been withdrawn from the XYK pool.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Uint128"
+                      }
+                    ]
+                  },
+                  "paired_asset_denom": {
+                    "description": "The denom of the paired asset (the asset paired with untrn in the pool).",
+                    "type": "string"
+                  },
+                  "pool_type": {
+                    "description": "The type of the pool the lockup is related to.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/PoolType"
+                      }
+                    ]
+                  },
+                  "user_address": {
+                    "description": "The address of the user which owns the lockup.",
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/Addr"
+                      }
+                    ]
                   }
                 }
               }
@@ -752,7 +994,16 @@
   "migrate": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "MigrateMsg",
-    "type": "object"
+    "type": "object",
+    "required": [
+      "pcl_lockdrop_contract"
+    ],
+    "properties": {
+      "pcl_lockdrop_contract": {
+        "description": "The address of the lockdrop contract working with PCL pools. Used to transfer the lockdrop's liquidity locked in XYK pools to more efficient pools.",
+        "type": "string"
+      }
+    }
   },
   "sudo": null,
   "responses": {
