@@ -617,11 +617,7 @@ pub fn update_pool_on_dual_rewards_claim(
             .info
             .query_pool(&deps.querier, env.contract.address.clone())?;
         let received_amount = current_balance.checked_sub(prev_balance.amount)?;
-        deps.api.debug(&format!(
-            "WASMDEBUG: set gen rewards per share for {:?}: {}",
-            prev_balance.info,
-            Decimal::from_ratio(received_amount, lp_balance)
-        ));
+
         pool_info.generator_rewards_per_share.update(
             &prev_balance.info,
             Decimal::from_ratio(received_amount, lp_balance),
@@ -705,6 +701,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         .try_into()?
     };
 
+    let mut pending_reward_assets: Vec<Asset> = vec![];
     // If Astro LP tokens are staked with Astro generator
     if pool_info.is_staked {
         // If this LP token is getting incentives
@@ -717,69 +714,34 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             },
         )?;
         for reward in pending_rewards {
-            let generator_rewards_per_share = pool_info.generator_rewards_per_share.update(
-                &reward.info,
-                Decimal::from_ratio(reward.amount, astroport_lp_amount),
-            )?;
+            let generator_rewards_per_share = pool_info
+                .generator_rewards_per_share
+                .load(&reward.info)
+                .unwrap_or_default();
+            if generator_rewards_per_share.is_zero() {
+                continue;
+            };
 
-            // Calculate Lockup Astro LP shares
-            let lockup_astroport_lp_units: Uint128 = lockup_info
-                .lp_units_locked
-                .full_mul(astroport_lp_amount)
-                .checked_div(Uint256::from(pool_info.amount_in_lockups))?
-                .try_into()?;
+            let total_lockup_rewards = generator_rewards_per_share
+                .checked_mul(astroport_lp_amount.to_decimal())?
+                .to_uint_floor();
+            let debt = lockup_info
+                .generator_debt
+                .load(&reward.info)
+                .unwrap_or_default();
+            let pending_reward = total_lockup_rewards.checked_sub(debt)?;
 
-            let debt = generator_rewards_per_share
-                .checked_mul_uint128(lockup_astroport_lp_units)?
-                .checked_sub(
-                    lockup_info
-                        .generator_debt
-                        .inner_ref()
-                        .iter()
-                        .find_map(|a| if reward.info == a.0 { Some(a.1) } else { None })
-                        .unwrap_or_default(),
-                )?;
+            if !pending_reward.is_zero() {
+                pending_reward_assets.push(Asset {
+                    info: reward.info.clone(),
+                    amount: pending_reward,
+                });
+            }
 
-            lockup_info.generator_debt.update(&reward.info, debt)?;
-            deps.api.debug(&format!(
-                "WASMDEBUG: found pending rewards debt: {} {}",
-                reward.info.clone(),
-                debt,
-            ));
+            lockup_info
+                .generator_debt
+                .update(&reward.info, total_lockup_rewards.checked_sub(debt)?)?;
         }
-
-        let mut pending_reward_assets: Vec<Asset> = vec![];
-        lockup_info.generator_debt = lockup_info
-            .generator_debt
-            .inner_ref()
-            .iter()
-            .map(|(asset, debt)| {
-                let generator_rewards_per_share = pool_info
-                    .generator_rewards_per_share
-                    .load(asset)
-                    .unwrap_or_default();
-                let total_lockup_reward =
-                    generator_rewards_per_share.checked_mul_uint128(astroport_lp_amount)?;
-                let pending_reward: Uint128 = total_lockup_reward.checked_sub(*debt)?;
-
-                deps.api.debug(&format!(
-                    "WASMDEBUG: rewards for {} calculated: share {}, total {}, pending {}",
-                    user_address.to_string(),
-                    generator_rewards_per_share,
-                    total_lockup_reward,
-                    pending_reward
-                ));
-
-                if !pending_reward.is_zero() {
-                    pending_reward_assets.push(Asset {
-                        info: asset.clone(),
-                        amount: pending_reward,
-                    });
-                }
-                Ok((asset.clone(), total_lockup_reward))
-            })
-            .collect::<StdResult<Vec<_>>>()?
-            .into();
 
         // If this is a void transaction (no state change), then return error.
         // Void tx scenario = ASTRO already claimed, 0 pending ASTRO staking reward, 0 pending rewards, not unlocking LP tokens in this tx
