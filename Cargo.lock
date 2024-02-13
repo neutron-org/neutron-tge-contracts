@@ -1511,36 +1511,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vesting-base-lp"
-version = "1.1.0"
-dependencies = [
- "astroport 2.8.0",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus 0.15.1",
- "cw-utils 0.15.1",
- "cw2 0.15.1",
- "cw20 0.15.1",
- "serde",
- "thiserror",
- "vesting-base",
- "vesting-base-pcl",
-]
-
-[[package]]
-name = "vesting-base-pcl"
-version = "1.1.0"
-dependencies = [
- "astroport 2.0.0",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus 1.1.0",
- "cw-utils 0.15.1",
- "cw20 1.1.1",
- "thiserror",
-]
-
-[[package]]
 name = "vesting-investors"
 version = "1.1.1"
 dependencies = [
@@ -1569,7 +1539,7 @@ dependencies = [
  "cw2 0.15.1",
  "cw20 0.15.1",
  "vesting-base",
- "vesting-base-lp",
+ "vesting-lp-pcl",
 ]
 
 [[package]]
@@ -1581,10 +1551,11 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "cw-multi-test 0.16.5",
+ "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
  "cw2 1.1.1",
  "cw20 1.1.1",
- "vesting-base-pcl",
+ "vesting-base",
 ]
 
 [[package]]
