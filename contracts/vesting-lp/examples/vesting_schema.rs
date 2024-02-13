@@ -1,6 +1,6 @@
 use cosmwasm_schema::write_api;
-use vesting_base::msg::{ExecuteMsg, MigrateMsg, QueryMsg};
-use vesting_lp::msg::InstantiateMsg;
+use vesting_lp::msg::{ExecuteMsg, MigrateMsg, InstantiateMsg};
+use vesting_base::msg::QueryMsg;
 
 fn main() {
     write_api! {

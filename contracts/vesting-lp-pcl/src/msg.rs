@@ -18,6 +18,7 @@ pub struct InstantiateMsg {
     pub vesting_token: AssetInfo,
 }
 
+#[cw_serde]
 pub enum ExecuteMsg {
     Base(BaseExecute),
     Receive(Cw20ReceiveMsg),
