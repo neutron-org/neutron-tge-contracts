@@ -4,8 +4,7 @@
   "type": "object",
   "required": [
     "amount_in_lockups",
-    "generator_ntrn_per_share",
-    "generator_proxy_per_share",
+    "generator_rewards_per_share",
     "incentives_share",
     "is_staked",
     "lp_token",
@@ -15,16 +14,8 @@
     "amount_in_lockups": {
       "$ref": "#/definitions/Uint128"
     },
-    "generator_ntrn_per_share": {
-      "description": "Ratio of Generator NTRN rewards accured to astroport pool share",
-      "allOf": [
-        {
-          "$ref": "#/definitions/Decimal"
-        }
-      ]
-    },
-    "generator_proxy_per_share": {
-      "description": "Ratio of Generator Proxy rewards accured to astroport pool share",
+    "generator_rewards_per_share": {
+      "description": "Ratio of Generator rewards accured to astroport pool share",
       "allOf": [
         {
           "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Decimal"
