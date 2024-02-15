@@ -14,7 +14,7 @@ use vesting_base::builder::VestingBaseBuilder;
 use vesting_base::error::ContractError;
 use vesting_base::handlers::execute as base_execute;
 use vesting_base::handlers::query as base_query;
-use vesting_base::msg::QueryMsg;
+use vesting_base::msg::{ExecuteMsg as BaseExecute, QueryMsg};
 use vesting_base::state::{vesting_info, vesting_state, CONFIG};
 use vesting_base::types::{
     VestingAccountResponse, VestingInfo, VestingSchedule, VestingSchedulePoint,
@@ -51,14 +51,14 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Base(base_msg) => {
-            // Delegate handling of the original message types to the base execute function
-            base_execute(deps, env, info, base_msg)
-        }
         ExecuteMsg::MigrateLiquidityToPCLPool { user } => {
             execute_migrate_liquidity(deps, info, env, None, user)
         }
         ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
+        _ => {
+            let base_msg: BaseExecute = msg.into();
+            base_execute(deps, env, info, base_msg)
+        }
     }
 }
 

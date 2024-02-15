@@ -16,8 +16,8 @@ library = []
 
 [dependencies]
 cw2 = { workspace = true }
-cw20 = { workspace = true }
-astroport = { workspace = true }
+cw20 = { version = "0.15" }
+astroport = { path= "../../packages/astroport"}
 vesting-base = {path = "../../packages/vesting-base"}
 cosmwasm-schema = { workspace = true }
 cosmwasm-std = { workspace = true }
