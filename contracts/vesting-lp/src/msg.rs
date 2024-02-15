@@ -48,6 +48,7 @@ pub enum CallbackMsg {
     },
     PostMigrationVestingReschedule {
         user: VestingAccountResponse,
+        init_balance_pcl_lp: Uint128,
     },
 }
 

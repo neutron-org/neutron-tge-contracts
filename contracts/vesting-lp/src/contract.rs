@@ -201,8 +201,8 @@ fn _handle_callback(
             slippage_tolerance,
             user,
         ),
-        CallbackMsg::PostMigrationVestingReschedule { user } => {
-            post_migration_vesting_reschedule_callback(deps, env, &user)
+        CallbackMsg::PostMigrationVestingReschedule { user, init_balance_pcl_lp } => {
+            post_migration_vesting_reschedule_callback(deps, env, &user, init_balance_pcl_lp)
         }
     }
 }
@@ -298,6 +298,16 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
 
     let mut msgs: Vec<CosmosMsg> = vec![];
 
+    let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
+
+    let balance_response: BalanceResponse = deps.querier.query_wasm_smart(
+        &migration_config.new_lp_token,
+        &Cw20QueryMsg::Balance {
+            address: env.contract.address.to_string(),
+        },
+    )?;
+    let current_balance = balance_response.balance;
+
     if !withdrawn_ntrn_amount.is_zero() && !withdrawn_paired_asset_amount.is_zero() {
         msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: cl_pair_address.to_string(),
@@ -317,7 +327,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
         }))
     }
 
-    msgs.push(CallbackMsg::PostMigrationVestingReschedule { user }.to_cosmos_msg(&env)?);
+    msgs.push(CallbackMsg::PostMigrationVestingReschedule { user, init_balance_pcl_lp:current_balance }.to_cosmos_msg(&env)?);
 
     Ok(Response::default().add_messages(msgs))
 }
@@ -326,6 +336,7 @@ fn post_migration_vesting_reschedule_callback(
     deps: DepsMut,
     env: Env,
     user: &VestingAccountResponse,
+    init_balance_pcl_lp: Uint128
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
@@ -335,19 +346,17 @@ fn post_migration_vesting_reschedule_callback(
             address: env.contract.address.to_string(),
         },
     )?;
-    let current_balance = balance_response.balance;
+    let current_balance = balance_response.balance.checked_sub(init_balance_pcl_lp)?;
 
     let schedule = user.info.schedules.last().unwrap();
 
-    let new_end_point;
-    if let Some(end_point) = &schedule.end_point {
-        new_end_point = Option::from(VestingSchedulePoint {
+    let new_end_point = match &schedule.end_point {
+        Some(end_point) => Option::from(VestingSchedulePoint {
             time: end_point.time,
             amount: current_balance,
-        })
-    } else {
-        new_end_point = None
-    }
+        }),
+        None => None,
+    };
 
     let new_schedule = VestingSchedule {
         start_point: VestingSchedulePoint {

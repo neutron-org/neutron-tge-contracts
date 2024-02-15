@@ -150,16 +150,6 @@ fn handle_migrate_xyk_liquidity(
 
     vesting_info.save(deps.storage, account_address, &user_vesting_info, height)?;
 
-    let mut to_deposit = Uint128::zero();
-    for sch in &user_vesting_info.schedules {
-        let amount = if let Some(end_point) = &sch.end_point {
-            end_point.amount
-        } else {
-            sch.start_point.amount
-        };
-        to_deposit = to_deposit.checked_add(amount)?;
-    }
-
     vesting_state(config.extensions.historical).update::<_, ContractError>(
         deps.storage,
         height,
