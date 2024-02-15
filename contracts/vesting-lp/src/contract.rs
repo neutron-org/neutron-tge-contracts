@@ -201,9 +201,10 @@ fn _handle_callback(
             slippage_tolerance,
             user,
         ),
-        CallbackMsg::PostMigrationVestingReschedule { user, init_balance_pcl_lp } => {
-            post_migration_vesting_reschedule_callback(deps, env, &user, init_balance_pcl_lp)
-        }
+        CallbackMsg::PostMigrationVestingReschedule {
+            user,
+            init_balance_pcl_lp,
+        } => post_migration_vesting_reschedule_callback(deps, env, &user, init_balance_pcl_lp),
     }
 }
 
@@ -301,7 +302,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
 
     let balance_response: BalanceResponse = deps.querier.query_wasm_smart(
-        &migration_config.new_lp_token,
+        migration_config.new_lp_token,
         &Cw20QueryMsg::Balance {
             address: env.contract.address.to_string(),
         },
@@ -327,7 +328,13 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
         }))
     }
 
-    msgs.push(CallbackMsg::PostMigrationVestingReschedule { user, init_balance_pcl_lp:current_balance }.to_cosmos_msg(&env)?);
+    msgs.push(
+        CallbackMsg::PostMigrationVestingReschedule {
+            user,
+            init_balance_pcl_lp: current_balance,
+        }
+        .to_cosmos_msg(&env)?,
+    );
 
     Ok(Response::default().add_messages(msgs))
 }
@@ -336,7 +343,7 @@ fn post_migration_vesting_reschedule_callback(
     deps: DepsMut,
     env: Env,
     user: &VestingAccountResponse,
-    init_balance_pcl_lp: Uint128
+    init_balance_pcl_lp: Uint128,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
