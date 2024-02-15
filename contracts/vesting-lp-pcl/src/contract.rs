@@ -12,7 +12,7 @@ use vesting_base::handlers::{
     assert_vesting_schedules, get_vesting_token, register_vesting_accounts,
 };
 use vesting_base::handlers::{execute as base_execute, query as base_query};
-use vesting_base::msg::QueryMsg;
+use vesting_base::msg::{ExecuteMsg as BaseExecute, QueryMsg};
 use vesting_base::state::{vesting_info, vesting_state, CONFIG, VESTING_MANAGERS};
 use vesting_base::types::{Config, Extensions, VestingInfo};
 
@@ -67,11 +67,11 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Base(base_msg) => {
-            // Delegate handling of the original message types to the base execute function
+        ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
+        _ => {
+            let base_msg: BaseExecute = msg.into();
             base_execute(deps, env, info, base_msg)
         }
-        ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
     }
 }
 
