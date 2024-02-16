@@ -1,6 +1,6 @@
 use cosmwasm_schema::write_api;
 
-use astroport_periphery::lockdrop::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
+use astroport_periphery::lockdrop_pcl::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg};
 
 fn main() {
     write_api! {

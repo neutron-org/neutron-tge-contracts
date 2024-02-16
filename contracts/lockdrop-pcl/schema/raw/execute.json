@@ -5,64 +5,6 @@
     {
       "type": "object",
       "required": [
-        "increase_lockup_for"
-      ],
-      "properties": {
-        "increase_lockup_for": {
-          "type": "object",
-          "required": [
-            "amount",
-            "duration",
-            "pool_type",
-            "user_address"
-          ],
-          "properties": {
-            "amount": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "duration": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "pool_type": {
-              "$ref": "#/definitions/PoolType"
-            },
-            "user_address": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "receive"
-      ],
-      "properties": {
-        "receive": {
-          "$ref": "#/definitions/Cw20ReceiveMsg"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "increase_ntrn_incentives"
-      ],
-      "properties": {
-        "increase_ntrn_incentives": {
-          "type": "object"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
         "update_config"
       ],
       "properties": {
@@ -74,68 +16,6 @@
           "properties": {
             "new_config": {
               "$ref": "#/definitions/UpdateConfigMsg"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "set_token_info"
-      ],
-      "properties": {
-        "set_token_info": {
-          "type": "object",
-          "required": [
-            "atom_token",
-            "generator",
-            "usdc_token"
-          ],
-          "properties": {
-            "atom_token": {
-              "type": "string"
-            },
-            "generator": {
-              "type": "string"
-            },
-            "usdc_token": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "withdraw_from_lockup"
-      ],
-      "properties": {
-        "withdraw_from_lockup": {
-          "type": "object",
-          "required": [
-            "amount",
-            "duration",
-            "pool_type",
-            "user_address"
-          ],
-          "properties": {
-            "amount": {
-              "$ref": "#/definitions/Uint128"
-            },
-            "duration": {
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "pool_type": {
-              "$ref": "#/definitions/PoolType"
-            },
-            "user_address": {
-              "type": "string"
             }
           }
         }
@@ -241,20 +121,54 @@
       "additionalProperties": false
     },
     {
-      "description": "Migrates user's locked liquidity from XYK pools to PCL ones, transferring lockdrop participation rewards to the address which liquidity has been migrated.",
+      "description": "A handler to receive lockdrop liquidity migrated from xyl pools to PCL ones. Only callable by the original lockdrop contract. Expects two **Coin**s to be attached as funds.",
       "type": "object",
       "required": [
-        "migrate_liquidity_to_pcl_pools"
+        "migrate_xyk_liquidity"
       ],
       "properties": {
-        "migrate_liquidity_to_pcl_pools": {
+        "migrate_xyk_liquidity": {
           "type": "object",
+          "required": [
+            "duration",
+            "lockup_info",
+            "pool_type",
+            "user_address_raw",
+            "user_info"
+          ],
           "properties": {
+            "duration": {
+              "description": "The duration of the lock period.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "lockup_info": {
+              "description": "The lockup info from the XYK lockdrop contract. Is used to create a LockupInfoV2 entry on the PCL lockdrop contract's side.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/LockupInfoV2"
+                }
+              ]
+            },
+            "pool_type": {
+              "description": "The type of the pool the lockup is related to.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/PoolType2"
+                }
+              ]
+            },
             "user_address_raw": {
-              "description": "The address which liquidity is supposed to be transferred. If no user address is provided, the message sender's address is used.",
-              "type": [
-                "string",
-                "null"
+              "description": "The address of the user which owns the lockup.",
+              "type": "string"
+            },
+            "user_info": {
+              "description": "The lockup owner's info from the XYK lockdrop contract. Is used to create a UserInfo entry on the PCL lockdrop contract's side.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/UserInfo"
+                }
               ]
             }
           }
@@ -344,14 +258,9 @@
         }
       ]
     },
-    "Binary": {
-      "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>. See also <https://github.com/CosmWasm/cosmwasm/blob/main/docs/MESSAGE_TYPES.md>.",
-      "type": "string"
-    },
     "CallbackMsg": {
       "oneOf": [
         {
-          "description": "Updates contract state after dual staking rewards are claimed from the generator contract.",
           "type": "object",
           "required": [
             "update_pool_on_dual_rewards_claim"
@@ -361,17 +270,13 @@
               "type": "object",
               "required": [
                 "pool_type",
-                "prev_ntrn_balance",
-                "prev_proxy_reward_balances"
+                "prev_reward_balances"
               ],
               "properties": {
                 "pool_type": {
                   "$ref": "#/definitions/PoolType"
                 },
-                "prev_ntrn_balance": {
-                  "$ref": "#/definitions/Uint128"
-                },
-                "prev_proxy_reward_balances": {
+                "prev_reward_balances": {
                   "type": "array",
                   "items": {
                     "$ref": "#/definitions/Asset"
@@ -383,7 +288,6 @@
           "additionalProperties": false
         },
         {
-          "description": "Withdraws user rewards and LP Tokens after claims / unlocks.",
           "type": "object",
           "required": [
             "withdraw_user_lockup_rewards_callback"
@@ -418,18 +322,22 @@
           "additionalProperties": false
         },
         {
-          "description": "Entry point for a single lockup position migration to PCL lockdrop contract. Performs generator rewards claiming and initializes liquidity withdrawal+transfer process by invocation of the respective callback message.",
+          "description": "Completes the liquidity migration process by making all necessary state updates for the lockup position.",
           "type": "object",
           "required": [
-            "init_migrate_lockup_to_pcl_pools_callback"
+            "finish_lockup_migration_callback"
           ],
           "properties": {
-            "init_migrate_lockup_to_pcl_pools_callback": {
+            "finish_lockup_migration_callback": {
               "type": "object",
               "required": [
                 "duration",
+                "lockup_info",
+                "lp_token",
                 "pool_type",
-                "user_address"
+                "staked_lp_token_amount",
+                "user_address",
+                "user_info"
               ],
               "properties": {
                 "duration": {
@@ -438,180 +346,16 @@
                   "format": "uint64",
                   "minimum": 0.0
                 },
-                "pool_type": {
-                  "description": "The type of the pool the lockup is related to.",
+                "lockup_info": {
+                  "description": "The lockup info from the XYK lockdrop contract. Is used to create a LockupInfoV2 entry on the PCL lockdrop contract's side.",
                   "allOf": [
                     {
-                      "$ref": "#/definitions/PoolType"
+                      "$ref": "#/definitions/LockupInfoV2"
                     }
                   ]
                 },
-                "user_address": {
-                  "description": "The address of the user which owns the lockup.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/Addr"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "The second step in the lockup's XYK -> PCL liquidity migration process. Claims all possible rewards that the user is eligible of and transfers them to the user.",
-          "type": "object",
-          "required": [
-            "transfer_all_rewards_before_migration_callback"
-          ],
-          "properties": {
-            "transfer_all_rewards_before_migration_callback": {
-              "type": "object",
-              "required": [
-                "duration",
-                "pool_type",
-                "user_address"
-              ],
-              "properties": {
-                "duration": {
-                  "description": "The duration of the lock period.",
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
-                },
-                "pool_type": {
-                  "description": "The type of the pool the lockup is related to.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/PoolType"
-                    }
-                  ]
-                },
-                "user_address": {
-                  "description": "The address of the user which owns the lockup.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/Addr"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "The third step in the lockup's XYK -> PCL liquidity migration process. Handles withdrawal of staked liquidity from the generator contract and liquidity transfer to the PCL lockdrop contract.",
-          "type": "object",
-          "required": [
-            "withdraw_user_lockup_callback"
-          ],
-          "properties": {
-            "withdraw_user_lockup_callback": {
-              "type": "object",
-              "required": [
-                "astroport_lp_amount",
-                "astroport_lp_token",
-                "duration",
-                "generator",
-                "pool_type",
-                "user_address"
-              ],
-              "properties": {
-                "astroport_lp_amount": {
-                  "description": "The amount of LP token to be unstaked and withdrawn.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/Uint128"
-                    }
-                  ]
-                },
-                "astroport_lp_token": {
-                  "description": "The address of the pool's liquidity token.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/Addr"
-                    }
-                  ]
-                },
-                "duration": {
-                  "description": "The duration of the lock period.",
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
-                },
-                "generator": {
-                  "description": "The address of the generator which possesses the staked liquidity.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/Addr"
-                    }
-                  ]
-                },
-                "pool_type": {
-                  "description": "The type of the pool the lockup is related to.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/PoolType"
-                    }
-                  ]
-                },
-                "user_address": {
-                  "description": "The address of the user which owns the lockup.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/Addr"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "description": "The fourth step in the lockup's XYK -> PCL liquidity migration process. Invokes the PCL lockdrop contract's MigrateXYKLiquidity handler which creates an LP position in the PCL pool and a lockup in the PCL lockdrop contract in accordance with the withdrawn user's lockup position.",
-          "type": "object",
-          "required": [
-            "migrate_user_lockup_to_pcl_pair_callback"
-          ],
-          "properties": {
-            "migrate_user_lockup_to_pcl_pair_callback": {
-              "type": "object",
-              "required": [
-                "duration",
-                "ntrn_balance",
-                "paired_asset_balance",
-                "paired_asset_denom",
-                "pool_type",
-                "user_address"
-              ],
-              "properties": {
-                "duration": {
-                  "description": "The duration of the lock period.",
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0.0
-                },
-                "ntrn_balance": {
-                  "description": "The balance in untrn of the XYK lockdrop contract at the third migration step. Is used in the callback to calculate the amount of untrn been withdrawn from the XYK pool.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/Uint128"
-                    }
-                  ]
-                },
-                "paired_asset_balance": {
-                  "description": "The balance in the paired denom of the XYK lockdrop contract at the third migration step. Is used in the callback to calculate the amount of the paired asset been withdrawn from the XYK pool.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/Uint128"
-                    }
-                  ]
-                },
-                "paired_asset_denom": {
-                  "description": "The denom of the paired asset (the asset paired with untrn in the pool).",
+                "lp_token": {
+                  "description": "The address of the LP token of the pool.",
                   "type": "string"
                 },
                 "pool_type": {
@@ -622,11 +366,27 @@
                     }
                   ]
                 },
+                "staked_lp_token_amount": {
+                  "description": "The amount of staked LP token the PCL lockdrop contract possesses of before liquidity provision and staking to the generator. Used to calculate LP token amount received for liquidity provision.",
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/Uint128"
+                    }
+                  ]
+                },
                 "user_address": {
                   "description": "The address of the user which owns the lockup.",
                   "allOf": [
                     {
                       "$ref": "#/definitions/Addr"
+                    }
+                  ]
+                },
+                "user_info": {
+                  "description": "The lockup owner's info from the XYK lockdrop contract. Is used to create a UserInfo entry on the PCL lockdrop contract's side.",
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/UserInfo"
                     }
                   ]
                 }
@@ -637,26 +397,70 @@
         }
       ]
     },
-    "Cw20ReceiveMsg": {
-      "description": "Cw20ReceiveMsg should be de/serialized under `Receive()` variant in a ExecuteMsg",
+    "LockupInfoV2": {
       "type": "object",
       "required": [
-        "amount",
-        "msg",
-        "sender"
+        "generator_ntrn_debt",
+        "generator_proxy_debt",
+        "lp_units_locked",
+        "ntrn_rewards",
+        "unlock_timestamp",
+        "withdrawal_flag"
       ],
       "properties": {
-        "amount": {
-          "$ref": "#/definitions/Uint128"
+        "astroport_lp_transferred": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "msg": {
-          "$ref": "#/definitions/Binary"
+        "generator_ntrn_debt": {
+          "description": "Generator NTRN tokens loockup received as generator rewards",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
         },
-        "sender": {
-          "type": "string"
+        "generator_proxy_debt": {
+          "description": "Generator Proxy tokens lockup received as generator rewards",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
+            }
+          ]
+        },
+        "lp_units_locked": {
+          "description": "Terraswap LP units locked by the user",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "ntrn_rewards": {
+          "description": "NTRN tokens received as rewards for participation in the lockdrop",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "unlock_timestamp": {
+          "description": "Timestamp beyond which this position can be unlocked",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "withdrawal_flag": {
+          "description": "Boolean value indicating if the user's has withdrawn funds post the only 1 withdrawal limit cutoff",
+          "type": "boolean"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "PoolType": {
       "type": "string",
@@ -665,6 +469,30 @@
         "ATOM"
       ]
     },
+    "PoolType2": {
+      "type": "string",
+      "enum": [
+        "USDC",
+        "ATOM"
+      ]
+    },
+    "RestrictedVector_for_AssetInfo_and_Uint128": {
+      "description": "Vec wrapper for internal use. Some business logic relies on an order of this vector, thus it is forbidden to sort it or remove elements. New values can be added using .update() ONLY.",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "$ref": "#/definitions/AssetInfo"
+          },
+          {
+            "$ref": "#/definitions/Uint128"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      }
+    },
     "Uint128": {
       "description": "A thin wrapper around u128 that is using strings for JSON encoding/decoding, such that the full u128 range can be used for clients that convert JSON numbers to floats, like JavaScript and jq.\n\n# Examples\n\nUse `from` to create instances of this and `u128` to get the value out:\n\n``` # use cosmwasm_std::Uint128; let a = Uint128::from(123u128); assert_eq!(a.u128(), 123);\n\nlet b = Uint128::from(42u64); assert_eq!(b.u128(), 42);\n\nlet c = Uint128::from(70u32); assert_eq!(c.u128(), 70); ```",
       "type": "string"
@@ -672,18 +500,39 @@
     "UpdateConfigMsg": {
       "type": "object",
       "properties": {
-        "auction_contract_address": {
-          "description": "Bootstrap Auction contract address",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "generator_address": {
           "description": "Generator (Staking for dual rewards) contract address",
           "type": [
             "string",
             "null"
+          ]
+        }
+      }
+    },
+    "UserInfo": {
+      "type": "object",
+      "required": [
+        "lockup_positions_index",
+        "ntrn_transferred",
+        "total_ntrn_rewards"
+      ],
+      "properties": {
+        "lockup_positions_index": {
+          "description": "Number of lockup positions the user is having",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "ntrn_transferred": {
+          "description": "NTRN tokens transferred to user",
+          "type": "boolean"
+        },
+        "total_ntrn_rewards": {
+          "description": "Total NTRN tokens user received as rewards for participation in the lockdrop",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
           ]
         }
       }

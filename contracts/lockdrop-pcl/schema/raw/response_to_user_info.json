@@ -3,18 +3,18 @@
   "title": "UserInfoResponse",
   "type": "object",
   "required": [
-    "claimable_generator_ntrn_debt",
+    "claimable_generator_debt",
     "lockup_infos",
     "lockup_positions_index",
     "ntrn_transferred",
     "total_ntrn_rewards"
   ],
   "properties": {
-    "claimable_generator_ntrn_debt": {
-      "description": "NTRN tokens receivable as generator rewards that user can claim",
+    "claimable_generator_debt": {
+      "description": "Tokens receivable as generator rewards that user can claim",
       "allOf": [
         {
-          "$ref": "#/definitions/Uint128"
+          "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
         }
       ]
     },
@@ -102,11 +102,9 @@
       "type": "object",
       "required": [
         "astroport_lp_token",
-        "claimable_generator_astro_debt",
-        "claimable_generator_proxy_debt",
+        "claimable_generator_debt",
         "duration",
-        "generator_ntrn_debt",
-        "generator_proxy_debt",
+        "generator_debt",
         "lp_units_locked",
         "ntrn_rewards",
         "pool_type",
@@ -138,16 +136,8 @@
             }
           ]
         },
-        "claimable_generator_astro_debt": {
-          "description": "ASTRO tokens receivable as generator rewards that user can claim",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Uint128"
-            }
-          ]
-        },
-        "claimable_generator_proxy_debt": {
-          "description": "Proxy tokens receivable as generator rewards that user can claim",
+        "claimable_generator_debt": {
+          "description": "Tokens receivable as generator rewards that user can claim",
           "allOf": [
             {
               "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
@@ -159,16 +149,8 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "generator_ntrn_debt": {
-          "description": "Generator NTRN tokens lockup received as generator rewards",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Uint128"
-            }
-          ]
-        },
-        "generator_proxy_debt": {
-          "description": "Generator Proxy tokens lockup received as generator rewards",
+        "generator_debt": {
+          "description": "Generator tokens lockup received as generator rewards",
           "allOf": [
             {
               "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"

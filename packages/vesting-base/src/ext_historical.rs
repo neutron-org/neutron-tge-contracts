@@ -3,7 +3,7 @@ use crate::msg::{ExecuteMsgHistorical, QueryMsgHistorical};
 use crate::state::{vesting_info, vesting_state, CONFIG};
 use crate::types::VestingInfo;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
+    to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
 };
 
 /// Contains the historical extension check and routing of the message.
@@ -35,10 +35,10 @@ pub(crate) fn handle_query_historical_msg(
 
     match msg {
         QueryMsgHistorical::UnclaimedAmountAtHeight { address, height } => {
-            to_binary(&query_unclaimed_amount_at_height(deps, address, height)?)
+            to_json_binary(&query_unclaimed_amount_at_height(deps, address, height)?)
         }
         QueryMsgHistorical::UnclaimedTotalAmountAtHeight { height } => {
-            to_binary(&query_total_unclaimed_amount_at_height(deps, height)?)
+            to_json_binary(&query_total_unclaimed_amount_at_height(deps, height)?)
         }
     }
 }

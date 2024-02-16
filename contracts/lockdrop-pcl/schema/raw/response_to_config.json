@@ -5,16 +5,11 @@
   "required": [
     "auction_contract",
     "credits_contract",
-    "init_timestamp",
-    "lock_window",
+    "incentives",
     "lockdrop_incentives",
     "lockup_rewards_info",
-    "max_lock_duration",
-    "max_positions_per_user",
-    "min_lock_duration",
     "owner",
-    "token_info_manager",
-    "withdrawal_window"
+    "xyk_lockdrop_contract"
   ],
   "properties": {
     "auction_contract": {
@@ -33,28 +28,13 @@
         }
       ]
     },
-    "generator": {
-      "description": "Generator (Staking for dual rewards) contract address",
-      "anyOf": [
+    "incentives": {
+      "description": "Incentives contract address",
+      "allOf": [
         {
           "$ref": "#/definitions/Addr"
-        },
-        {
-          "type": "null"
         }
       ]
-    },
-    "init_timestamp": {
-      "description": "Timestamp when Contract will start accepting LP Token deposits",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
-    },
-    "lock_window": {
-      "description": "Number of seconds during which lockup positions be accepted",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
     },
     "lockdrop_incentives": {
       "description": "Total NTRN lockdrop incentives to be distributed among the users",
@@ -71,24 +51,6 @@
         "$ref": "#/definitions/LockupRewardsInfo"
       }
     },
-    "max_lock_duration": {
-      "description": "Max. no. of weeks allowed for lockup",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
-    },
-    "max_positions_per_user": {
-      "description": "Max lockup positions a user can have",
-      "type": "integer",
-      "format": "uint32",
-      "minimum": 0.0
-    },
-    "min_lock_duration": {
-      "description": "Min. no. of weeks allowed for lockup",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
-    },
     "owner": {
       "description": "Account which can update the config",
       "allOf": [
@@ -97,19 +59,13 @@
         }
       ]
     },
-    "token_info_manager": {
-      "description": "Account which can update the generator and token addresses",
+    "xyk_lockdrop_contract": {
+      "description": "Original XYK lockdrop contract address",
       "allOf": [
         {
           "$ref": "#/definitions/Addr"
         }
       ]
-    },
-    "withdrawal_window": {
-      "description": "Withdrawal Window Length :: Post the deposit window",
-      "type": "integer",
-      "format": "uint64",
-      "minimum": 0.0
     }
   },
   "definitions": {

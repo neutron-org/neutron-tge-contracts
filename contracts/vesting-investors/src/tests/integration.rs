@@ -2,7 +2,7 @@ use crate::msg::InstantiateMsg;
 use astroport::asset::{native_asset_info, token_asset_info};
 use astroport::querier::query_balance;
 use astroport::token::InstantiateMsg as TokenInstantiateMsg;
-use cosmwasm_std::{coin, coins, to_binary, Addr, StdResult, Timestamp, Uint128};
+use cosmwasm_std::{coin, coins, to_json_binary, Addr, StdResult, Timestamp, Uint128};
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use cw_multi_test::{App, ContractWrapper, Executor};
 use cw_utils::PaymentError;
@@ -37,7 +37,7 @@ fn claim() {
 
     let msg = Cw20ExecuteMsg::Send {
         contract: vesting_instance.to_string(),
-        msg: to_binary(&Cw20HookMsg::RegisterVestingAccounts {
+        msg: to_json_binary(&Cw20HookMsg::RegisterVestingAccounts {
             vesting_accounts: vec![VestingAccount {
                 address: user1.to_string(),
                 schedules: vec![
@@ -85,7 +85,7 @@ fn claim() {
 
     let msg = Cw20ExecuteMsg::Send {
         contract: vesting_instance.to_string(),
-        msg: to_binary(&Cw20HookMsg::RegisterVestingAccounts {
+        msg: to_json_binary(&Cw20HookMsg::RegisterVestingAccounts {
             vesting_accounts: vec![VestingAccount {
                 address: user1.to_string(),
                 schedules: vec![
@@ -213,7 +213,7 @@ fn claim_native() {
 
     let msg = Cw20ExecuteMsg::Send {
         contract: vesting_instance.to_string(),
-        msg: to_binary(&Cw20HookMsg::RegisterVestingAccounts {
+        msg: to_json_binary(&Cw20HookMsg::RegisterVestingAccounts {
             vesting_accounts: vec![VestingAccount {
                 address: user1.to_string(),
                 schedules: vec![VestingSchedule {
@@ -383,7 +383,7 @@ fn register_vesting_accounts() {
 
     let msg = Cw20ExecuteMsg::Send {
         contract: vesting_instance.to_string(),
-        msg: to_binary(&Cw20HookMsg::RegisterVestingAccounts {
+        msg: to_json_binary(&Cw20HookMsg::RegisterVestingAccounts {
             vesting_accounts: vec![VestingAccount {
                 address: user1.to_string(),
                 schedules: vec![VestingSchedule {
@@ -409,7 +409,7 @@ fn register_vesting_accounts() {
 
     let msg = Cw20ExecuteMsg::Send {
         contract: vesting_instance.to_string(),
-        msg: to_binary(&Cw20HookMsg::RegisterVestingAccounts {
+        msg: to_json_binary(&Cw20HookMsg::RegisterVestingAccounts {
             vesting_accounts: vec![VestingAccount {
                 address: user1.to_string(),
                 schedules: vec![VestingSchedule {
@@ -495,7 +495,7 @@ fn register_vesting_accounts() {
     // Let's check user1's final vesting amount after add schedule for a new one
     let msg = Cw20ExecuteMsg::Send {
         contract: vesting_instance.to_string(),
-        msg: to_binary(&Cw20HookMsg::RegisterVestingAccounts {
+        msg: to_json_binary(&Cw20HookMsg::RegisterVestingAccounts {
             vesting_accounts: vec![VestingAccount {
                 address: user2.to_string(),
                 schedules: vec![VestingSchedule {
@@ -542,7 +542,7 @@ fn register_vesting_accounts() {
     // Add one more vesting schedule; final amount to vest must increase
     let msg = Cw20ExecuteMsg::Send {
         contract: vesting_instance.to_string(),
-        msg: to_binary(&Cw20HookMsg::RegisterVestingAccounts {
+        msg: to_json_binary(&Cw20HookMsg::RegisterVestingAccounts {
             vesting_accounts: vec![VestingAccount {
                 address: user1.to_string(),
                 schedules: vec![VestingSchedule {
@@ -636,7 +636,7 @@ fn register_vesting_accounts_native() {
 
     let msg = Cw20ExecuteMsg::Send {
         contract: vesting_instance.to_string(),
-        msg: to_binary(&Cw20HookMsg::RegisterVestingAccounts {
+        msg: to_json_binary(&Cw20HookMsg::RegisterVestingAccounts {
             vesting_accounts: vec![VestingAccount {
                 address: user1.to_string(),
                 schedules: vec![VestingSchedule {
@@ -1142,7 +1142,7 @@ fn remove_vesting_accounts() {
     let res: StdResult<Uint128> = app.wrap().query_wasm_smart(vesting_instance.clone(), &msg);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "Generic error: Querier contract error: vesting_base::types::VestingInfo not found"
+        "Generic error: Querier contract error: type: vesting_base::types::VestingInfo; key: [00, 0C, 76, 65, 73, 74, 69, 6E, 67, 5F, 69, 6E, 66, 6F, 75, 73, 65, 72, 31] not found"
     );
 
     // Check vesting balance
@@ -1281,7 +1281,7 @@ fn remove_vesting_accounts() {
     let res: StdResult<Uint128> = app.wrap().query_wasm_smart(vesting_instance.clone(), &msg);
     assert_eq!(
         res.unwrap_err().to_string(),
-        "Generic error: Querier contract error: vesting_base::types::VestingInfo not found"
+        "Generic error: Querier contract error: type: vesting_base::types::VestingInfo; key: [00, 0C, 76, 65, 73, 74, 69, 6E, 67, 5F, 69, 6E, 66, 6F, 75, 73, 65, 72, 31] not found"
     );
 
     // Check vesting balance

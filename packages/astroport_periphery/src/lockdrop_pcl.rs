@@ -6,8 +6,8 @@ use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
-    WasmMsg,
+    to_json_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128,
+    Uint256, WasmMsg,
 };
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use schemars::JsonSchema;
@@ -176,8 +176,7 @@ pub enum ExecuteMsg {
 pub enum CallbackMsg {
     UpdatePoolOnDualRewardsClaim {
         pool_type: PoolType,
-        prev_ntrn_balance: Uint128,
-        prev_proxy_reward_balances: Vec<Asset>,
+        prev_reward_balances: Vec<Asset>,
     },
     WithdrawUserLockupRewardsCallback {
         pool_type: PoolType,
@@ -215,7 +214,7 @@ impl CallbackMsg {
     pub fn to_cosmos_msg(self, env: &Env) -> StdResult<CosmosMsg> {
         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: env.contract.address.to_string(),
-            msg: to_binary(&ExecuteMsg::Callback(self))?,
+            msg: to_json_binary(&ExecuteMsg::Callback(self))?,
             funds: vec![],
         }))
     }
@@ -269,8 +268,8 @@ pub struct Config {
     pub credits_contract: Addr,
     /// Bootstrap Auction contract address
     pub auction_contract: Addr,
-    /// Generator (Staking for dual rewards) contract address
-    pub generator: Addr,
+    /// Incentives contract address
+    pub incentives: Addr,
     /// Total NTRN lockdrop incentives to be distributed among the users
     pub lockdrop_incentives: Uint128,
     /// Describes rewards coefficients for each lockup duration
@@ -291,10 +290,8 @@ pub struct PoolInfo {
     pub incentives_share: Uint128,
     /// Weighted LP Token balance used to calculate NTRN rewards a particular user can claim
     pub weighted_amount: Uint256,
-    /// Ratio of Generator NTRN rewards accured to astroport pool share
-    pub generator_ntrn_per_share: Decimal,
-    /// Ratio of Generator Proxy rewards accured to astroport pool share
-    pub generator_proxy_per_share: RestrictedVector<AssetInfo, Decimal>,
+    /// Ratio of Generator rewards accured to astroport pool share
+    pub generator_rewards_per_share: RestrictedVector<AssetInfo, Decimal>,
     /// Boolean value indicating if the LP Tokens are staked with the Generator contract or not
     pub is_staked: bool,
 }
@@ -319,25 +316,8 @@ impl From<LockdropXYKUserInfo> for UserInfo {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct LockupInfoV1 {
-    /// Terraswap LP units locked by the user
-    pub lp_units_locked: Uint128,
-    pub astroport_lp_transferred: Option<Uint128>,
-    /// Boolean value indicating if the user's has withdrawn funds post the only 1 withdrawal limit cutoff
-    pub withdrawal_flag: bool,
-    /// NTRN tokens received as rewards for participation in the lockdrop
-    pub ntrn_rewards: Uint128,
-    /// Generator NTRN tokens loockup received as generator rewards
-    pub generator_ntrn_debt: Uint128,
-    /// Generator Proxy tokens lockup received as generator rewards
-    pub generator_proxy_debt: Uint128,
-    /// Timestamp beyond which this position can be unlocked
-    pub unlock_timestamp: u64,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct LockupInfoV2 {
+pub struct LockupInfo {
     /// Terraswap LP units locked by the user
     pub lp_units_locked: Uint128,
     pub astroport_lp_transferred: Option<Uint128>,
@@ -345,28 +325,25 @@ pub struct LockupInfoV2 {
     pub withdrawal_flag: bool,
     /// NTRN tokens received as rewards for participation in the lockdrop
     pub ntrn_rewards: Uint128,
-    /// Generator NTRN tokens loockup received as generator rewards
-    pub generator_ntrn_debt: Uint128,
-    /// Generator Proxy tokens lockup received as generator rewards
-    pub generator_proxy_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// Generator tokens lockup received as generator rewards
+    pub generator_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Timestamp beyond which this position can be unlocked
     pub unlock_timestamp: u64,
 }
 
-impl LockupInfoV2 {
+impl LockupInfo {
     /// Creates a lockup entry for PCL lockdrop contract based on a lockup entry for XYK lockdrop
     /// contract. The **lp_units_locked** field is the amount of lp tokens minted by the PCL pool.
     pub fn from_xyk_lockup_info(
         i: LockdropXYKLockupInfoV2,
         lp_units_locked: Uint128,
-    ) -> LockupInfoV2 {
-        LockupInfoV2 {
+    ) -> LockupInfo {
+        LockupInfo {
             lp_units_locked,
             astroport_lp_transferred: None,
             withdrawal_flag: i.withdrawal_flag,
             ntrn_rewards: i.ntrn_rewards,
-            generator_ntrn_debt: Uint128::zero(),
-            generator_proxy_debt: Default::default(),
+            generator_debt: Default::default(),
             unlock_timestamp: i.unlock_timestamp,
         }
     }
@@ -388,8 +365,8 @@ pub struct UserInfoResponse {
     pub ntrn_transferred: bool,
     /// Lockup positions
     pub lockup_infos: Vec<LockUpInfoResponse>,
-    /// NTRN tokens receivable as generator rewards that user can claim
-    pub claimable_generator_ntrn_debt: Uint128,
+    /// Tokens receivable as generator rewards that user can claim
+    pub claimable_generator_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Number of lockup positions the user is having
     pub lockup_positions_index: u32,
 }
@@ -423,14 +400,10 @@ pub struct LockUpInfoResponse {
     /// NTRN tokens received as rewards for participation in the lockdrop
     pub ntrn_rewards: Uint128,
     pub duration: u64,
-    /// Generator NTRN tokens lockup received as generator rewards
-    pub generator_ntrn_debt: Uint128,
-    /// ASTRO tokens receivable as generator rewards that user can claim
-    pub claimable_generator_astro_debt: Uint128,
-    /// Generator Proxy tokens lockup received as generator rewards
-    pub generator_proxy_debt: RestrictedVector<AssetInfo, Uint128>,
-    /// Proxy tokens receivable as generator rewards that user can claim
-    pub claimable_generator_proxy_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// Generator tokens lockup received as generator rewards
+    pub generator_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// Tokens receivable as generator rewards that user can claim
+    pub claimable_generator_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Timestamp beyond which this position can be unlocked
     pub unlock_timestamp: u64,
     /// User's Astroport LP units, calculated as lp_units_locked (terraswap) / total LP units locked (terraswap) * Astroport LP units minted post migration

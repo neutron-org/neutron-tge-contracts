@@ -1,14 +1,5 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "MigrateMsg",
-  "type": "object",
-  "required": [
-    "pcl_lockdrop_contract"
-  ],
-  "properties": {
-    "pcl_lockdrop_contract": {
-      "description": "The address of the lockdrop contract working with PCL pools. Used to transfer the lockdrop's liquidity locked in XYK pools to more efficient pools.",
-      "type": "string"
-    }
-  }
+  "type": "object"
 }
