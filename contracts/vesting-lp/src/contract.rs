@@ -81,6 +81,7 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
             cl_pair: deps.api.addr_validate(msg.cl_pair.as_str())?,
             new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
             pcl_vesting: deps.api.addr_validate(msg.pcl_vesting.as_str())?,
+            dust_threshold: msg.dust_threshold,
         },
     )?;
 
@@ -124,7 +125,23 @@ fn execute_migrate_liquidity(
         return Ok(resp);
     }
 
-    let user_amount = compute_share(&user.info)?;
+    let user_share = compute_share(&user.info)?;
+    let user_amount = if user_share < migration_config.dust_threshold {
+        if !user_share.is_zero() {
+            resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: pair_info.liquidity_token.to_string(),
+                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                    recipient: user.address.to_string(),
+                    amount: user_share,
+                })?,
+                funds: vec![],
+            }));
+        }
+
+        Uint128::zero()
+    } else {
+        user_share
+    };
 
     if let Some(slippage_tolerance) = slippage_tolerance {
         if slippage_tolerance.gt(&migration_config.max_slippage) {
