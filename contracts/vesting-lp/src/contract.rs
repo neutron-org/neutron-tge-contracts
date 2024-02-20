@@ -101,7 +101,8 @@ fn execute_migrate_liquidity(
         Some(val) => deps.api.addr_validate(&val)?,
         None => info.sender,
     };
-    let info = vesting_info(config.extensions.historical).load(deps.storage, address.clone())?;
+    let vesting_info = vesting_info(config.extensions.historical);
+    let info = vesting_info.load(deps.storage, address.clone())?;
     let mut resp = Response::default();
     let user = VestingAccountResponse { address, info };
 
@@ -142,6 +143,21 @@ fn execute_migrate_liquidity(
     } else {
         user_share
     };
+
+    // if there is nothing to migrate just update vi and quit.
+    // if there is only dust, than send it back to user, update vi and quit
+    if user_amount.is_zero() {
+        vesting_info.save(
+            deps.storage,
+            user.address.clone(),
+            &VestingInfo {
+                schedules: vec![],
+                released_amount: Uint128::zero(),
+            },
+            env.block.height,
+        )?;
+        return Ok(resp);
+    }
 
     if let Some(slippage_tolerance) = slippage_tolerance {
         if slippage_tolerance.gt(&migration_config.max_slippage) {
