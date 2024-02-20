@@ -402,23 +402,27 @@ fn post_migration_vesting_reschedule_callback(
         },
         env.block.height,
     )?;
-    let msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: migration_config.new_lp_token.to_string(),
-        funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Send {
-            contract: migration_config.pcl_vesting.to_string(),
-            amount: current_balance,
-            msg: to_binary(&vesting_lp_pcl::msg::Cw20HookMsg::MigrateXYKLiquidity {
-                user_address_raw: user.address.clone(),
-                user_vesting_info: VestingInfo {
-                    schedules: vec![new_schedule],
-                    released_amount: Uint128::zero(),
-                },
+    if !current_balance.is_zero() {
+        let msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: migration_config.new_lp_token.to_string(),
+            funds: vec![],
+            msg: to_binary(&Cw20ExecuteMsg::Send {
+                contract: migration_config.pcl_vesting.to_string(),
+                amount: current_balance,
+                msg: to_binary(&vesting_lp_pcl::msg::Cw20HookMsg::MigrateXYKLiquidity {
+                    user_address_raw: user.address.clone(),
+                    user_vesting_info: VestingInfo {
+                        schedules: vec![new_schedule],
+                        released_amount: Uint128::zero(),
+                    },
+                })?,
             })?,
-        })?,
-    })];
+        })];
 
-    Ok(Response::new().add_messages(msgs))
+        Ok(Response::new().add_messages(msgs))
+    } else {
+        Ok(Response::new())
+    }
 }
 
 fn compute_share(vesting_info: &VestingInfo) -> StdResult<Uint128> {
