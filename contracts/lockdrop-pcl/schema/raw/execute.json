@@ -367,7 +367,7 @@
                   ]
                 },
                 "staked_lp_token_amount": {
-                  "description": "The amount of staked LP token the PCL lockdrop contract possesses of before liquidity provision and staking to the generator. Used to calculate LP token amount received for liquidity provision.",
+                  "description": "The amount of staked LP token the PCL lockdrop contract possesses of before liquidity provision and staking to the incentives. Used to calculate LP token amount received for liquidity provision.",
                   "allOf": [
                     {
                       "$ref": "#/definitions/Uint128"
@@ -500,8 +500,8 @@
     "UpdateConfigMsg": {
       "type": "object",
       "properties": {
-        "generator_address": {
-          "description": "Generator (Staking for dual rewards) contract address",
+        "incentives_address": {
+          "description": "incentives (Staking for dual rewards) contract address",
           "type": [
             "string",
             "null"

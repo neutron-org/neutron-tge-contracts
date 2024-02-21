@@ -12,7 +12,7 @@
       "atom_weighted_amount",
       "auction_contract",
       "credits_contract",
-      "generator",
+      "incentives",
       "lockdrop_incentives",
       "lockup_rewards_info",
       "usdc_incentives_share",
@@ -49,8 +49,8 @@
         "description": "Credits contract address",
         "type": "string"
       },
-      "generator": {
-        "description": "Generator (Staking for dual rewards) contract address",
+      "incentives": {
+        "description": "Incentives (Staking for dual rewards) contract address",
         "type": "string"
       },
       "lockdrop_incentives": {
@@ -501,7 +501,7 @@
                     ]
                   },
                   "staked_lp_token_amount": {
-                    "description": "The amount of staked LP token the PCL lockdrop contract possesses of before liquidity provision and staking to the generator. Used to calculate LP token amount received for liquidity provision.",
+                    "description": "The amount of staked LP token the PCL lockdrop contract possesses of before liquidity provision and staking to the incentives. Used to calculate LP token amount received for liquidity provision.",
                     "allOf": [
                       {
                         "$ref": "#/definitions/Uint128"
@@ -634,8 +634,8 @@
       "UpdateConfigMsg": {
         "type": "object",
         "properties": {
-          "generator_address": {
-            "description": "Generator (Staking for dual rewards) contract address",
+          "incentives_address": {
+            "description": "incentives (Staking for dual rewards) contract address",
             "type": [
               "string",
               "null"
@@ -981,9 +981,9 @@
       "type": "object",
       "required": [
         "astroport_lp_token",
-        "claimable_generator_debt",
+        "claimable_incentives_debt",
         "duration",
-        "generator_debt",
+        "incentives_debt",
         "lp_units_locked",
         "ntrn_rewards",
         "pool_type",
@@ -1015,8 +1015,8 @@
             }
           ]
         },
-        "claimable_generator_debt": {
-          "description": "Tokens receivable as generator rewards that user can claim",
+        "claimable_incentives_debt": {
+          "description": "Tokens receivable as incentives rewards that user can claim",
           "allOf": [
             {
               "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
@@ -1028,8 +1028,8 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "generator_debt": {
-          "description": "Generator tokens lockup received as generator rewards",
+        "incentives_debt": {
+          "description": "incentives tokens lockup received as incentives rewards",
           "allOf": [
             {
               "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
@@ -1161,7 +1161,7 @@
       "type": "object",
       "required": [
         "amount_in_lockups",
-        "generator_rewards_per_share",
+        "incentives_rewards_per_share",
         "incentives_share",
         "is_staked",
         "lp_token",
@@ -1171,8 +1171,8 @@
         "amount_in_lockups": {
           "$ref": "#/definitions/Uint128"
         },
-        "generator_rewards_per_share": {
-          "description": "Ratio of Generator rewards accured to astroport pool share",
+        "incentives_rewards_per_share": {
+          "description": "Ratio of incentives rewards accured to astroport pool share",
           "allOf": [
             {
               "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Decimal"
@@ -1188,7 +1188,7 @@
           ]
         },
         "is_staked": {
-          "description": "Boolean value indicating if the LP Tokens are staked with the Generator contract or not",
+          "description": "Boolean value indicating if the LP Tokens are staked with the incentives contract or not",
           "type": "boolean"
         },
         "lp_token": {
@@ -1368,15 +1368,15 @@
       "title": "UserInfoResponse",
       "type": "object",
       "required": [
-        "claimable_generator_debt",
+        "claimable_incentives_debt",
         "lockup_infos",
         "lockup_positions_index",
         "ntrn_transferred",
         "total_ntrn_rewards"
       ],
       "properties": {
-        "claimable_generator_debt": {
-          "description": "Tokens receivable as generator rewards that user can claim",
+        "claimable_incentives_debt": {
+          "description": "Tokens receivable as incentives rewards that user can claim",
           "allOf": [
             {
               "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
@@ -1467,9 +1467,9 @@
           "type": "object",
           "required": [
             "astroport_lp_token",
-            "claimable_generator_debt",
+            "claimable_incentives_debt",
             "duration",
-            "generator_debt",
+            "incentives_debt",
             "lp_units_locked",
             "ntrn_rewards",
             "pool_type",
@@ -1501,8 +1501,8 @@
                 }
               ]
             },
-            "claimable_generator_debt": {
-              "description": "Tokens receivable as generator rewards that user can claim",
+            "claimable_incentives_debt": {
+              "description": "Tokens receivable as incentives rewards that user can claim",
               "allOf": [
                 {
                   "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
@@ -1514,8 +1514,8 @@
               "format": "uint64",
               "minimum": 0.0
             },
-            "generator_debt": {
-              "description": "Generator tokens lockup received as generator rewards",
+            "incentives_debt": {
+              "description": "incentives tokens lockup received as incentives rewards",
               "allOf": [
                 {
                   "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"

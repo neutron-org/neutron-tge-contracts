@@ -3,10 +3,10 @@ use cosmwasm_std::{from_json, Addr, Empty, QuerierWrapper, StdError, StdResult, 
 use cw_storage_plus::Path;
 use serde::Deserialize;
 
-/// Returns generator deposit of tokens for the specified address
-pub fn raw_generator_deposit(
+/// Returns incentives deposit of tokens for the specified address
+pub fn raw_incentives_deposit(
     querier: QuerierWrapper,
-    generator: &Addr,
+    incentives: &Addr,
     lp_token: &[u8],
     address: &[u8],
 ) -> StdResult<Uint128> {
@@ -16,7 +16,7 @@ pub fn raw_generator_deposit(
     }
 
     let key: Path<Empty> = Path::new(b"user_info", &[lp_token, address]);
-    if let Some(res) = &querier.query_wasm_raw(generator, key.to_vec())? {
+    if let Some(res) = &querier.query_wasm_raw(incentives, key.to_vec())? {
         let UserInfo { amount } = from_json(res)?;
         Ok(amount)
     } else {
@@ -35,14 +35,14 @@ pub fn raw_balance(querier: QuerierWrapper, token: &Addr, address: &[u8]) -> Std
     }
 }
 
-/// Returns AssetInfo for the specified proxy address from generator storage
+/// Returns AssetInfo for the specified proxy address from incentives storage
 pub fn raw_proxy_asset(
     querier: QuerierWrapper,
-    generator: &Addr,
+    incentives: &Addr,
     address: &[u8],
 ) -> StdResult<AssetInfo> {
     let key: Path<Empty> = Path::new(b"proxy_reward_asset", &[address]);
-    if let Some(res) = &querier.query_wasm_raw(generator, key.to_vec())? {
+    if let Some(res) = &querier.query_wasm_raw(incentives, key.to_vec())? {
         let res: AssetInfo = from_json(res)?;
         return Ok(res);
     }

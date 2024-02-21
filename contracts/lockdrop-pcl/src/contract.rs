@@ -18,7 +18,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 
-use crate::raw_queries::{raw_balance, raw_generator_deposit};
+use crate::raw_queries::{raw_balance, raw_incentives_deposit};
 use astroport_periphery::lockdrop::{
     LockupInfoV2 as LockdropXYKLockupInfoV2, PoolType as LockdropXYKPoolType,
     UserInfo as LockdropXYKUserInfo,
@@ -73,7 +73,7 @@ pub fn instantiate(
         xyk_lockdrop_contract: deps.api.addr_validate(&msg.xyk_lockdrop_contract)?,
         credits_contract: deps.api.addr_validate(&msg.credits_contract)?,
         auction_contract: deps.api.addr_validate(&msg.auction_contract)?,
-        incentives: deps.api.addr_validate(&msg.generator)?,
+        incentives: deps.api.addr_validate(&msg.incentives)?,
         lockdrop_incentives: msg.lockdrop_incentives,
         lockup_rewards_info: msg.lockup_rewards_info,
     };
@@ -85,7 +85,7 @@ pub fn instantiate(
         amount_in_lockups: Default::default(),
         incentives_share: msg.atom_incentives_share,
         weighted_amount: msg.atom_weighted_amount,
-        generator_rewards_per_share: RestrictedVector::default(),
+        incentives_rewards_per_share: RestrictedVector::default(),
         is_staked: true,
     };
     ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
@@ -96,7 +96,7 @@ pub fn instantiate(
         amount_in_lockups: Default::default(),
         incentives_share: msg.usdc_incentives_share,
         weighted_amount: msg.usdc_weighted_amount,
-        generator_rewards_per_share: RestrictedVector::default(),
+        incentives_rewards_per_share: RestrictedVector::default(),
         is_staked: true,
     };
     ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
@@ -284,8 +284,8 @@ pub fn handle_update_config(
         return Err(StdError::generic_err("Unauthorized"));
     }
 
-    if let Some(generator) = new_config.generator_address {
-        // If generator is set, we check is any LP tokens are currently staked before updating generator address
+    if let Some(incentives) = new_config.incentives_address {
+        // If incentives is set, we check is any LP tokens are currently staked before updating incentives address
         for pool_type in ASSET_POOLS
             .keys(deps.storage, None, None, Order::Ascending)
             .collect::<Result<Vec<PoolType>, StdError>>()?
@@ -293,14 +293,14 @@ pub fn handle_update_config(
             let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
             if pool_info.is_staked {
                 return Err(StdError::generic_err(format!(
-                    "{:?} astro LP tokens already staked. Unstake them before updating generator",
+                    "{:?} astro LP tokens already staked. Unstake them before updating incentives",
                     pool_type
                 )));
             }
         }
 
-        config.incentives = deps.api.addr_validate(&generator)?;
-        attributes.push(attr("new_generator", generator))
+        config.incentives = deps.api.addr_validate(&incentives)?;
+        attributes.push(attr("new_incentives", incentives))
     }
 
     CONFIG.save(deps.storage, &config)?;
@@ -315,7 +315,7 @@ pub fn handle_update_config(
 ///
 /// Exactly two **Coin**s are expected to be attached to the message as funds. These **Coin**s are
 /// used in ProvideLiquidity message sent to the PCL pool, the minted LP tokens are staked to the
-/// generator.
+/// incentives.
 ///
 /// Liquidity migration process consists of several sequential messages invocation and from this
 /// contract's point of view it mostly mimics (and clones code of) the **IncreaseLockupFor** exec
@@ -466,11 +466,11 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     let astroport_lp_token = pool_info.lp_token;
 
     if pool_info.is_staked {
-        let generator = &config.incentives;
+        let incentives = &config.incentives;
 
         // QUERY :: Check if there are any pending staking rewards
         let pending_rewards_response: Vec<Asset> = deps.querier.query_wasm_smart(
-            generator,
+            incentives,
             &IncentivesQueryMsg::PendingRewards {
                 lp_token: astroport_lp_token.to_string(),
                 user: env.contract.address.to_string(),
@@ -497,7 +497,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
                 .collect();
 
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: generator.to_string(),
+                contract_addr: incentives.to_string(),
                 funds: vec![],
                 msg: to_json_binary(&IncentivesExecuteMsg::ClaimRewards {
                     lp_tokens: vec![astroport_lp_token.to_string()],
@@ -583,7 +583,7 @@ pub fn claim_airdrop_tokens_with_multiplier_msg(
     }))
 }
 
-/// Updates contract state after dual staking rewards are claimed from the generator contract. Returns a default object of type [`Response`].
+/// Updates contract state after dual staking rewards are claimed from the incentives contract. Returns a default object of type [`Response`].
 /// ## Params
 /// * **deps** is an object of type [`DepsMut`].
 ///
@@ -618,7 +618,7 @@ pub fn update_pool_on_dual_rewards_claim(
             .query_pool(&deps.querier, env.contract.address.clone())?;
         let received_amount = current_balance.checked_sub(prev_balance.amount)?;
 
-        pool_info.generator_rewards_per_share.update(
+        pool_info.incentives_rewards_per_share.update(
             &prev_balance.info,
             Decimal::from_ratio(received_amount, lp_balance),
         )?;
@@ -628,7 +628,7 @@ pub fn update_pool_on_dual_rewards_claim(
     ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
 
     Ok(Response::new().add_attributes(vec![
-        attr("action", "update_generator_dual_rewards"),
+        attr("action", "update_incentives_dual_rewards"),
         attr("pool_type", format!("{:?}", pool_type)),
     ]))
 }
@@ -702,7 +702,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     };
 
     let mut pending_reward_assets: Vec<Asset> = vec![];
-    // If Astro LP tokens are staked with Astro generator
+    // If Astro LP tokens are staked with Astro incentives
     if pool_info.is_staked {
         // If this LP token is getting incentives
         // Calculate claimable staking rewards for this lockup
@@ -714,19 +714,19 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             },
         )?;
         for reward in pending_rewards {
-            let generator_rewards_per_share = pool_info
-                .generator_rewards_per_share
+            let incentives_rewards_per_share = pool_info
+                .incentives_rewards_per_share
                 .load(&reward.info)
                 .unwrap_or_default();
-            if generator_rewards_per_share.is_zero() {
+            if incentives_rewards_per_share.is_zero() {
                 continue;
             };
 
-            let total_lockup_rewards = generator_rewards_per_share
+            let total_lockup_rewards = incentives_rewards_per_share
                 .checked_mul(astroport_lp_amount.to_decimal())?
                 .to_uint_floor();
             let debt = lockup_info
-                .generator_debt
+                .incentives_debt
                 .load(&reward.info)
                 .unwrap_or_default();
             let pending_reward = total_lockup_rewards.checked_sub(debt)?;
@@ -739,7 +739,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             }
 
             lockup_info
-                .generator_debt
+                .incentives_debt
                 .update(&reward.info, total_lockup_rewards.checked_sub(debt)?)?;
         }
 
@@ -940,7 +940,7 @@ pub fn query_user_info(deps: Deps, env: Env, user: String) -> StdResult<UserInfo
 
     let mut total_astro_rewards = Uint128::zero();
     let mut lockup_infos = vec![];
-    let mut claimable_generator_debt: RestrictedVector<AssetInfo, Uint128> = Default::default();
+    let mut claimable_incentives_debt: RestrictedVector<AssetInfo, Uint128> = Default::default();
     for pool_type in ASSET_POOLS
         .keys(deps.storage, None, None, Order::Ascending)
         .collect::<Result<Vec<PoolType>, StdError>>()?
@@ -953,8 +953,8 @@ pub fn query_user_info(deps: Deps, env: Env, user: String) -> StdResult<UserInfo
             let lockup_info = query_lockup_info(deps, &env, &user, pool_type, duration)?;
             total_astro_rewards = total_astro_rewards.checked_add(lockup_info.ntrn_rewards)?;
 
-            for v in lockup_info.claimable_generator_debt.inner_ref().iter() {
-                claimable_generator_debt.update(&v.0, v.1)?;
+            for v in lockup_info.claimable_incentives_debt.inner_ref().iter() {
+                claimable_incentives_debt.update(&v.0, v.1)?;
             }
             lockup_infos.push(lockup_info);
         }
@@ -964,7 +964,7 @@ pub fn query_user_info(deps: Deps, env: Env, user: String) -> StdResult<UserInfo
         total_ntrn_rewards: total_astro_rewards,
         ntrn_transferred: user_info.ntrn_transferred,
         lockup_infos,
-        claimable_generator_debt,
+        claimable_incentives_debt,
         lockup_positions_index: user_info.lockup_positions_index,
     })
 }
@@ -1077,7 +1077,7 @@ pub fn query_lockup_info(
 
     let lockup_astroport_lp_units_opt: Option<Uint128>;
     let astroport_lp_token_opt: Addr;
-    let mut claimable_generator_rewards_debt: RestrictedVector<AssetInfo, Uint128> =
+    let mut claimable_incentives_rewards_debt: RestrictedVector<AssetInfo, Uint128> =
         RestrictedVector::default();
     if let Some(astroport_lp_transferred) = lockup_info.astroport_lp_transferred {
         lockup_astroport_lp_units_opt = Some(astroport_lp_transferred);
@@ -1088,7 +1088,7 @@ pub fn query_lockup_info(
         let lockup_astroport_lp_units = {
             // Query Astro LP Tokens balance for the pool
             pool_astroport_lp_units = if pool_info.is_staked {
-                raw_generator_deposit(
+                raw_incentives_deposit(
                     deps.querier,
                     &config.incentives,
                     astroport_lp_token.as_bytes(),
@@ -1124,23 +1124,23 @@ pub fn query_lockup_info(
 
             // Calculate claimable staking rewards for this lockup
             for reward in pending_rewards {
-                let generator_rewards_per_share = pool_info.generator_rewards_per_share.update(
+                let incentives_rewards_per_share = pool_info.incentives_rewards_per_share.update(
                     &reward.info,
                     Decimal::from_ratio(reward.amount, pool_astroport_lp_units),
                 )?;
 
-                let debt = generator_rewards_per_share
+                let debt = incentives_rewards_per_share
                     .checked_mul_uint128(lockup_astroport_lp_units)?
                     .checked_sub(
                         lockup_info
-                            .generator_debt
+                            .incentives_debt
                             .inner_ref()
                             .iter()
                             .find_map(|a| if reward.info == a.0 { Some(a.1) } else { None })
                             .unwrap_or_default(),
                     )?;
 
-                claimable_generator_rewards_debt.update(&reward.info, debt)?;
+                claimable_incentives_rewards_debt.update(&reward.info, debt)?;
             }
         }
     }
@@ -1162,8 +1162,8 @@ pub fn query_lockup_info(
         lp_units_locked: lockup_info.lp_units_locked,
         withdrawal_flag: lockup_info.withdrawal_flag,
         ntrn_rewards: lockup_info.ntrn_rewards,
-        generator_debt: lockup_info.generator_debt,
-        claimable_generator_debt: claimable_generator_rewards_debt,
+        incentives_debt: lockup_info.incentives_debt,
+        claimable_incentives_debt: claimable_incentives_rewards_debt,
         unlock_timestamp: lockup_info.unlock_timestamp,
         astroport_lp_units: lockup_astroport_lp_units_opt,
         astroport_lp_token: astroport_lp_token_opt,

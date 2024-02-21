@@ -88,8 +88,8 @@ pub struct InstantiateMsg {
     pub credits_contract: String,
     /// Auction contract address
     pub auction_contract: String,
-    /// Generator (Staking for dual rewards) contract address
-    pub generator: String,
+    /// Incentives (Staking for dual rewards) contract address
+    pub incentives: String,
     /// Describes rewards coefficients for each lockup duration
     pub lockup_rewards_info: Vec<LockupRewardsInfo>,
     /// Address of the LP token of the NTRN/USDC PCL pool
@@ -118,8 +118,8 @@ pub struct InstantiateMsg {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
-    /// Generator (Staking for dual rewards) contract address
-    pub generator_address: Option<String>,
+    /// incentives (Staking for dual rewards) contract address
+    pub incentives_address: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -196,7 +196,7 @@ pub enum CallbackMsg {
         /// The address of the LP token of the pool.
         lp_token: String,
         /// The amount of staked LP token the PCL lockdrop contract possesses of before liquidity
-        /// provision and staking to the generator. Used to calculate LP token amount received for
+        /// provision and staking to the incentives. Used to calculate LP token amount received for
         /// liquidity provision.
         staked_lp_token_amount: Uint128,
         /// The lockup owner's info from the XYK lockdrop contract. Is used to create a UserInfo
@@ -290,9 +290,9 @@ pub struct PoolInfo {
     pub incentives_share: Uint128,
     /// Weighted LP Token balance used to calculate NTRN rewards a particular user can claim
     pub weighted_amount: Uint256,
-    /// Ratio of Generator rewards accured to astroport pool share
-    pub generator_rewards_per_share: RestrictedVector<AssetInfo, Decimal>,
-    /// Boolean value indicating if the LP Tokens are staked with the Generator contract or not
+    /// Ratio of incentives rewards accured to astroport pool share
+    pub incentives_rewards_per_share: RestrictedVector<AssetInfo, Decimal>,
+    /// Boolean value indicating if the LP Tokens are staked with the incentives contract or not
     pub is_staked: bool,
 }
 
@@ -325,8 +325,8 @@ pub struct LockupInfo {
     pub withdrawal_flag: bool,
     /// NTRN tokens received as rewards for participation in the lockdrop
     pub ntrn_rewards: Uint128,
-    /// Generator tokens lockup received as generator rewards
-    pub generator_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// incentives tokens lockup received as incentives rewards
+    pub incentives_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Timestamp beyond which this position can be unlocked
     pub unlock_timestamp: u64,
 }
@@ -343,7 +343,7 @@ impl LockupInfo {
             astroport_lp_transferred: None,
             withdrawal_flag: i.withdrawal_flag,
             ntrn_rewards: i.ntrn_rewards,
-            generator_debt: Default::default(),
+            incentives_debt: Default::default(),
             unlock_timestamp: i.unlock_timestamp,
         }
     }
@@ -365,8 +365,8 @@ pub struct UserInfoResponse {
     pub ntrn_transferred: bool,
     /// Lockup positions
     pub lockup_infos: Vec<LockUpInfoResponse>,
-    /// Tokens receivable as generator rewards that user can claim
-    pub claimable_generator_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// Tokens receivable as incentives rewards that user can claim
+    pub claimable_incentives_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Number of lockup positions the user is having
     pub lockup_positions_index: u32,
 }
@@ -400,10 +400,10 @@ pub struct LockUpInfoResponse {
     /// NTRN tokens received as rewards for participation in the lockdrop
     pub ntrn_rewards: Uint128,
     pub duration: u64,
-    /// Generator tokens lockup received as generator rewards
-    pub generator_debt: RestrictedVector<AssetInfo, Uint128>,
-    /// Tokens receivable as generator rewards that user can claim
-    pub claimable_generator_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// incentives tokens lockup received as incentives rewards
+    pub incentives_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// Tokens receivable as incentives rewards that user can claim
+    pub claimable_incentives_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Timestamp beyond which this position can be unlocked
     pub unlock_timestamp: u64,
     /// User's Astroport LP units, calculated as lp_units_locked (terraswap) / total LP units locked (terraswap) * Astroport LP units minted post migration

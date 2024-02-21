@@ -3,15 +3,15 @@
   "title": "UserInfoResponse",
   "type": "object",
   "required": [
-    "claimable_generator_debt",
+    "claimable_incentives_debt",
     "lockup_infos",
     "lockup_positions_index",
     "ntrn_transferred",
     "total_ntrn_rewards"
   ],
   "properties": {
-    "claimable_generator_debt": {
-      "description": "Tokens receivable as generator rewards that user can claim",
+    "claimable_incentives_debt": {
+      "description": "Tokens receivable as incentives rewards that user can claim",
       "allOf": [
         {
           "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
@@ -102,9 +102,9 @@
       "type": "object",
       "required": [
         "astroport_lp_token",
-        "claimable_generator_debt",
+        "claimable_incentives_debt",
         "duration",
-        "generator_debt",
+        "incentives_debt",
         "lp_units_locked",
         "ntrn_rewards",
         "pool_type",
@@ -136,8 +136,8 @@
             }
           ]
         },
-        "claimable_generator_debt": {
-          "description": "Tokens receivable as generator rewards that user can claim",
+        "claimable_incentives_debt": {
+          "description": "Tokens receivable as incentives rewards that user can claim",
           "allOf": [
             {
               "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"
@@ -149,8 +149,8 @@
           "format": "uint64",
           "minimum": 0.0
         },
-        "generator_debt": {
-          "description": "Generator tokens lockup received as generator rewards",
+        "incentives_debt": {
+          "description": "incentives tokens lockup received as incentives rewards",
           "allOf": [
             {
               "$ref": "#/definitions/RestrictedVector_for_AssetInfo_and_Uint128"

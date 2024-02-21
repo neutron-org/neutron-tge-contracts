@@ -8,7 +8,7 @@
     "atom_weighted_amount",
     "auction_contract",
     "credits_contract",
-    "generator",
+    "incentives",
     "lockdrop_incentives",
     "lockup_rewards_info",
     "usdc_incentives_share",
@@ -45,8 +45,8 @@
       "description": "Credits contract address",
       "type": "string"
     },
-    "generator": {
-      "description": "Generator (Staking for dual rewards) contract address",
+    "incentives": {
+      "description": "Incentives (Staking for dual rewards) contract address",
       "type": "string"
     },
     "lockdrop_incentives": {
