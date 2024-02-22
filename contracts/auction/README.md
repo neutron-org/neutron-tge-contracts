@@ -5,7 +5,7 @@ The LP Bootstrap via auction contract facilitates cNTRN-NATIVE Neutron pool init
 **Phase 1 :: Bootstrapping cNTRN and NATIVE Side of the LP Pool**
 
 - Airdrop recipients and lockdrop participants can delegate part / all of their cNTRN rewards to the auction contract.
-- Any _user can deposit UST directly to the auction contract to participate in the LP bootstrap auction.
+- Any user can deposit UST directly to the auction contract to participate in the LP bootstrap auction.
 - Both UST deposited & cNTRN delegated (if any) balances are used to calculate _user's LP token shares and additional cNTRN incentives that he will receive for participating in the auction.
 
 **Phase 2 :: Post cNTRN-NATIVE Pool initialization**
