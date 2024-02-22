@@ -5,30 +5,30 @@ use std::str::FromStr;
 use astroport::asset::{Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::cosmwasm_ext::IntegerToDecimal;
+use astroport::DecimalCheckedOps;
 use astroport::incentives::{ExecuteMsg as IncentivesExecuteMsg, QueryMsg as IncentivesQueryMsg};
 use astroport::pair::ExecuteMsg::ProvideLiquidity;
 use astroport::restricted_vector::RestrictedVector;
-use astroport::DecimalCheckedOps;
-use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, to_json_binary, Addr, BankMsg, Binary, CosmosMsg, Decimal,
-    Decimal256, Deps, DepsMut, Empty, Env, MessageInfo, Order, Response, StdError, StdResult,
+    Addr, attr, BankMsg, Binary, coins, CosmosMsg, Decimal, Decimal256, Deps,
+    DepsMut, Empty, entry_point, Env, MessageInfo, Order, Response, StdError, StdResult, to_json_binary,
     Uint128, Uint256, WasmMsg,
 };
-use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
+use cw2::set_contract_version;
 
-use crate::raw_queries::{raw_balance, raw_incentives_deposit};
 use astroport_periphery::lockdrop::{
     LockupInfoV2 as LockdropXYKLockupInfoV2, PoolType as LockdropXYKPoolType,
     UserInfo as LockdropXYKUserInfo,
 };
 use astroport_periphery::lockdrop_pcl::{
-    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockUpInfoResponse, LockUpInfoSummary,
-    LockupInfo, MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockupInfo, LockUpInfoResponse,
+    LockUpInfoSummary, MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
     UserInfo, UserInfoResponse, UserInfoWithListResponse,
 };
+use astroport_periphery::utils::Decimal256CheckedOps;
 
+use crate::raw_queries::raw_incentives_deposit;
 use crate::state::{
     ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE, TOTAL_USER_LOCKUP_AMOUNT,
     USER_INFO,
@@ -86,7 +86,6 @@ pub fn instantiate(
         incentives_share: msg.atom_incentives_share,
         weighted_amount: msg.atom_weighted_amount,
         incentives_rewards_per_share: RestrictedVector::default(),
-        is_staked: true,
     };
     ASSET_POOLS.save(deps.storage, PoolType::ATOM, &pool_info, env.block.height)?;
 
@@ -97,7 +96,6 @@ pub fn instantiate(
         incentives_share: msg.usdc_incentives_share,
         weighted_amount: msg.usdc_weighted_amount,
         incentives_rewards_per_share: RestrictedVector::default(),
-        is_staked: true,
     };
     ASSET_POOLS.save(deps.storage, PoolType::USDC, &pool_info, env.block.height)?;
 
@@ -147,7 +145,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
                 Ok(())
             })
         }
-        ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, info, new_config),
+        ExecuteMsg::UpdateConfig { new_config } => handle_update_config(deps, env, info, new_config),
         ExecuteMsg::MigrateXYKLiquidity {
             pool_type,
             user_address_raw,
@@ -273,6 +271,7 @@ pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Respons
 /// * **new_config** is an object of type [`UpdateConfigMsg`]. Same as UpdateConfigMsg struct
 pub fn handle_update_config(
     deps: DepsMut,
+    env: Env,
     info: MessageInfo,
     new_config: UpdateConfigMsg,
 ) -> StdResult<Response> {
@@ -291,9 +290,18 @@ pub fn handle_update_config(
             .collect::<Result<Vec<PoolType>, StdError>>()?
         {
             let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
-            if pool_info.is_staked {
+
+            let staked_lp_token_amount = deps.querier.query_wasm_smart::<Uint128>(
+                config.incentives.to_string(),
+                &IncentivesQueryMsg::Deposit {
+                    lp_token: pool_info.lp_token.to_string(),
+                    user: env.contract.address.to_string(),
+                },
+            )?;
+
+            if !staked_lp_token_amount.is_zero() {
                 return Err(StdError::generic_err(format!(
-                    "{:?} astro LP tokens already staked. Unstake them before updating incentives",
+                    "{:?} astro LP tokens already staked. Unstake them before updating generator",
                     pool_type
                 )));
             }
@@ -392,7 +400,7 @@ pub fn handle_migrate_xyk_liquidity(
             user_info,
             lockup_info,
         }
-        .to_cosmos_msg(&env)?,
+            .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::default().add_messages(cosmos_msgs))
@@ -464,56 +472,51 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     let mut cosmos_msgs = vec![];
 
     let astroport_lp_token = pool_info.lp_token;
+    let incentives = &config.incentives;
 
-    if pool_info.is_staked {
-        let incentives = &config.incentives;
+    // QUERY :: Check if there are any pending staking rewards
+    let pending_rewards_response: Vec<Asset> = deps.querier.query_wasm_smart(
+        incentives,
+        &IncentivesQueryMsg::PendingRewards {
+            lp_token: astroport_lp_token.to_string(),
+            user: env.contract.address.to_string(),
+        },
+    )?;
 
-        // QUERY :: Check if there are any pending staking rewards
-        let pending_rewards_response: Vec<Asset> = deps.querier.query_wasm_smart(
-            incentives,
-            &IncentivesQueryMsg::PendingRewards {
-                lp_token: astroport_lp_token.to_string(),
-                user: env.contract.address.to_string(),
-            },
-        )?;
-
-        if pending_rewards_response
+    if pending_rewards_response
+        .iter()
+        .any(|asset| !asset.amount.is_zero())
+    {
+        let prev_pending_rewards_balances: Vec<Asset> = pending_rewards_response
             .iter()
-            .any(|asset| !asset.amount.is_zero())
-        {
-            let prev_pending_rewards_balances: Vec<Asset> = pending_rewards_response
-                .iter()
-                .map(|asset| {
-                    let balance = asset
-                        .info
-                        .query_pool(&deps.querier, env.contract.address.clone())
-                        .unwrap_or_default();
+            .map(|asset| {
+                let balance = asset
+                    .info
+                    .query_pool(&deps.querier, env.contract.address.clone())
+                    .unwrap_or_default();
 
-                    Asset {
-                        info: asset.info.clone(),
-                        amount: balance,
-                    }
-                })
-                .collect();
-
-            cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: incentives.to_string(),
-                funds: vec![],
-                msg: to_json_binary(&IncentivesExecuteMsg::ClaimRewards {
-                    lp_tokens: vec![astroport_lp_token.to_string()],
-                })?,
-            }));
-
-            cosmos_msgs.push(
-                CallbackMsg::UpdatePoolOnDualRewardsClaim {
-                    pool_type,
-                    prev_reward_balances: prev_pending_rewards_balances,
+                Asset {
+                    info: asset.info.clone(),
+                    amount: balance,
                 }
+            })
+            .collect();
+
+        cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: incentives.to_string(),
+            funds: vec![],
+            msg: to_json_binary(&IncentivesExecuteMsg::ClaimRewards {
+                lp_tokens: vec![astroport_lp_token.to_string()],
+            })?,
+        }));
+
+        cosmos_msgs.push(
+            CallbackMsg::UpdatePoolOnDualRewardsClaim {
+                pool_type,
+                prev_reward_balances: prev_pending_rewards_balances,
+            }
                 .to_cosmos_msg(&env)?,
-            );
-        }
-    } else if user_info.ntrn_transferred && !withdraw_lp_stake {
-        return Err(StdError::generic_err("No rewards available to claim!"));
+        );
     }
 
     cosmos_msgs.push(
@@ -523,7 +526,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             duration,
             withdraw_lp_stake,
         }
-        .to_cosmos_msg(&env)?,
+            .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
@@ -676,95 +679,83 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
 
     // Calculate Astro LP share for the lockup position
     let astroport_lp_amount: Uint128 = {
-        let balance: Uint128 = if pool_info.is_staked {
+        let balance: Uint128 =
             deps.querier.query_wasm_smart(
                 incentives,
                 &IncentivesQueryMsg::Deposit {
                     lp_token: astroport_lp_token.to_string(),
                     user: env.contract.address.to_string(),
                 },
-            )?
-        } else {
-            let res: BalanceResponse = deps.querier.query_wasm_smart(
-                astroport_lp_token.clone(),
-                &Cw20QueryMsg::Balance {
-                    address: env.contract.address.to_string(),
-                },
             )?;
-            res.balance
-        };
 
         (lockup_info
             .lp_units_locked
             .full_mul(balance)
             .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-        .try_into()?
+            .try_into()?
     };
 
     let mut pending_reward_assets: Vec<Asset> = vec![];
-    // If Astro LP tokens are staked with Astro incentives
-    if pool_info.is_staked {
-        // If this LP token is getting incentives
-        // Calculate claimable staking rewards for this lockup
-        let pending_rewards: Vec<Asset> = deps.querier.query_wasm_smart(
-            incentives,
-            &IncentivesQueryMsg::PendingRewards {
+    // If this LP token is getting incentives
+    // Calculate claimable staking rewards for this lockup
+    let pending_rewards: Vec<Asset> = deps.querier.query_wasm_smart(
+        incentives,
+        &IncentivesQueryMsg::PendingRewards {
+            lp_token: astroport_lp_token.to_string(),
+            user: env.contract.address.to_string(),
+        },
+    )?;
+    for reward in pending_rewards {
+        let incentives_rewards_per_share = pool_info
+            .incentives_rewards_per_share
+            .load(&reward.info)
+            .unwrap_or_default();
+        if incentives_rewards_per_share.is_zero() {
+            continue;
+        };
+
+        let total_lockup_rewards = incentives_rewards_per_share
+            .checked_mul(astroport_lp_amount.to_decimal())?
+            .to_uint_floor();
+        let debt = lockup_info
+            .incentives_debt
+            .load(&reward.info)
+            .unwrap_or_default();
+        let pending_reward = total_lockup_rewards.checked_sub(debt)?;
+
+        if !pending_reward.is_zero() {
+            pending_reward_assets.push(Asset {
+                info: reward.info.clone(),
+                amount: pending_reward,
+            });
+        }
+
+        lockup_info
+            .incentives_debt
+            .update(&reward.info, total_lockup_rewards.checked_sub(debt)?)?;
+    }
+
+    // If this is a void transaction (no state change), then return error.
+    // Void tx scenario = ASTRO already claimed, 0 pending ASTRO staking reward, 0 pending rewards, not unlocking LP tokens in this tx
+    if !withdraw_lp_stake && user_info.ntrn_transferred && pending_reward_assets.is_empty() {
+        return Err(StdError::generic_err("No rewards available to claim!"));
+    }
+
+    // If claimable staking rewards > 0, claim them
+    for pending_reward in pending_reward_assets {
+        cosmos_msgs.push(pending_reward.into_msg(user_address.clone())?);
+    }
+
+    //  COSMOSMSG :: If LP Tokens are staked, we unstake the amount which needs to be returned to the user
+    if withdraw_lp_stake {
+        cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: incentives.to_string(),
+            funds: vec![],
+            msg: to_json_binary(&IncentivesExecuteMsg::Withdraw {
                 lp_token: astroport_lp_token.to_string(),
-                user: env.contract.address.to_string(),
-            },
-        )?;
-        for reward in pending_rewards {
-            let incentives_rewards_per_share = pool_info
-                .incentives_rewards_per_share
-                .load(&reward.info)
-                .unwrap_or_default();
-            if incentives_rewards_per_share.is_zero() {
-                continue;
-            };
-
-            let total_lockup_rewards = incentives_rewards_per_share
-                .checked_mul(astroport_lp_amount.to_decimal())?
-                .to_uint_floor();
-            let debt = lockup_info
-                .incentives_debt
-                .load(&reward.info)
-                .unwrap_or_default();
-            let pending_reward = total_lockup_rewards.checked_sub(debt)?;
-
-            if !pending_reward.is_zero() {
-                pending_reward_assets.push(Asset {
-                    info: reward.info.clone(),
-                    amount: pending_reward,
-                });
-            }
-
-            lockup_info
-                .incentives_debt
-                .update(&reward.info, total_lockup_rewards.checked_sub(debt)?)?;
-        }
-
-        // If this is a void transaction (no state change), then return error.
-        // Void tx scenario = ASTRO already claimed, 0 pending ASTRO staking reward, 0 pending rewards, not unlocking LP tokens in this tx
-        if !withdraw_lp_stake && user_info.ntrn_transferred && pending_reward_assets.is_empty() {
-            return Err(StdError::generic_err("No rewards available to claim!"));
-        }
-
-        // If claimable staking rewards > 0, claim them
-        for pending_reward in pending_reward_assets {
-            cosmos_msgs.push(pending_reward.into_msg(user_address.clone())?);
-        }
-
-        //  COSMOSMSG :: If LP Tokens are staked, we unstake the amount which needs to be returned to the user
-        if withdraw_lp_stake {
-            cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: incentives.to_string(),
-                funds: vec![],
-                msg: to_json_binary(&IncentivesExecuteMsg::Withdraw {
-                    lp_token: astroport_lp_token.to_string(),
-                    amount: astroport_lp_amount,
-                })?,
-            }));
-        }
+                amount: astroport_lp_amount,
+            })?,
+        }));
     }
 
     if withdraw_lp_stake {
@@ -1087,31 +1078,24 @@ pub fn query_lockup_info(
         let pool_astroport_lp_units;
         let lockup_astroport_lp_units = {
             // Query Astro LP Tokens balance for the pool
-            pool_astroport_lp_units = if pool_info.is_staked {
+            pool_astroport_lp_units =
                 raw_incentives_deposit(
                     deps.querier,
                     &config.incentives,
                     astroport_lp_token.as_bytes(),
                     env.contract.address.as_bytes(),
-                )?
-            } else {
-                raw_balance(
-                    deps.querier,
-                    &astroport_lp_token,
-                    env.contract.address.as_bytes(),
-                )?
-            };
+                )?;
             // Calculate Lockup Astro LP shares
             (lockup_info
                 .lp_units_locked
                 .full_mul(pool_astroport_lp_units)
                 .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-            .try_into()?
+                .try_into()?
         };
         lockup_astroport_lp_units_opt = Some(lockup_astroport_lp_units);
         astroport_lp_token_opt = astroport_lp_token.clone();
-        // If LP tokens are staked, calculate the rewards claimable by the user for this lockup position
-        if pool_info.is_staked && !lockup_astroport_lp_units.is_zero() {
+        // Calculate the rewards claimable by the user for this lockup position
+        if !lockup_astroport_lp_units.is_zero() {
             let incentives = &config.incentives;
             // QUERY :: Check if there are any pending staking rewards
             let pending_rewards: Vec<Asset> = deps.querier.query_wasm_smart(
@@ -1197,7 +1181,7 @@ pub fn calculate_astro_incentives_for_lockup(
             Uint256::from(pool_incentives_share).checked_mul(lockup_weighted_balance)?,
             Uint256::from(total_incentives_share).checked_mul(total_weighted_amount)?,
         )
-        .checked_mul_uint256(total_lockdrop_incentives.into())?)
+            .checked_mul_uint256(total_lockdrop_incentives.into())?)
     }
 }
 

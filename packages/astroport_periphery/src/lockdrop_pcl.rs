@@ -292,8 +292,6 @@ pub struct PoolInfo {
     pub weighted_amount: Uint256,
     /// Ratio of incentives rewards accured to astroport pool share
     pub incentives_rewards_per_share: RestrictedVector<AssetInfo, Decimal>,
-    /// Boolean value indicating if the LP Tokens are staked with the incentives contract or not
-    pub is_staked: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]

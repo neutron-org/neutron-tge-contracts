@@ -1163,7 +1163,6 @@
         "amount_in_lockups",
         "incentives_rewards_per_share",
         "incentives_share",
-        "is_staked",
         "lp_token",
         "weighted_amount"
       ],
@@ -1186,10 +1185,6 @@
               "$ref": "#/definitions/Uint128"
             }
           ]
-        },
-        "is_staked": {
-          "description": "Boolean value indicating if the LP Tokens are staked with the incentives contract or not",
-          "type": "boolean"
         },
         "lp_token": {
           "$ref": "#/definitions/Addr"
