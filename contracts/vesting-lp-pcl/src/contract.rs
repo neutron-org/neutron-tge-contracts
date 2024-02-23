@@ -17,7 +17,7 @@ use vesting_base::state::{vesting_info, vesting_state, CONFIG, VESTING_MANAGERS}
 use vesting_base::types::{Config, Extensions, VestingInfo};
 
 /// Contract name that is used for migration.
-const CONTRACT_NAME: &str = "neutron-vesting-lp";
+const CONTRACT_NAME: &str = "neutron-vesting-lp-pcl";
 /// Contract version that is used for migration.
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
