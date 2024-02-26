@@ -102,7 +102,7 @@ fn receive_cw20(
             user_address_raw,
             user_vesting_info,
         } => {
-            if !is_sender_xyk_vesting_lp(deps.storage, &deps.api.addr_validate(sender.as_str())?) {
+            if !is_sender_xyk_vesting_lp(deps.storage, &sender){
                 return Err(ContractError::Unauthorized {});
             }
             handle_migrate_xyk_liquidity(deps, env, user_address_raw, user_vesting_info)
