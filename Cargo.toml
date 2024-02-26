@@ -4,11 +4,12 @@ members = [
     "contracts/lockdrop",
     "contracts/credits",
     "contracts/vesting-lp",
+    "contracts/vesting-lp-pcl",
     "contracts/vesting-lti",
     "contracts/vesting-investors",
     "contracts/cw20-merkle-airdrop",
     "contracts/price-feed",
-    "contracts/astroport/*"
+    "contracts/astroport/*",
 ]
 
 [profile.release]
@@ -33,6 +34,7 @@ cosmwasm-schema = { version = "1.4.1", default-features = false }
 astroport = { path = "packages/astroport", default-features = false }
 astroport-periphery = { path = "packages/astroport_periphery" }
 vesting-base = { path = "packages/vesting-base" }
+vesting-base-pcl = { path = "packages/vesting-base-pcl" }
 # setting cw-multi-test to 0.17.0 enables cosmwasm_1_1, we don't want that
 cw-multi-test = "0.16.5"
 itertools = "0.11.0"

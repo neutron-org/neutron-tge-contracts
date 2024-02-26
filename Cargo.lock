@@ -101,7 +101,7 @@ dependencies = [
  "astroport-token",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cw-multi-test",
+ "cw-multi-test 0.16.5",
  "cw-storage-plus 1.1.0",
  "cw2 1.1.1",
  "cw20 1.1.1",
@@ -418,6 +418,25 @@ dependencies = [
 
 [[package]]
 name = "cw-multi-test"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8e81b4a7821d5eeba0d23f737c16027b39a600742ca8c32eb980895ffd270f4"
+dependencies = [
+ "anyhow",
+ "cosmwasm-std",
+ "cosmwasm-storage",
+ "cw-storage-plus 0.15.1",
+ "cw-utils 0.15.1",
+ "derivative",
+ "itertools 0.10.5",
+ "prost",
+ "schemars",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "cw-multi-test"
 version = "0.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "127c7bb95853b8e828bdab97065c81cb5ddc20f7339180b61b2300565aaa99d1"
@@ -642,7 +661,7 @@ dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
  "credits",
- "cw-multi-test",
+ "cw-multi-test 0.16.5",
  "cw-storage-plus 1.1.0",
  "cw2 1.1.1",
  "cw20 1.1.1",
@@ -1473,7 +1492,7 @@ dependencies = [
  "cosmwasm-std",
  "cw-storage-plus 1.1.0",
  "cw-utils 0.15.1",
- "cw20 1.1.1",
+ "cw20 0.15.1",
  "thiserror",
 ]
 
@@ -1485,7 +1504,7 @@ dependencies = [
  "astroport-token",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cw-multi-test",
+ "cw-multi-test 0.16.5",
  "cw-utils 0.15.1",
  "cw2 1.1.1",
  "cw20 1.1.1",
@@ -1500,10 +1519,28 @@ dependencies = [
  "astroport-token",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cw-multi-test",
+ "cw-multi-test 0.15.1",
+ "cw-storage-plus 0.15.1",
+ "cw-utils 0.15.1",
+ "cw2 0.15.1",
+ "cw20 0.15.1",
+ "vesting-base",
+ "vesting-lp-pcl",
+]
+
+[[package]]
+name = "vesting-lp-pcl"
+version = "1.1.0"
+dependencies = [
+ "astroport 2.0.0",
+ "astroport-token",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-multi-test 0.16.5",
+ "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
  "cw2 1.1.1",
- "cw20 1.1.1",
+ "cw20 0.15.1",
  "vesting-base",
 ]
 
@@ -1515,7 +1552,7 @@ dependencies = [
  "astroport-token",
  "cosmwasm-schema",
  "cosmwasm-std",
- "cw-multi-test",
+ "cw-multi-test 0.16.5",
  "cw-utils 0.15.1",
  "cw2 1.1.1",
  "cw20 1.1.1",
