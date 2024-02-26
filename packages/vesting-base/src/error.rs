@@ -20,9 +20,6 @@ pub enum ContractError {
     #[error("Vesting schedule error on addr: {0}. Should satisfy: (start < end and at_start < total) or (start = end and at_start = total)")]
     VestingScheduleError(String),
 
-    #[error("Vesting schedule error on addr: {0}. No schedule found")]
-    VestingScheduleExtractError(String),
-
     #[error("Vesting schedule amount error. The total amount should be equal to the CW20 receive amount.")]
     VestingScheduleAmountError {},
 
