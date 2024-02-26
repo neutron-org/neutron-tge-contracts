@@ -1068,21 +1068,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "neutron-lockdrop-pcl"
-version = "1.0.0"
-dependencies = [
- "astroport 3.11.0",
- "astroport-periphery",
- "cosmwasm-schema",
- "cosmwasm-std",
- "credits",
- "cw-storage-plus 0.15.1",
- "cw2 1.1.2",
- "cw20 1.1.2",
- "serde",
-]
-
-[[package]]
 name = "neutron-price-feed"
 version = "0.1.0"
 dependencies = [
@@ -1562,7 +1547,7 @@ dependencies = [
  "cosmwasm-std",
  "cw-storage-plus 1.2.0",
  "cw-utils 0.15.1",
- "cw20 0.15.2",
+ "cw20 0.15.1",
  "thiserror",
 ]
 
@@ -1610,7 +1595,7 @@ dependencies = [
  "cw-storage-plus 0.15.1",
  "cw-utils 0.15.1",
  "cw2 1.1.2",
- "cw20 0.15.2",
+ "cw20 0.15.1",
  "vesting-base",
 ]
 

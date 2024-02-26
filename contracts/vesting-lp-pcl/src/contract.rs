@@ -2,7 +2,7 @@ use crate::msg::{Cw20HookMsg, ExecuteMsg, InstantiateMsg};
 use crate::state::XYK_VESTING_LP_CONTRACT;
 use astroport::asset::token_asset_info;
 use cosmwasm_std::{
-    entry_point, from_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
+    entry_point, from_json, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
     Storage, Uint128,
 };
 use cw2::set_contract_version;
@@ -86,7 +86,7 @@ fn receive_cw20(
     let vesting_token = get_vesting_token(&config)?;
     let sender = info.sender;
 
-    match from_binary(&cw20_msg.msg)? {
+    match from_json(&cw20_msg.msg)? {
         Cw20HookMsg::RegisterVestingAccounts { vesting_accounts } => {
             if !is_sender_whitelisted(
                 deps.storage,

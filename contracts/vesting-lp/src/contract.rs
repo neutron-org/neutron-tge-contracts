@@ -5,7 +5,7 @@ use astroport::pair::{
     Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
 };
 use cosmwasm_std::{
-    entry_point, to_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
+    entry_point, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Response, StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
@@ -119,7 +119,7 @@ fn execute_migrate_liquidity(
         if !user_share.is_zero() {
             resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: pair_info.liquidity_token.to_string(),
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: user.address.to_string(),
                     amount: user_share,
                 })?,
@@ -249,10 +249,10 @@ fn migrate_liquidity_to_cl_pair_callback(
     // push message to withdraw liquidity from the xyk pair
     msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: xyk_lp_token.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::Send {
+        msg: to_json_binary(&Cw20ExecuteMsg::Send {
             contract: xyk_pair.to_string(),
             amount,
-            msg: to_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
+            msg: to_json_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
         })?,
         funds: vec![],
     }));
@@ -323,7 +323,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
 
     msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: cl_pair_address.to_string(),
-        msg: to_binary(&PairExecuteMsg::ProvideLiquidity {
+        msg: to_json_binary(&PairExecuteMsg::ProvideLiquidity {
             assets: vec![
                 native_asset(ntrn_denom.clone(), withdrawn_ntrn_amount),
                 native_asset(paired_asset_denom.clone(), withdrawn_paired_asset_amount),
@@ -404,10 +404,10 @@ fn post_migration_vesting_reschedule_callback(
         let msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: migration_config.new_lp_token.to_string(),
             funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Send {
+            msg: to_json_binary(&Cw20ExecuteMsg::Send {
                 contract: migration_config.pcl_vesting.to_string(),
                 amount: balance_diff,
-                msg: to_binary(&vesting_lp_pcl::msg::Cw20HookMsg::MigrateXYKLiquidity {
+                msg: to_json_binary(&vesting_lp_pcl::msg::Cw20HookMsg::MigrateXYKLiquidity {
                     user_address_raw: user.address.clone(),
                     user_vesting_info: VestingInfo {
                         schedules: vec![new_schedule],
