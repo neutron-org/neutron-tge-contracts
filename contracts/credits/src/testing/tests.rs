@@ -564,7 +564,7 @@ mod withdraw {
         let res = execute_withdraw(deps.as_mut(), env, somebody_info);
         assert_eq!(
             res,
-            Err(Std(StdError::not_found("credits::state::Allocation")))
+            Err(Std(StdError::not_found("type: credits::state::Allocation; key: [00, 0B, 61, 6C, 6C, 6F, 63, 61, 74, 69, 6F, 6E, 73, 73, 6F, 6D, 65, 62, 6F, 64, 79]")))
         );
     }
 }
@@ -858,7 +858,7 @@ mod query_vested_amount {
         let query_res = query_vested_amount(deps.as_ref(), env, "noname".to_string());
         assert_eq!(
             query_res,
-            Err(StdError::not_found("credits::state::Allocation"))
+            Err(StdError::not_found( "type: credits::state::Allocation; key: [00, 0B, 61, 6C, 6C, 6F, 63, 61, 74, 69, 6F, 6E, 73, 6E, 6F, 6E, 61, 6D, 65]"))
         );
     }
 
