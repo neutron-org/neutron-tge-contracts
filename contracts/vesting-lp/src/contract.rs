@@ -262,7 +262,7 @@ fn migrate_liquidity_to_cl_pair_callback(
         env.block.height,
         |s| {
             let mut state = s.unwrap_or_default();
-            state.total_released = state.total_released.checked_add(amount)?;
+            state.total_granted = state.total_granted.checked_sub(amount)?;
             Ok(state)
         },
     )?;
