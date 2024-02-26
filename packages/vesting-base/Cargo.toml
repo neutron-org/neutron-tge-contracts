@@ -13,10 +13,10 @@ backtraces = ["cosmwasm-std/backtraces"]
 library = []
 
 [dependencies]
-cw20 = { version = "0.15" }
+cw20 = { workspace = true }
 cosmwasm-std = { workspace = true }
 cw-storage-plus = { workspace = true }
-astroport = { path = "../../packages/astroport" }
+astroport = { workspace = true }
 thiserror = { workspace = true }
 # we keep it at 0.15 instead of latest version just for vesting investors contract
 cw-utils = "0.15"

@@ -3,9 +3,9 @@ use astroport::common::OwnershipProposal;
 use cosmwasm_std::{Addr, Deps, StdResult};
 use cw_storage_plus::{Bound, Item, Map, SnapshotItem, SnapshotMap, Strategy};
 
-pub const CONFIG: Item<Config> = Item::new("config");
+pub(crate) const CONFIG: Item<Config> = Item::new("config");
 pub(crate) const OWNERSHIP_PROPOSAL: Item<OwnershipProposal> = Item::new("ownership_proposal");
-pub const VESTING_MANAGERS: Map<Addr, ()> = Map::new("vesting_managers");
+pub(crate) const VESTING_MANAGERS: Map<Addr, ()> = Map::new("vesting_managers");
 pub(crate) const VESTING_STATE: SnapshotItem<VestingState> = SnapshotItem::new(
     "vesting_state",
     "vesting_state__checkpoints",
@@ -31,14 +31,14 @@ pub(crate) const VESTING_INFO_HISTORICAL: SnapshotMap<Addr, VestingInfo> = Snaps
     Strategy::EveryBlock,
 );
 
-pub fn vesting_state(historical: bool) -> SnapshotItem<'static, VestingState> {
+pub(crate) fn vesting_state(historical: bool) -> SnapshotItem<'static, VestingState> {
     if historical {
         return VESTING_STATE_HISTORICAL;
     }
     VESTING_STATE
 }
 
-pub fn vesting_info(historical: bool) -> SnapshotMap<'static, Addr, VestingInfo> {
+pub(crate) fn vesting_info(historical: bool) -> SnapshotMap<'static, Addr, VestingInfo> {
     if historical {
         return VESTING_INFO_HISTORICAL;
     }

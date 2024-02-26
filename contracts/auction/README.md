@@ -20,7 +20,7 @@ The LP Bootstrap via auction contract facilitates cNTRN-NATIVE Neutron pool init
 ### Handle Messages
 
 | Message                     | Description                                                                                                                                                                                                                                                                                    |
-|-----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ExecuteMsg::Receive`       | ReceiveCW20 Hook which facilitates cNTRN tokens delegation by lockdrop participants / airdrop recipients                                                                                                                                                                                       |
 | `ExecuteMsg::UpdateConfig`  | Admin function to update any of the configuration parameters.                                                                                                                                                                                                                                  |
 | `ExecuteMsg::DepositUst`    | Facilitates UST deposits by users                                                                                                                                                                                                                                                              |
@@ -32,7 +32,7 @@ The LP Bootstrap via auction contract facilitates cNTRN-NATIVE Neutron pool init
 ### Handle Messages :: Callback
 
 | Message                                             | Description                                                                                          |
-|-----------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `CallbackMsg::UpdateStateOnLiquidityAdditionToPool` | Callback function to update state after liquidity is added to the cNTRN-UST Pool                     |
 | `CallbackMsg::UpdateStateOnRewardClaim`             | Callback function to update state after cNTRN rewards are claimed from the generator                 |
 | `CallbackMsg::WithdrawUserRewardsCallback`          | Callback function to facilitate cNTRN reward claiming and unlocked LP tokens withdrawal for the user |
@@ -40,7 +40,7 @@ The LP Bootstrap via auction contract facilitates cNTRN-NATIVE Neutron pool init
 ### Query Messages
 
 | Message              | Description                   |
-|----------------------|-------------------------------|
+| -------------------- | ----------------------------- |
 | `QueryMsg::Config`   | Returns the config info       |
 | `QueryMsg::State`    | Returns state of the contract |
 | `QueryMsg::UserInfo` | Returns user position details |
