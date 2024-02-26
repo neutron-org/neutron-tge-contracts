@@ -120,7 +120,7 @@ fn receive_cw20(
 /// * **vesting_accounts** list of accounts and associated vesting schedules to create.
 ///
 /// * **cw20_amount** sets the amount that confirms the total amount of all accounts to register.
-fn register_vesting_accounts(
+pub fn register_vesting_accounts(
     deps: DepsMut,
     vesting_accounts: Vec<VestingAccount>,
     amount: Uint128,
@@ -275,7 +275,7 @@ pub(crate) fn set_vesting_token(
     ]))
 }
 
-pub(crate) fn get_vesting_token(config: &Config) -> Result<AssetInfo, ContractError> {
+pub fn get_vesting_token(config: &Config) -> Result<AssetInfo, ContractError> {
     config
         .vesting_token
         .clone()
@@ -398,7 +398,7 @@ fn is_sender_whitelisted(store: &mut dyn Storage, config: &Config, sender: &Addr
 /// * **addr** receiver of the vested tokens.
 ///
 /// * **vesting_schedules** vesting schedules to validate.
-fn assert_vesting_schedules(
+pub fn assert_vesting_schedules(
     addr: &Addr,
     vesting_schedules: &[VestingSchedule],
 ) -> Result<(), ContractError> {
