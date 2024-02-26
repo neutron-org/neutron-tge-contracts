@@ -115,7 +115,7 @@ fn execute_migrate_liquidity(
 
     // if there is nothing to migrate just update vi and quit.
     // if there is only dust, than send it back to user, update vi and quit
-    let user_amount = if user_share < migration_config.dust_threshold {
+    if  user_share < migration_config.dust_threshold {
         if !user_share.is_zero() {
             resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: pair_info.liquidity_token.to_string(),
@@ -137,8 +137,6 @@ fn execute_migrate_liquidity(
             env.block.height,
         )?;
         return Ok(resp);
-    } else {
-        user_share
     };
 
     if let Some(slippage_tolerance) = slippage_tolerance {
@@ -153,7 +151,7 @@ fn execute_migrate_liquidity(
         CallbackMsg::MigrateLiquidityToClPair {
             xyk_pair: migration_config.xyk_pair.clone(),
             xyk_lp_token: pair_info.liquidity_token.clone(),
-            amount: user_amount,
+            amount: user_share,
             slippage_tolerance,
             cl_pair: migration_config.cl_pair.clone(),
             ntrn_denom: migration_config.ntrn_denom.clone(),
