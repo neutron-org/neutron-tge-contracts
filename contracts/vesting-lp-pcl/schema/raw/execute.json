@@ -209,27 +209,6 @@
     {
       "type": "object",
       "required": [
-        "migrate_liquidity_to_pcl_pool"
-      ],
-      "properties": {
-        "migrate_liquidity_to_pcl_pool": {
-          "type": "object",
-          "properties": {
-            "user": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
         "receive"
       ],
       "properties": {
