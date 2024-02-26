@@ -5,7 +5,7 @@ use cw20::Cw20ReceiveMsg;
 use vesting_base::msg::{
     ExecuteMsg as BaseExecute, ExecuteMsgHistorical, ExecuteMsgManaged, ExecuteMsgWithManagers,
 };
-use vesting_base::types::{VestingAccount, VestingAccountResponse};
+use vesting_base::types::{VestingAccount, VestingAccountFullInfo};
 
 /// This structure describes the parameters used for creating a contract.
 #[cw_serde]
@@ -76,7 +76,7 @@ pub enum CallbackMsg {
         cl_pair: Addr,
         ntrn_denom: String,
         paired_asset_denom: String,
-        user: VestingAccountResponse,
+        user: VestingAccountFullInfo,
     },
     ProvideLiquidityToClPairAfterWithdrawal {
         ntrn_denom: String,
@@ -85,10 +85,10 @@ pub enum CallbackMsg {
         paired_asset_init_balance: Uint128,
         cl_pair: Addr,
         slippage_tolerance: Decimal,
-        user: VestingAccountResponse,
+        user: VestingAccountFullInfo,
     },
     PostMigrationVestingReschedule {
-        user: VestingAccountResponse,
+        user: VestingAccountFullInfo,
         init_balance_pcl_lp: Uint128,
     },
 }

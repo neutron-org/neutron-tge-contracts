@@ -17,7 +17,7 @@ use vesting_base::handlers::query as base_query;
 use vesting_base::msg::{ExecuteMsg as BaseExecute, QueryMsg};
 use vesting_base::state::{vesting_info, vesting_state, CONFIG};
 use vesting_base::types::{
-    VestingAccountResponse, VestingInfo, VestingSchedule, VestingSchedulePoint,
+    VestingAccountFullInfo, VestingInfo, VestingSchedule, VestingSchedulePoint,
 };
 
 /// Contract name that is used for migration.
@@ -104,7 +104,7 @@ fn execute_migrate_liquidity(
     let vesting_info = vesting_info(config.extensions.historical);
     let info = vesting_info.load(deps.storage, address.clone())?;
     let mut resp = Response::default();
-    let user = VestingAccountResponse { address, info };
+    let user = VestingAccountFullInfo { address, info };
 
     // get pairs LP token addresses
     let pair_info: PairInfo = deps
@@ -127,6 +127,9 @@ fn execute_migrate_liquidity(
     }
 
     let user_share = compute_share(&user.info)?;
+
+    // if there is nothing to migrate just update vi and quit.
+    // if there is only dust, than send it back to user, update vi and quit
     let user_amount = if user_share < migration_config.dust_threshold {
         if !user_share.is_zero() {
             resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
@@ -139,14 +142,6 @@ fn execute_migrate_liquidity(
             }));
         }
 
-        Uint128::zero()
-    } else {
-        user_share
-    };
-
-    // if there is nothing to migrate just update vi and quit.
-    // if there is only dust, than send it back to user, update vi and quit
-    if user_amount.is_zero() {
         vesting_info.save(
             deps.storage,
             user.address.clone(),
@@ -157,7 +152,9 @@ fn execute_migrate_liquidity(
             env.block.height,
         )?;
         return Ok(resp);
-    }
+    } else {
+        user_share
+    };
 
     if let Some(slippage_tolerance) = slippage_tolerance {
         if slippage_tolerance.gt(&migration_config.max_slippage) {
@@ -253,7 +250,7 @@ fn migrate_liquidity_to_cl_pair_callback(
     cl_pair: Addr,
     ntrn_denom: String,
     paired_asset_denom: String,
-    user: VestingAccountResponse,
+    user: VestingAccountFullInfo,
 ) -> Result<Response, ContractError> {
     let ntrn_init_balance = deps
         .querier
@@ -267,17 +264,15 @@ fn migrate_liquidity_to_cl_pair_callback(
     let mut msgs: Vec<CosmosMsg> = vec![];
 
     // push message to withdraw liquidity from the xyk pair
-    if !amount.is_zero() {
-        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: xyk_lp_token.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Send {
-                contract: xyk_pair.to_string(),
-                amount,
-                msg: to_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
-            })?,
-            funds: vec![],
-        }))
-    }
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: xyk_lp_token.to_string(),
+        msg: to_binary(&Cw20ExecuteMsg::Send {
+            contract: xyk_pair.to_string(),
+            amount,
+            msg: to_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
+        })?,
+        funds: vec![],
+    }));
     let config = CONFIG.load(deps.storage)?;
     vesting_state(config.extensions.historical).update::<_, ContractError>(
         deps.storage,
@@ -315,7 +310,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     paired_asset_init_balance: Uint128,
     cl_pair_address: Addr,
     slippage_tolerance: Decimal,
-    user: VestingAccountResponse,
+    user: VestingAccountFullInfo,
 ) -> Result<Response, ContractError> {
     let ntrn_balance_after_withdrawal = deps
         .querier
@@ -343,24 +338,22 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
     )?;
     let current_balance = balance_response.balance;
 
-    if !withdrawn_ntrn_amount.is_zero() && !withdrawn_paired_asset_amount.is_zero() {
-        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
-            contract_addr: cl_pair_address.to_string(),
-            msg: to_binary(&PairExecuteMsg::ProvideLiquidity {
-                assets: vec![
-                    native_asset(ntrn_denom.clone(), withdrawn_ntrn_amount),
-                    native_asset(paired_asset_denom.clone(), withdrawn_paired_asset_amount),
-                ],
-                slippage_tolerance: Some(slippage_tolerance),
-                auto_stake: None,
-                receiver: None,
-            })?,
-            funds: vec![
-                Coin::new(withdrawn_ntrn_amount.into(), ntrn_denom),
-                Coin::new(withdrawn_paired_asset_amount.into(), paired_asset_denom),
+    msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: cl_pair_address.to_string(),
+        msg: to_binary(&PairExecuteMsg::ProvideLiquidity {
+            assets: vec![
+                native_asset(ntrn_denom.clone(), withdrawn_ntrn_amount),
+                native_asset(paired_asset_denom.clone(), withdrawn_paired_asset_amount),
             ],
-        }))
-    }
+            slippage_tolerance: Some(slippage_tolerance),
+            auto_stake: None,
+            receiver: None,
+        })?,
+        funds: vec![
+            Coin::new(withdrawn_ntrn_amount.into(), ntrn_denom),
+            Coin::new(withdrawn_paired_asset_amount.into(), paired_asset_denom),
+        ],
+    }));
 
     msgs.push(
         CallbackMsg::PostMigrationVestingReschedule {
@@ -376,7 +369,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
 fn post_migration_vesting_reschedule_callback(
     deps: DepsMut,
     env: Env,
-    user: &VestingAccountResponse,
+    user: &VestingAccountFullInfo,
     init_balance_pcl_lp: Uint128,
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
@@ -387,14 +380,20 @@ fn post_migration_vesting_reschedule_callback(
             address: env.contract.address.to_string(),
         },
     )?;
-    let current_balance = balance_response.balance.checked_sub(init_balance_pcl_lp)?;
+    let balance_diff = balance_response.balance.checked_sub(init_balance_pcl_lp)?;
 
-    let schedule = user.info.schedules.last().unwrap();
+    let schedule = user
+        .info
+        .schedules
+        .last()
+        .ok_or(ContractError::VestingScheduleExtractError(
+            user.address.to_string(),
+        ))?;
 
     let new_end_point = match &schedule.end_point {
         Some(end_point) => Option::from(VestingSchedulePoint {
             time: end_point.time,
-            amount: current_balance,
+            amount: balance_diff,
         }),
         None => None,
     };
@@ -418,13 +417,13 @@ fn post_migration_vesting_reschedule_callback(
         },
         env.block.height,
     )?;
-    if !current_balance.is_zero() {
+    if !balance_diff.is_zero() {
         let msgs = vec![CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: migration_config.new_lp_token.to_string(),
             funds: vec![],
             msg: to_binary(&Cw20ExecuteMsg::Send {
                 contract: migration_config.pcl_vesting.to_string(),
-                amount: current_balance,
+                amount: balance_diff,
                 msg: to_binary(&vesting_lp_pcl::msg::Cw20HookMsg::MigrateXYKLiquidity {
                     user_address_raw: user.address.clone(),
                     user_vesting_info: VestingInfo {

@@ -68,10 +68,6 @@ pub enum ExecuteMsg {
     HistoricalExtension {
         msg: ExecuteMsgHistorical,
     },
-    #[serde(rename = "migrate_liquidity_to_pcl_pool")]
-    MigrateLiquidityToPCLPool {
-        user: Option<String>,
-    },
     Receive(Cw20ReceiveMsg),
 }
 

@@ -8,10 +8,8 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::Cw20ReceiveMsg;
 use vesting_base::error::ContractError;
-use vesting_base::handlers::{
-    assert_vesting_schedules, get_vesting_token, register_vesting_accounts,
-};
 use vesting_base::handlers::{execute as base_execute, query as base_query};
+use vesting_base::handlers::{get_vesting_token, register_vesting_accounts};
 use vesting_base::msg::{ExecuteMsg as BaseExecute, QueryMsg};
 use vesting_base::state::{vesting_info, vesting_state, CONFIG, VESTING_MANAGERS};
 use vesting_base::types::{Config, Extensions, VestingInfo};
@@ -40,7 +38,7 @@ pub fn instantiate(
 
             extensions: Extensions {
                 historical: true,
-                managed: true,
+                managed: false,
                 with_managers: true,
             },
         },
@@ -86,25 +84,29 @@ fn receive_cw20(
 ) -> Result<Response, ContractError> {
     let config = CONFIG.load(deps.storage)?;
     let vesting_token = get_vesting_token(&config)?;
-
-    // Permission check
-    if !is_sender_whitelisted(
-        deps.storage,
-        &config,
-        &deps.api.addr_validate(&cw20_msg.sender)?,
-    ) || token_asset_info(info.sender) != vesting_token
-    {
-        return Err(ContractError::Unauthorized {});
-    }
+    let sender = info.sender;
 
     match from_binary(&cw20_msg.msg)? {
         Cw20HookMsg::RegisterVestingAccounts { vesting_accounts } => {
+            if !is_sender_whitelisted(
+                deps.storage,
+                &config,
+                &deps.api.addr_validate(sender.as_str())?,
+            ) || token_asset_info(sender.clone()) != vesting_token
+            {
+                return Err(ContractError::Unauthorized {});
+            }
             register_vesting_accounts(deps, vesting_accounts, cw20_msg.amount, env.block.height)
         }
         Cw20HookMsg::MigrateXYKLiquidity {
             user_address_raw,
             user_vesting_info,
-        } => handle_migrate_xyk_liquidity(deps, env, user_address_raw, user_vesting_info),
+        } => {
+            if !is_sender_xyk_vesting_lp(deps.storage, &deps.api.addr_validate(sender.as_str())?) {
+                return Err(ContractError::Unauthorized {});
+            }
+            handle_migrate_xyk_liquidity(deps, env, user_address_raw, user_vesting_info)
+        }
     }
 }
 
@@ -123,18 +125,23 @@ fn is_sender_whitelisted(store: &mut dyn Storage, config: &Config, sender: &Addr
     false
 }
 
+fn is_sender_xyk_vesting_lp(store: &mut dyn Storage, sender: &Addr) -> bool {
+    let xyk_vesting_lp_contract = XYK_VESTING_LP_CONTRACT.load(store).unwrap();
+    if *sender == xyk_vesting_lp_contract {
+        return true;
+    }
+
+    false
+}
+
 fn handle_migrate_xyk_liquidity(
     deps: DepsMut,
     env: Env,
-    user_addr_raw: Addr,
+    user_addr: Addr,
     user_vesting_info: VestingInfo,
 ) -> Result<Response, ContractError> {
     let height = env.block.height;
     let config = CONFIG.load(deps.storage)?;
-
-    let account_address = user_addr_raw;
-
-    assert_vesting_schedules(&account_address, &user_vesting_info.schedules)?;
 
     let mut to_deposit = Uint128::zero();
     for sch in &user_vesting_info.schedules {
@@ -148,7 +155,7 @@ fn handle_migrate_xyk_liquidity(
 
     let vesting_info = vesting_info(config.extensions.historical);
 
-    vesting_info.save(deps.storage, account_address, &user_vesting_info, height)?;
+    vesting_info.save(deps.storage, user_addr, &user_vesting_info, height)?;
 
     vesting_state(config.extensions.historical).update::<_, ContractError>(
         deps.storage,
