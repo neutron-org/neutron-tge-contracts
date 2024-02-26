@@ -6,7 +6,7 @@ use ::cw20_base::ContractError as Cw20ContractError;
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
+    to_json_binary, BankMsg, Binary, Coin, Deps, DepsMut, Env, MessageInfo, Response, StdError,
     StdResult, Uint128,
 };
 use cw2::set_contract_version;
@@ -74,6 +74,16 @@ pub fn instantiate(
     Ok(Response::new())
 }
 
+/// ## Description
+/// Exposes all the execute functions available in the contract.
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
+///
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
+///
+/// * **msg** is an object of type [`ExecuteMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -388,42 +398,51 @@ pub fn execute_mint(deps: DepsMut, env: Env, info: MessageInfo) -> Result<Respon
         .map_err(Cw20Error)
 }
 
+/// Exposes all the queries available in the contract.
+/// ## Params
+/// * **deps** is an object of type [`Deps`].
+///
+/// * **_env** is an object of type [`Env`].
+///
+/// * **msg** is an object of type [`QueryMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::WithdrawableAmount { address } => {
-            to_binary(&query_withdrawable_amount(deps, env, address)?)
+            to_json_binary(&query_withdrawable_amount(deps, env, address)?)
         }
-        QueryMsg::VestedAmount { address } => to_binary(&query_vested_amount(deps, env, address)?),
-        QueryMsg::Allocation { address } => to_binary(&query_allocation(deps, address)?),
+        QueryMsg::VestedAmount { address } => {
+            to_json_binary(&query_vested_amount(deps, env, address)?)
+        }
+        QueryMsg::Allocation { address } => to_json_binary(&query_allocation(deps, address)?),
         QueryMsg::Balance { address } => {
-            to_binary(&::cw20_base::contract::query_balance(deps, address)?)
+            to_json_binary(&::cw20_base::contract::query_balance(deps, address)?)
         }
         QueryMsg::TotalSupplyAtHeight { height } => {
-            to_binary(&query_total_supply_at_height(deps, height)?)
+            to_json_binary(&query_total_supply_at_height(deps, height)?)
         }
         QueryMsg::BalanceAtHeight { address, height } => {
-            to_binary(&query_balance_at_height(deps, address, height)?)
+            to_json_binary(&query_balance_at_height(deps, address, height)?)
         }
-        QueryMsg::TokenInfo {} => to_binary(&::cw20_base::contract::query_token_info(deps)?),
-        QueryMsg::Minter {} => to_binary(&::cw20_base::contract::query_minter(deps)?),
-        QueryMsg::Allowance { owner, spender } => to_binary(
+        QueryMsg::TokenInfo {} => to_json_binary(&::cw20_base::contract::query_token_info(deps)?),
+        QueryMsg::Minter {} => to_json_binary(&::cw20_base::contract::query_minter(deps)?),
+        QueryMsg::Allowance { owner, spender } => to_json_binary(
             &::cw20_base::allowances::query_allowance(deps, owner, spender)?,
         ),
         QueryMsg::AllAllowances {
             owner,
             start_after,
             limit,
-        } => to_binary(&::cw20_base::enumerable::query_all_allowances(
+        } => to_json_binary(&::cw20_base::enumerable::query_all_allowances(
             deps,
             owner,
             start_after,
             limit,
         )?),
-        QueryMsg::AllAccounts { start_after, limit } => to_binary(
+        QueryMsg::AllAccounts { start_after, limit } => to_json_binary(
             &::cw20_base::enumerable::query_all_accounts(deps, start_after, limit)?,
         ),
-        QueryMsg::Config {} => to_binary(&query_config(deps)?),
+        QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
     }
 }
 

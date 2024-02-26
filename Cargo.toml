@@ -33,6 +33,7 @@ cosmwasm-schema = { version = "1.4.1", default-features = false }
 astroport = { path = "packages/astroport", default-features = false }
 astroport-periphery = { path = "packages/astroport_periphery" }
 vesting-base = { path = "packages/vesting-base" }
+vesting-base-lp = {path = "packages/vesting-base-lp"}
 # setting cw-multi-test to 0.17.0 enables cosmwasm_1_1, we don't want that
 cw-multi-test = "0.16.5"
 itertools = "0.11.0"

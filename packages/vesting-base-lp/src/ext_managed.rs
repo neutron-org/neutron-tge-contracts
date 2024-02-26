@@ -83,7 +83,7 @@ fn remove_vesting_accounts(
 
             let transfer_msg = vesting_token
                 .with_balance(amount_to_claw_back)
-                .into_msg(&deps.querier, clawback_address.clone())?;
+                .into_msg(clawback_address.clone())?;
             response = response.add_message(transfer_msg);
 
             vesting_state(config.extensions.historical).update::<_, ContractError>(

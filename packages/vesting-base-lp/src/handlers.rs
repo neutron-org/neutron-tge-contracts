@@ -2,20 +2,29 @@ use crate::error::ContractError;
 use crate::ext_historical::{handle_execute_historical_msg, handle_query_historical_msg};
 use crate::ext_managed::{handle_execute_managed_msg, handle_query_managed_msg};
 use crate::ext_with_managers::{handle_execute_with_managers_msg, handle_query_managers_msg};
-use crate::msg::{Cw20HookMsg, ExecuteMsg, MigrateMsg, QueryMsg};
-use crate::state::{read_vesting_infos, vesting_info, vesting_state};
+use crate::msg::{CallbackMsg, Cw20HookMsg, ExecuteMsg, MigrateMsg, QueryMsg};
+use crate::state::{
+    read_vesting_infos, vesting_info, vesting_state, MIGRATION_STATUS, XYK_TO_CL_MIGRATION_CONFIG,
+};
 use crate::state::{CONFIG, OWNERSHIP_PROPOSAL, VESTING_MANAGERS};
 use crate::types::{
-    Config, OrderBy, VestingAccount, VestingAccountResponse, VestingAccountsResponse, VestingInfo,
-    VestingSchedule, VestingState,
+    Config, MigrationState, OrderBy, VestingAccount, VestingAccountResponse,
+    VestingAccountsResponse, VestingInfo, VestingSchedule, VestingSchedulePoint, VestingState,
+    XykToClMigrationConfig,
 };
-use astroport::asset::{addr_opt_validate, token_asset_info, AssetInfo, AssetInfoExt};
+use astroport::asset::{
+    addr_opt_validate, native_asset, token_asset_info, AssetInfo, AssetInfoExt, PairInfo,
+};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
-use cosmwasm_std::{
-    attr, from_json, to_json_binary, Addr, Binary, Deps, DepsMut, Env, MessageInfo, Response,
-    StdError, StdResult, Storage, Uint128,
+use astroport::pair::{
+    Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
 };
-use cw20::Cw20ReceiveMsg;
+
+use cosmwasm_std::{
+    attr, from_json, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
+    MessageInfo, Response, StdError, StdResult, Storage, Uint128, WasmMsg,
+};
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
 use cw_utils::must_pay;
 
 /// Exposes execute functions available in the contract.
@@ -25,6 +34,17 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
+    let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
+    if migration_state.unwrap_or(MigrationState::Completed) != MigrationState::Completed {
+        match msg {
+            ExecuteMsg::MigrateLiquidity {
+                slippage_tolerance: _,
+                batch_size: _,
+            } => {}
+            ExecuteMsg::Callback(..) => {}
+            _ => return Err(ContractError::MigrationIncomplete {}),
+        }
+    }
     match msg {
         ExecuteMsg::Claim { recipient, amount } => claim(deps, env, info, recipient, amount),
         ExecuteMsg::Receive(msg) => receive_cw20(deps, env, info, msg),
@@ -52,18 +72,18 @@ pub fn execute(
                 owner,
                 expires_in,
                 config.owner,
-                &OWNERSHIP_PROPOSAL,
+                OWNERSHIP_PROPOSAL,
             )
             .map_err(Into::into)
         }
         ExecuteMsg::DropOwnershipProposal {} => {
             let config: Config = CONFIG.load(deps.storage)?;
 
-            drop_ownership_proposal(deps, info, config.owner, &OWNERSHIP_PROPOSAL)
+            drop_ownership_proposal(deps, info, config.owner, OWNERSHIP_PROPOSAL)
                 .map_err(Into::into)
         }
         ExecuteMsg::ClaimOwnership {} => {
-            claim_ownership(deps, info, env, &OWNERSHIP_PROPOSAL, |deps, new_owner| {
+            claim_ownership(deps, info, env, OWNERSHIP_PROPOSAL, |deps, new_owner| {
                 CONFIG.update::<_, StdError>(deps.storage, |mut v| {
                     v.owner = new_owner;
                     Ok(v)
@@ -83,6 +103,11 @@ pub fn execute(
         ExecuteMsg::HistoricalExtension { msg } => {
             handle_execute_historical_msg(deps, env, info, msg)
         }
+        ExecuteMsg::MigrateLiquidity {
+            slippage_tolerance,
+            batch_size,
+        } => execute_migrate_liquidity(deps, env, slippage_tolerance, batch_size),
+        ExecuteMsg::Callback(msg) => _handle_callback(deps, env, info, msg),
     }
 }
 
@@ -216,10 +241,9 @@ fn claim(
     let mut response = Response::new();
 
     if !claim_amount.is_zero() {
-        let transfer_msg = vesting_token.with_balance(claim_amount).into_msg(
-            &deps.querier,
-            recipient.unwrap_or_else(|| info.sender.to_string()),
-        )?;
+        let transfer_msg = vesting_token
+            .with_balance(claim_amount)
+            .into_msg(recipient.unwrap_or_else(|| info.sender.to_string()))?;
         response = response.add_message(transfer_msg);
 
         sender_vesting_info.released_amount = sender_vesting_info
@@ -282,8 +306,331 @@ pub(crate) fn get_vesting_token(config: &Config) -> Result<AssetInfo, ContractEr
         .ok_or(ContractError::VestingTokenIsNotSet {})
 }
 
+fn execute_migrate_liquidity(
+    deps: DepsMut,
+    env: Env,
+    slippage_tolerance: Option<Decimal>,
+    batch_size: Option<u32>,
+) -> Result<Response, ContractError> {
+    let migration_state: MigrationState = MIGRATION_STATUS.load(deps.storage)?;
+    if migration_state == MigrationState::Completed {
+        return Err(ContractError::MigrationComplete {});
+    }
+    let migration_config: XykToClMigrationConfig = XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
+
+    let batch = if Some(batch_size).is_some() {
+        batch_size
+    } else {
+        Some(migration_config.batch_size)
+    };
+    let vesting_infos = read_vesting_infos(
+        deps.as_ref(),
+        migration_config.last_processed_user,
+        batch,
+        None,
+    )?;
+
+    let vesting_accounts: Vec<_> = vesting_infos
+        .into_iter()
+        .map(|(address, info)| VestingAccountResponse { address, info })
+        .collect();
+
+    if vesting_accounts.is_empty() {
+        MIGRATION_STATUS.save(deps.storage, &MigrationState::Completed)?;
+    }
+    let mut resp = Response::default();
+
+    // get pairs LP token addresses
+    let pair_info: PairInfo = deps
+        .querier
+        .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
+
+    for user in vesting_accounts.into_iter() {
+        let user_share = compute_share(&user.info)?;
+        let user_amount = if user_share < migration_config.dust_threshold {
+            if !user_share.is_zero() {
+                resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: pair_info.liquidity_token.to_string(),
+                    msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                        recipient: user.address.to_string(),
+                        amount: user_share,
+                    })?,
+                    funds: vec![],
+                }));
+            }
+
+            Uint128::zero()
+        } else {
+            user_share
+        };
+
+        if let Some(slippage_tolerance) = slippage_tolerance {
+            if slippage_tolerance.gt(&migration_config.max_slippage) {
+                return Err(ContractError::MigrationSlippageToBig {
+                    slippage_tolerance,
+                    max_slippage_tolerance: migration_config.max_slippage,
+                });
+            }
+        }
+
+        let slippage_tolerance = slippage_tolerance.unwrap_or(migration_config.max_slippage);
+
+        resp = resp.add_message(
+            CallbackMsg::MigrateLiquidityToClPair {
+                xyk_pair: migration_config.xyk_pair.clone(),
+                xyk_lp_token: pair_info.liquidity_token.clone(),
+                amount: user_amount,
+                slippage_tolerance,
+                cl_pair: migration_config.cl_pair.clone(),
+                ntrn_denom: migration_config.ntrn_denom.clone(),
+                paired_asset_denom: migration_config.paired_denom.clone(),
+                user,
+            }
+            .to_cosmos_msg(&env)?,
+        );
+    }
+
+    Ok(resp)
+}
+
+fn _handle_callback(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    msg: CallbackMsg,
+) -> Result<Response, ContractError> {
+    // Only the contract itself can call callbacks
+    if info.sender != env.contract.address {
+        return Err(ContractError::Unauthorized {});
+    }
+    match msg {
+        CallbackMsg::MigrateLiquidityToClPair {
+            xyk_pair,
+            xyk_lp_token,
+            amount,
+            slippage_tolerance,
+            cl_pair,
+            ntrn_denom,
+            paired_asset_denom,
+            user,
+        } => migrate_liquidity_to_cl_pair_callback(
+            deps,
+            env,
+            xyk_pair,
+            xyk_lp_token,
+            amount,
+            slippage_tolerance,
+            cl_pair,
+            ntrn_denom,
+            paired_asset_denom,
+            user,
+        ),
+        CallbackMsg::ProvideLiquidityToClPairAfterWithdrawal {
+            ntrn_denom,
+            ntrn_init_balance,
+            paired_asset_denom,
+            paired_asset_init_balance,
+            cl_pair,
+            slippage_tolerance,
+            user,
+        } => provide_liquidity_to_cl_pair_after_withdrawal_callback(
+            deps,
+            env,
+            ntrn_denom,
+            ntrn_init_balance,
+            paired_asset_denom,
+            paired_asset_init_balance,
+            cl_pair,
+            slippage_tolerance,
+            user,
+        ),
+        CallbackMsg::PostMigrationVestingReschedule { user } => {
+            post_migration_vesting_reschedule_callback(deps, env, &user)
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn migrate_liquidity_to_cl_pair_callback(
+    deps: DepsMut,
+    env: Env,
+    xyk_pair: Addr,
+    xyk_lp_token: Addr,
+    amount: Uint128,
+    slippage_tolerance: Decimal,
+    cl_pair: Addr,
+    ntrn_denom: String,
+    paired_asset_denom: String,
+    user: VestingAccountResponse,
+) -> Result<Response, ContractError> {
+    let ntrn_init_balance = deps
+        .querier
+        .query_balance(env.contract.address.to_string(), ntrn_denom.clone())?
+        .amount;
+    let paired_asset_init_balance = deps
+        .querier
+        .query_balance(env.contract.address.to_string(), paired_asset_denom.clone())?
+        .amount;
+
+    let mut msgs: Vec<CosmosMsg> = vec![];
+    // push message to withdraw liquidity from the xyk pair
+    if !amount.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: xyk_lp_token.to_string(),
+            msg: to_json_binary(&Cw20ExecuteMsg::Send {
+                contract: xyk_pair.to_string(),
+                amount,
+                msg: to_json_binary(&PairCw20HookMsg::WithdrawLiquidity { assets: vec![] })?,
+            })?,
+            funds: vec![],
+        }))
+    }
+    // push the next migration step as a callback message
+    msgs.push(
+        CallbackMsg::ProvideLiquidityToClPairAfterWithdrawal {
+            ntrn_denom,
+            ntrn_init_balance,
+            paired_asset_denom,
+            paired_asset_init_balance,
+            cl_pair,
+            slippage_tolerance,
+            user,
+        }
+        .to_cosmos_msg(&env)?,
+    );
+
+    Ok(Response::default().add_messages(msgs))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
+    deps: DepsMut,
+    env: Env,
+    ntrn_denom: String,
+    ntrn_init_balance: Uint128,
+    paired_asset_denom: String,
+    paired_asset_init_balance: Uint128,
+    cl_pair_address: Addr,
+    slippage_tolerance: Decimal,
+    user: VestingAccountResponse,
+) -> Result<Response, ContractError> {
+    let ntrn_balance_after_withdrawal = deps
+        .querier
+        .query_balance(env.contract.address.to_string(), ntrn_denom.clone())?
+        .amount;
+    let paired_asset_balance_after_withdrawal = deps
+        .querier
+        .query_balance(env.contract.address.to_string(), paired_asset_denom.clone())?
+        .amount;
+
+    // calc amount of assets that's been withdrawn
+    let withdrawn_ntrn_amount = ntrn_balance_after_withdrawal.checked_sub(ntrn_init_balance)?;
+    let withdrawn_paired_asset_amount =
+        paired_asset_balance_after_withdrawal.checked_sub(paired_asset_init_balance)?;
+    let mut msgs: Vec<CosmosMsg> = vec![];
+
+    if !withdrawn_ntrn_amount.is_zero() && !withdrawn_paired_asset_amount.is_zero() {
+        msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: cl_pair_address.to_string(),
+            msg: to_json_binary(&PairExecuteMsg::ProvideLiquidity {
+                assets: vec![
+                    native_asset(ntrn_denom.clone(), withdrawn_ntrn_amount),
+                    native_asset(paired_asset_denom.clone(), withdrawn_paired_asset_amount),
+                ],
+                slippage_tolerance: Some(slippage_tolerance),
+                auto_stake: None,
+                receiver: None,
+            })?,
+            funds: vec![
+                Coin::new(withdrawn_ntrn_amount.into(), ntrn_denom),
+                Coin::new(withdrawn_paired_asset_amount.into(), paired_asset_denom),
+            ],
+        }))
+    }
+
+    msgs.push(CallbackMsg::PostMigrationVestingReschedule { user }.to_cosmos_msg(&env)?);
+
+    Ok(Response::default().add_messages(msgs))
+}
+
+fn post_migration_vesting_reschedule_callback(
+    deps: DepsMut,
+    env: Env,
+    user: &VestingAccountResponse,
+) -> Result<Response, ContractError> {
+    let config = CONFIG.load(deps.storage)?;
+    let mut migration_config: XykToClMigrationConfig =
+        XYK_TO_CL_MIGRATION_CONFIG.load(deps.storage)?;
+    let balance_response: BalanceResponse = deps.querier.query_wasm_smart(
+        &migration_config.new_lp_token,
+        &Cw20QueryMsg::Balance {
+            address: env.contract.address.to_string(),
+        },
+    )?;
+    let state = vesting_state(config.extensions.historical).load(deps.storage)?;
+    let current_balance = balance_response.balance;
+
+    let balance_diff: Uint128 = if !current_balance.is_zero() {
+        current_balance.checked_sub(state.total_granted)?
+    } else {
+        Uint128::zero()
+    };
+
+    let schedule = user.info.schedules.last().unwrap();
+
+    let new_end_point;
+    if let Some(end_point) = &schedule.end_point {
+        new_end_point = Option::from(VestingSchedulePoint {
+            time: end_point.time,
+            amount: balance_diff,
+        })
+    } else {
+        new_end_point = None
+    }
+
+    let new_schedule = VestingSchedule {
+        start_point: VestingSchedulePoint {
+            time: schedule.start_point.time,
+            amount: Uint128::zero(),
+        },
+        end_point: new_end_point,
+    };
+
+    let vesting_info = vesting_info(config.extensions.historical);
+
+    vesting_info.save(
+        deps.storage,
+        user.address.clone(),
+        &VestingInfo {
+            schedules: vec![new_schedule],
+            released_amount: Uint128::zero(),
+        },
+        env.block.height,
+    )?;
+
+    vesting_state(config.extensions.historical).update::<_, ContractError>(
+        deps.storage,
+        env.block.height,
+        |s| {
+            let mut state = s.unwrap_or_default();
+            state.total_granted = state.total_granted.checked_add(balance_diff)?;
+            Ok(state)
+        },
+    )?;
+
+    migration_config.last_processed_user = Some(user.address.clone());
+    XYK_TO_CL_MIGRATION_CONFIG.save(deps.storage, &migration_config)?;
+
+    Ok(Response::default())
+}
+
 /// Exposes all the queries available in the contract.
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    let migration_state = MIGRATION_STATUS.may_load(deps.storage)?;
+    if migration_state.unwrap_or(MigrationState::Completed) != MigrationState::Completed {
+        return Err(ContractError::MigrationIncomplete {}.into());
+    }
+
     match msg {
         QueryMsg::Config {} => Ok(to_json_binary(&query_config(deps)?)?),
         QueryMsg::VestingAccount { address } => {
@@ -379,7 +726,41 @@ fn query_vesting_available_amount(deps: Deps, env: Env, address: String) -> StdR
 }
 
 /// Manages contract migration.
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> Result<Response, ContractError> {
+pub fn migrate(deps: DepsMut, env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
+    let mut config = CONFIG.load(deps.storage)?;
+    XYK_TO_CL_MIGRATION_CONFIG.save(
+        deps.storage,
+        &XykToClMigrationConfig {
+            max_slippage: msg.max_slippage,
+            ntrn_denom: msg.ntrn_denom,
+            xyk_pair: deps.api.addr_validate(msg.xyk_pair.as_str())?,
+            paired_denom: msg.paired_denom,
+            cl_pair: deps.api.addr_validate(msg.cl_pair.as_str())?,
+            batch_size: msg.batch_size,
+            last_processed_user: None,
+            new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
+            dust_threshold: msg.dust_threshold,
+        },
+    )?;
+    config.vesting_token = Some(AssetInfo::Token {
+        contract_addr: deps.api.addr_validate(msg.new_lp_token.as_str())?,
+    });
+
+    CONFIG.save(deps.storage, &config)?;
+
+    vesting_state(config.extensions.historical).update::<_, ContractError>(
+        deps.storage,
+        env.block.height,
+        |s| {
+            let mut state = s.unwrap_or_default();
+            state.total_granted = Uint128::zero();
+            state.total_released = Uint128::zero();
+            Ok(state)
+        },
+    )?;
+
+    MIGRATION_STATUS.save(deps.storage, &MigrationState::Started)?;
+
     Ok(Response::default())
 }
 
@@ -447,4 +828,15 @@ fn compute_available_amount(current_time: u64, vesting_info: &VestingInfo) -> St
     available_amount
         .checked_sub(vesting_info.released_amount)
         .map_err(StdError::from)
+}
+
+fn compute_share(vesting_info: &VestingInfo) -> StdResult<Uint128> {
+    let mut available_amount: Uint128 = Uint128::zero();
+    for sch in &vesting_info.schedules {
+        if let Some(end_point) = &sch.end_point {
+            available_amount = available_amount.checked_add(end_point.amount)?
+        }
+    }
+
+    Ok(available_amount.checked_sub(vesting_info.released_amount)?)
 }

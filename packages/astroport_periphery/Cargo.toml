@@ -13,10 +13,17 @@ backtraces = ["cosmwasm-std/backtraces"]
 
 [dependencies]
 cw20 = { workspace = true }
-# we have to keep it at 0.15.1 instead of latest version for the lockdrop contract
-cw-storage-plus = "0.15.1"
 cosmwasm-std = { workspace = true }
 cosmwasm-schema = { workspace = true }
-astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v2.5.0" }
+schemars = { workspace = true }
+serde = { workspace = true }
+# we have to keep it at 0.15.1 instead of latest version for the lockdrop contract
+cw-storage-plus = "0.15.1"
+terraswap = "2.6"
+astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v3.6.0" }
+
+[dev-dependencies]
+cosmwasm-std = { workspace = true }
+cosmwasm-schema = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }

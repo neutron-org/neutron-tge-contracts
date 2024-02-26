@@ -7,8 +7,8 @@ use astroport::oracle::{Config, ExecuteMsg, InstantiateMsg, QueryMsg};
 use astroport::pair::TWAP_PRECISION;
 use astroport::querier::query_pair_info;
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response, Uint128,
-    Uint256, Uint64,
+    entry_point, to_json_binary, Binary, Decimal256, Deps, DepsMut, Env, MessageInfo, Response,
+    Uint128, Uint256, Uint64,
 };
 use cw2::set_contract_version;
 use std::ops::Div;
@@ -42,10 +42,16 @@ pub fn instantiate(
     Ok(Response::default())
 }
 
+/// ## Description
 /// Exposes all the execute functions available in the contract.
+/// ## Params
+/// * **deps** is an object of type [`DepsMut`].
 ///
-/// ## Variants
-/// * **ExecuteMsg::Update {}** Updates the local TWAP values for the assets in the Astroport pool.
+/// * **env** is an object of type [`Env`].
+///
+/// * **info** is an object of type [`MessageInfo`].
+///
+/// * **msg** is an object of type [`ExecuteMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
@@ -174,19 +180,21 @@ pub fn update(deps: DepsMut, env: Env) -> Result<Response, ContractError> {
 }
 
 /// Exposes all the queries available in the contract.
+/// ## Params
+/// * **deps** is an object of type [`Deps`].
 ///
-/// ## Queries
-/// * **QueryMsg::Consult { token, amount }** Validates assets and calculates a new average
-/// amount with updated precision
+/// * **_env** is an object of type [`Env`].
+///
+/// * **msg** is an object of type [`QueryMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> Result<Binary, ContractError> {
     match msg {
-        QueryMsg::Consult { token, amount } => Ok(to_binary(&consult(deps, token, amount)?)?),
+        QueryMsg::Consult { token, amount } => Ok(to_json_binary(&consult(deps, token, amount)?)?),
         QueryMsg::TWAPAtHeight { token, height } => {
-            Ok(to_binary(&twap_at_height(deps, token, height)?)?)
+            Ok(to_json_binary(&twap_at_height(deps, token, height)?)?)
         }
-        QueryMsg::Config {} => Ok(to_binary(&query_config(deps)?)?),
-        QueryMsg::LastUpdateTimestamp {} => Ok(to_binary(&query_last_update_ts(deps)?)?),
+        QueryMsg::Config {} => Ok(to_json_binary(&query_config(deps)?)?),
+        QueryMsg::LastUpdateTimestamp {} => Ok(to_json_binary(&query_last_update_ts(deps)?)?),
     }
 }
 
