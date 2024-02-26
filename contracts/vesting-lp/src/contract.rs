@@ -115,7 +115,7 @@ fn execute_migrate_liquidity(
 
     // if there is nothing to migrate just update vi and quit.
     // if there is only dust, than send it back to user, update vi and quit
-    if  user_share < migration_config.dust_threshold {
+    if user_share < migration_config.dust_threshold {
         if !user_share.is_zero() {
             resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: pair_info.liquidity_token.to_string(),
