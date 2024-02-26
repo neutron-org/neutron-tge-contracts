@@ -2,8 +2,8 @@ use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
-    WasmMsg,
+    to_json_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128,
+    Uint256, WasmMsg,
 };
 use cw20::Cw20ReceiveMsg;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
@@ -163,6 +163,14 @@ pub enum ExecuteMsg {
     DropOwnershipProposal {},
     /// Used to claim contract ownership.
     ClaimOwnership {},
+    /// Migrates user's locked liquidity from XYK pools to PCL ones, transferring lockdrop participation
+    /// rewards to the address which liquidity has been migrated.
+    #[serde(rename = "migrate_liquidity_to_pcl_pools")]
+    MigrateLiquidityToPCLPools {
+        /// The address which liquidity is supposed to be transferred. If no user address is
+        /// provided, the message sender's address is used.
+        user_address_raw: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -181,23 +189,80 @@ pub enum Cw20HookMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CallbackMsg {
+    /// Updates contract state after dual staking rewards are claimed from the generator contract.
     UpdatePoolOnDualRewardsClaim {
         pool_type: PoolType,
         prev_ntrn_balance: Uint128,
         prev_proxy_reward_balances: Vec<Asset>,
     },
+    /// Withdraws user rewards and LP Tokens after claims / unlocks.
     WithdrawUserLockupRewardsCallback {
         pool_type: PoolType,
         user_address: Addr,
         duration: u64,
         withdraw_lp_stake: bool,
     },
-    // WithdrawLiquidityFromTerraswapCallback {
-    //     terraswap_lp_token: Addr,
-    //     astroport_pool: Addr,
-    //     prev_assets: [terraswap::asset::Asset; 2],
-    //     slippage_tolerance: Option<Decimal>,
-    // },
+    /// Entry point for a single lockup position migration to PCL lockdrop contract. Performs
+    /// generator rewards claiming and initializes liquidity withdrawal+transfer process by
+    /// invocation of the respective callback message.
+    #[serde(rename = "init_migrate_lockup_to_pcl_pools_callback")]
+    InitMigrateLockupToPCLPoolsCallback {
+        /// The type of the pool the lockup is related to.
+        pool_type: PoolType,
+        /// The address of the user which owns the lockup.
+        user_address: Addr,
+        /// The duration of the lock period.
+        duration: u64,
+    },
+    /// The second step in the lockup's XYK -> PCL liquidity migration process.
+    /// Claims all possible rewards that the user is eligible of and transfers them to the user.
+    TransferAllRewardsBeforeMigrationCallback {
+        /// The type of the pool the lockup is related to.
+        pool_type: PoolType,
+        /// The address of the user which owns the lockup.
+        user_address: Addr,
+        /// The duration of the lock period.
+        duration: u64,
+    },
+    /// The third step in the lockup's XYK -> PCL liquidity migration process.
+    /// Handles withdrawal of staked liquidity from the generator contract and liquidity transfer to
+    /// the PCL lockdrop contract.
+    WithdrawUserLockupCallback {
+        /// The type of the pool the lockup is related to.
+        pool_type: PoolType,
+        /// The address of the user which owns the lockup.
+        user_address: Addr,
+        /// The duration of the lock period.
+        duration: u64,
+        /// The address of the generator which possesses the staked liquidity.
+        generator: Addr,
+        /// The address of the pool's liquidity token.
+        astroport_lp_token: Addr,
+        /// The amount of LP token to be unstaked and withdrawn.
+        astroport_lp_amount: Uint128,
+    },
+    /// The fourth step in the lockup's XYK -> PCL liquidity migration process.
+    /// Invokes the PCL lockdrop contract's MigrateXYKLiquidity handler which creates an LP position
+    /// in the PCL pool and a lockup in the PCL lockdrop contract in accordance with the withdrawn
+    /// user's lockup position.
+    #[serde(rename = "migrate_user_lockup_to_pcl_pair_callback")]
+    MigrateUserLockupToPCLPairCallback {
+        /// The type of the pool the lockup is related to.
+        pool_type: PoolType,
+        /// The address of the user which owns the lockup.
+        user_address: Addr,
+        /// The duration of the lock period.
+        duration: u64,
+        /// The balance in untrn of the XYK lockdrop contract at the third migration step. Is used
+        /// in the callback to calculate the amount of untrn been withdrawn from the XYK pool.
+        ntrn_balance: Uint128,
+        /// The denom of the paired asset (the asset paired with untrn in the pool).
+        paired_asset_denom: String,
+        /// The balance in the paired denom of the XYK lockdrop contract at the third migration step.
+        /// Is used in the callback to calculate the amount of the paired asset been withdrawn
+        /// from the XYK pool.
+        paired_asset_balance: Uint128,
+    },
 }
 
 // Modified from
@@ -206,7 +271,7 @@ impl CallbackMsg {
     pub fn to_cosmos_msg(self, env: &Env) -> StdResult<CosmosMsg> {
         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: env.contract.address.to_string(),
-            msg: to_binary(&ExecuteMsg::Callback(self))?,
+            msg: to_json_binary(&ExecuteMsg::Callback(self))?,
             funds: vec![],
         }))
     }
@@ -242,7 +307,11 @@ pub enum QueryMsg {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct MigrateMsg {}
+pub struct MigrateMsg {
+    /// The address of the lockdrop contract working with PCL pools. Used to transfer
+    /// the lockdrop's liquidity locked in XYK pools to more efficient pools.
+    pub pcl_lockdrop_contract: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub struct MigrationInfo {

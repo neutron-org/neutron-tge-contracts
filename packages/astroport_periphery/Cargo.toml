@@ -17,6 +17,6 @@ cw20 = { workspace = true }
 cw-storage-plus = "0.15.1"
 cosmwasm-std = { workspace = true }
 cosmwasm-schema = { workspace = true }
-astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v2.5.0" }
+astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v3.11.0" }
 schemars = { workspace = true }
 serde = { workspace = true }

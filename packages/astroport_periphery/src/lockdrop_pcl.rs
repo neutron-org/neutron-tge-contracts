@@ -1,11 +1,14 @@
+use crate::lockdrop::{
+    LockupInfoV2 as LockdropXYKLockupInfoV2, PoolType as LockdropXYKPoolType,
+    UserInfo as LockdropXYKUserInfo,
+};
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{
-    to_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128, Uint256,
-    WasmMsg,
+    to_json_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128,
+    Uint256, WasmMsg,
 };
-use cw20::Cw20ReceiveMsg;
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -15,6 +18,15 @@ use serde::{Deserialize, Serialize};
 pub enum PoolType {
     USDC,
     ATOM,
+}
+
+impl From<LockdropXYKPoolType> for PoolType {
+    fn from(t: LockdropXYKPoolType) -> PoolType {
+        match t {
+            LockdropXYKPoolType::USDC => PoolType::USDC,
+            LockdropXYKPoolType::ATOM => PoolType::ATOM,
+        }
+    }
 }
 
 #[allow(clippy::from_over_into)]
@@ -70,76 +82,53 @@ impl<'a> Prefixer<'a> for PoolType {
 pub struct InstantiateMsg {
     /// Account which can update config
     pub owner: Option<String>,
-    /// Account which can update token addresses and generator
-    pub token_info_manager: String,
+    /// Original XYK lockdrop contract address
+    pub xyk_lockdrop_contract: String,
     /// Credits contract address
     pub credits_contract: String,
     /// Auction contract address
     pub auction_contract: String,
-    /// Timestamp when Contract will start accepting LP Token deposits
-    pub init_timestamp: u64,
-    /// Number of seconds during which lockup deposits will be accepted
-    pub lock_window: u64,
-    /// Withdrawal Window Length :: Post the deposit window
-    pub withdrawal_window: u64,
-    /// Min. no. of weeks allowed for lockup
-    pub min_lock_duration: u64,
-    /// Max. no. of weeks allowed for lockup
-    pub max_lock_duration: u64,
-    /// Max lockup positions a user can have
-    pub max_positions_per_user: u32,
+    /// Incentives (Staking for dual rewards) contract address
+    pub incentives: String,
     /// Describes rewards coefficients for each lockup duration
     pub lockup_rewards_info: Vec<LockupRewardsInfo>,
+    /// Address of the LP token of the NTRN/USDC PCL pool
+    pub usdc_token: String,
+    /// Address of the LP token of the NTRN/ATOM PCL pool
+    pub atom_token: String,
+
+    /*
+    Since no NTRN rewards are distributed from the PCL lockdrop contract, the fields below are
+    just used to fill the contract's state with the same values as it is in the XYK lockdrop
+    contract. So the values should be just copied from the XYK lockdrop contract's state.
+    */
+    /// Total NTRN lockdrop incentives distributed among the users.
+    pub lockdrop_incentives: Uint128,
+    /// Share of total NTRN incentives allocated to the NTRN/USDC PCL pool
+    pub usdc_incentives_share: Uint128,
+    /// Weighted LP Token balance used to calculate NTRN rewards a particular NTRN/USDC pool
+    /// depositor can claim
+    pub usdc_weighted_amount: Uint256,
+    /// Share of total NTRN incentives allocated to the NTRN/ATOM PCL pool
+    pub atom_incentives_share: Uint128,
+    /// Weighted LP Token balance used to calculate NTRN rewards a particular NTRN/ATOM pool
+    /// depositor can claim
+    pub atom_weighted_amount: Uint256,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct UpdateConfigMsg {
-    /// Bootstrap Auction contract address
-    pub auction_contract_address: Option<String>,
-    /// Generator (Staking for dual rewards) contract address
-    pub generator_address: Option<String>,
+    /// incentives (Staking for dual rewards) contract address
+    pub incentives_address: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    IncreaseLockupFor {
-        user_address: String,
-        pool_type: PoolType,
-        amount: Uint128,
-        duration: u64,
-    },
-    // Receive hook used to accept LP Token deposits
-    Receive(Cw20ReceiveMsg),
-    #[serde(rename = "increase_ntrn_incentives")]
-    IncreaseNTRNIncentives {},
     // ADMIN Function ::: To update configuration
     UpdateConfig {
         new_config: UpdateConfigMsg,
     },
-    SetTokenInfo {
-        atom_token: String,
-        usdc_token: String,
-        generator: String,
-    },
-    // Function to facilitate LP Token withdrawals from lockups
-    WithdrawFromLockup {
-        user_address: String,
-        pool_type: PoolType,
-        duration: u64,
-        amount: Uint128,
-    },
-
-    // ADMIN Function ::: To Migrate liquidity from terraswap to astroport
-    // MigrateLiquidity {
-    //     terraswap_lp_token: String,
-    //     astroport_pool_addr: String,
-    //     slippage_tolerance: Option<Decimal>,
-    // },
-    // ADMIN Function ::: To stake LP Tokens with the generator contract
-    // StakeLpTokens {
-    //     pool_type: PoolType,
-    // },
     // Facilitates ASTRO reward withdrawal which have not been delegated to bootstrap auction along with optional Unlock (can be forceful)
     // If withdraw_lp_stake is true and force_unlock is false, it Unlocks the lockup position if its lockup duration has concluded
     // If both withdraw_lp_stake and force_unlock are true, it forcefully unlocks the positon. user needs to approve ASTRO Token to
@@ -163,18 +152,22 @@ pub enum ExecuteMsg {
     DropOwnershipProposal {},
     /// Used to claim contract ownership.
     ClaimOwnership {},
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum Cw20HookMsg {
-    // Called by the bootstrap auction contract when liquidity is added to the
-    // Pool to enable ASTRO withdrawals by users
-    // EnableClaims {},
-    // ADMIN Function ::: Add new Pool (Only Terraswap Pools)
-    InitializePool {
-        pool_type: PoolType,
-        incentives_share: Uint128,
+    /// A handler to receive lockdrop liquidity migrated from xyl pools to PCL ones. Only callable
+    /// by the original lockdrop contract. Expects two **Coin**s to be attached as funds.
+    #[serde(rename = "migrate_xyk_liquidity")]
+    MigrateXYKLiquidity {
+        /// The type of the pool the lockup is related to.
+        pool_type: LockdropXYKPoolType,
+        /// The address of the user which owns the lockup.
+        user_address_raw: String,
+        /// The duration of the lock period.
+        duration: u64,
+        /// The lockup owner's info from the XYK lockdrop contract. Is used to create a UserInfo
+        /// entry on the PCL lockdrop contract's side.
+        user_info: LockdropXYKUserInfo,
+        /// The lockup info from the XYK lockdrop contract. Is used to create a LockupInfoV2 entry
+        /// on the PCL lockdrop contract's side.
+        lockup_info: LockdropXYKLockupInfoV2,
     },
 }
 
@@ -183,8 +176,7 @@ pub enum Cw20HookMsg {
 pub enum CallbackMsg {
     UpdatePoolOnDualRewardsClaim {
         pool_type: PoolType,
-        prev_ntrn_balance: Uint128,
-        prev_proxy_reward_balances: Vec<Asset>,
+        prev_reward_balances: Vec<Asset>,
     },
     WithdrawUserLockupRewardsCallback {
         pool_type: PoolType,
@@ -192,12 +184,28 @@ pub enum CallbackMsg {
         duration: u64,
         withdraw_lp_stake: bool,
     },
-    // WithdrawLiquidityFromTerraswapCallback {
-    //     terraswap_lp_token: Addr,
-    //     astroport_pool: Addr,
-    //     prev_assets: [terraswap::asset::Asset; 2],
-    //     slippage_tolerance: Option<Decimal>,
-    // },
+    /// Completes the liquidity migration process by making all necessary state updates for the lockup
+    /// position.
+    FinishLockupMigrationCallback {
+        /// The type of the pool the lockup is related to.
+        pool_type: PoolType,
+        /// The address of the user which owns the lockup.
+        user_address: Addr,
+        /// The duration of the lock period.
+        duration: u64,
+        /// The address of the LP token of the pool.
+        lp_token: String,
+        /// The amount of staked LP token the PCL lockdrop contract possesses of before liquidity
+        /// provision and staking to the incentives. Used to calculate LP token amount received for
+        /// liquidity provision.
+        staked_lp_token_amount: Uint128,
+        /// The lockup owner's info from the XYK lockdrop contract. Is used to create a UserInfo
+        /// entry on the PCL lockdrop contract's side.
+        user_info: LockdropXYKUserInfo,
+        /// The lockup info from the XYK lockdrop contract. Is used to create a LockupInfoV2 entry
+        /// on the PCL lockdrop contract's side.
+        lockup_info: LockdropXYKLockupInfoV2,
+    },
 }
 
 // Modified from
@@ -206,7 +214,7 @@ impl CallbackMsg {
     pub fn to_cosmos_msg(self, env: &Env) -> StdResult<CosmosMsg> {
         Ok(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: env.contract.address.to_string(),
-            msg: to_binary(&ExecuteMsg::Callback(self))?,
+            msg: to_json_binary(&ExecuteMsg::Callback(self))?,
             funds: vec![],
         }))
     }
@@ -244,12 +252,6 @@ pub enum QueryMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct MigrateMsg {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
-pub struct MigrationInfo {
-    pub terraswap_migrated_amount: Uint128,
-    pub astroport_lp_token: Addr,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct LockupRewardsInfo {
     pub duration: u64,
@@ -260,28 +262,16 @@ pub struct LockupRewardsInfo {
 pub struct Config {
     /// Account which can update the config
     pub owner: Addr,
-    /// Account which can update the generator and token addresses
-    pub token_info_manager: Addr,
+    /// Original XYK lockdrop contract address
+    pub xyk_lockdrop_contract: Addr,
     /// Credits contract address
     pub credits_contract: Addr,
     /// Bootstrap Auction contract address
     pub auction_contract: Addr,
-    /// Generator (Staking for dual rewards) contract address
-    pub generator: Option<Addr>,
-    /// Timestamp when Contract will start accepting LP Token deposits
-    pub init_timestamp: u64,
-    /// Number of seconds during which lockup positions be accepted
-    pub lock_window: u64,
-    /// Withdrawal Window Length :: Post the deposit window
-    pub withdrawal_window: u64,
-    /// Min. no. of weeks allowed for lockup
-    pub min_lock_duration: u64,
-    /// Max. no. of weeks allowed for lockup
-    pub max_lock_duration: u64,
+    /// Incentives contract address
+    pub incentives: Addr,
     /// Total NTRN lockdrop incentives to be distributed among the users
     pub lockdrop_incentives: Uint128,
-    /// Max lockup positions a user can have
-    pub max_positions_per_user: u32,
     /// Describes rewards coefficients for each lockup duration
     pub lockup_rewards_info: Vec<LockupRewardsInfo>,
 }
@@ -296,17 +286,12 @@ pub struct State {
 pub struct PoolInfo {
     pub lp_token: Addr,
     pub amount_in_lockups: Uint128,
-    // pub migration_info: Option<MigrationInfo>,
     /// Share of total NTRN incentives allocated to this pool
     pub incentives_share: Uint128,
     /// Weighted LP Token balance used to calculate NTRN rewards a particular user can claim
     pub weighted_amount: Uint256,
-    /// Ratio of Generator NTRN rewards accured to astroport pool share
-    pub generator_ntrn_per_share: Decimal,
-    /// Ratio of Generator Proxy rewards accured to astroport pool share
-    pub generator_proxy_per_share: RestrictedVector<AssetInfo, Decimal>,
-    /// Boolean value indicating if the LP Tokens are staked with the Generator contract or not
-    pub is_staked: bool,
+    /// Ratio of incentives rewards accured to astroport pool share
+    pub incentives_rewards_per_share: RestrictedVector<AssetInfo, Decimal>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
@@ -319,8 +304,18 @@ pub struct UserInfo {
     pub lockup_positions_index: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct LockupInfoV1 {
+impl From<LockdropXYKUserInfo> for UserInfo {
+    fn from(i: LockdropXYKUserInfo) -> UserInfo {
+        UserInfo {
+            total_ntrn_rewards: i.total_ntrn_rewards,
+            ntrn_transferred: i.ntrn_transferred,
+            lockup_positions_index: i.lockup_positions_index,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct LockupInfo {
     /// Terraswap LP units locked by the user
     pub lp_units_locked: Uint128,
     pub astroport_lp_transferred: Option<Uint128>,
@@ -328,29 +323,28 @@ pub struct LockupInfoV1 {
     pub withdrawal_flag: bool,
     /// NTRN tokens received as rewards for participation in the lockdrop
     pub ntrn_rewards: Uint128,
-    /// Generator NTRN tokens loockup received as generator rewards
-    pub generator_ntrn_debt: Uint128,
-    /// Generator Proxy tokens lockup received as generator rewards
-    pub generator_proxy_debt: Uint128,
+    /// incentives tokens lockup received as incentives rewards
+    pub incentives_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Timestamp beyond which this position can be unlocked
     pub unlock_timestamp: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct LockupInfoV2 {
-    /// Terraswap LP units locked by the user
-    pub lp_units_locked: Uint128,
-    pub astroport_lp_transferred: Option<Uint128>,
-    /// Boolean value indicating if the user's has withdrawn funds post the only 1 withdrawal limit cutoff
-    pub withdrawal_flag: bool,
-    /// NTRN tokens received as rewards for participation in the lockdrop
-    pub ntrn_rewards: Uint128,
-    /// Generator NTRN tokens loockup received as generator rewards
-    pub generator_ntrn_debt: Uint128,
-    /// Generator Proxy tokens lockup received as generator rewards
-    pub generator_proxy_debt: RestrictedVector<AssetInfo, Uint128>,
-    /// Timestamp beyond which this position can be unlocked
-    pub unlock_timestamp: u64,
+impl LockupInfo {
+    /// Creates a lockup entry for PCL lockdrop contract based on a lockup entry for XYK lockdrop
+    /// contract. The **lp_units_locked** field is the amount of lp tokens minted by the PCL pool.
+    pub fn from_xyk_lockup_info(
+        i: LockdropXYKLockupInfoV2,
+        lp_units_locked: Uint128,
+    ) -> LockupInfo {
+        LockupInfo {
+            lp_units_locked,
+            astroport_lp_transferred: None,
+            withdrawal_flag: i.withdrawal_flag,
+            ntrn_rewards: i.ntrn_rewards,
+            incentives_debt: Default::default(),
+            unlock_timestamp: i.unlock_timestamp,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
@@ -369,8 +363,8 @@ pub struct UserInfoResponse {
     pub ntrn_transferred: bool,
     /// Lockup positions
     pub lockup_infos: Vec<LockUpInfoResponse>,
-    /// NTRN tokens receivable as generator rewards that user can claim
-    pub claimable_generator_ntrn_debt: Uint128,
+    /// Tokens receivable as incentives rewards that user can claim
+    pub claimable_incentives_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Number of lockup positions the user is having
     pub lockup_positions_index: u32,
 }
@@ -404,23 +398,14 @@ pub struct LockUpInfoResponse {
     /// NTRN tokens received as rewards for participation in the lockdrop
     pub ntrn_rewards: Uint128,
     pub duration: u64,
-    /// Generator NTRN tokens lockup received as generator rewards
-    pub generator_ntrn_debt: Uint128,
-    /// ASTRO tokens receivable as generator rewards that user can claim
-    pub claimable_generator_astro_debt: Uint128,
-    /// Generator Proxy tokens lockup received as generator rewards
-    pub generator_proxy_debt: RestrictedVector<AssetInfo, Uint128>,
-    /// Proxy tokens receivable as generator rewards that user can claim
-    pub claimable_generator_proxy_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// incentives tokens lockup received as incentives rewards
+    pub incentives_debt: RestrictedVector<AssetInfo, Uint128>,
+    /// Tokens receivable as incentives rewards that user can claim
+    pub claimable_incentives_debt: RestrictedVector<AssetInfo, Uint128>,
     /// Timestamp beyond which this position can be unlocked
     pub unlock_timestamp: u64,
     /// User's Astroport LP units, calculated as lp_units_locked (terraswap) / total LP units locked (terraswap) * Astroport LP units minted post migration
     pub astroport_lp_units: Option<Uint128>,
     pub astroport_lp_token: Addr,
     pub astroport_lp_transferred: Option<Uint128>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
-pub struct PendingAssetRewardResponse {
-    pub amount: Uint128,
 }

@@ -7,9 +7,9 @@ use crate::{
     },
 };
 use cosmwasm_std::{
-    attr, coin, from_binary, from_slice,
+    attr, coin, from_json,
     testing::{mock_dependencies, mock_env, mock_info},
-    to_binary, Addr, BlockInfo, CosmosMsg, Empty, SubMsg, Timestamp, Uint128, WasmMsg,
+    to_json_binary, Addr, BlockInfo, CosmosMsg, Empty, SubMsg, Timestamp, Uint128, WasmMsg,
 };
 use credits::msg::ExecuteMsg::AddVesting;
 use cw20::{BalanceResponse, Cw20ExecuteMsg};
@@ -68,7 +68,7 @@ fn proper_instantiation() {
     );
 
     let res = query(deps.as_ref(), env.clone(), QueryMsg::MerkleRoot {}).unwrap();
-    let merkle_root: MerkleRootResponse = from_binary(&res).unwrap();
+    let merkle_root: MerkleRootResponse = from_json(res).unwrap();
     assert_eq!(
         merkle_root,
         MerkleRootResponse {
@@ -82,7 +82,7 @@ fn proper_instantiation() {
     );
 
     let res = query(deps.as_ref(), env, QueryMsg::Config {}).unwrap();
-    let config: ConfigResponse = from_binary(&res).unwrap();
+    let config: ConfigResponse = from_json(res).unwrap();
     assert_eq!(
         config,
         ConfigResponse {
@@ -113,7 +113,7 @@ fn claim() {
     let airdrop_start = env.block.time.minus_seconds(5_000).seconds();
     let vesting_start = env.block.time.plus_seconds(10_000).seconds();
     let vesting_duration_seconds = 20_000;
-    let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+    let test_data: Encoded = from_json(TEST_DATA_1).unwrap();
 
     let msg = InstantiateMsg {
         credits_address: "credits0000".to_string(),
@@ -141,7 +141,7 @@ fn claim() {
         SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: "credits0000".to_string(),
             funds: vec![],
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+            msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                 recipient: test_data.account.clone(),
                 amount: test_data.amount,
             })
@@ -149,7 +149,7 @@ fn claim() {
         })),
         SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: "credits0000".to_string(),
-            msg: to_binary(&AddVesting {
+            msg: to_json_binary(&AddVesting {
                 address: test_data.account.clone(),
                 amount: test_data.amount,
                 start_time: vesting_start,
@@ -172,7 +172,7 @@ fn claim() {
 
     // Check total claimed
     assert_eq!(
-        from_binary::<TotalClaimedResponse>(
+        from_json::<TotalClaimedResponse>(
             &query(deps.as_ref(), env.clone(), QueryMsg::TotalClaimed {},).unwrap()
         )
         .unwrap()
@@ -182,7 +182,7 @@ fn claim() {
 
     // Check address is claimed
     assert!(
-        from_binary::<IsClaimedResponse>(
+        from_json::<IsClaimedResponse>(
             &query(
                 deps.as_ref(),
                 env.clone(),
@@ -225,7 +225,7 @@ fn multiple_claim() {
     let airdrop_start = env.block.time.minus_seconds(5_000).seconds();
     let vesting_start = env.block.time.plus_seconds(10_000).seconds();
     let vesting_duration_seconds = 20_000;
-    let test_data: MultipleData = from_slice(TEST_DATA_1_MULTI).unwrap();
+    let test_data: MultipleData = from_json(TEST_DATA_1_MULTI).unwrap();
 
     let msg = InstantiateMsg {
         credits_address: "credits0000".to_string(),
@@ -255,7 +255,7 @@ fn multiple_claim() {
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: "credits0000".to_string(),
                 funds: vec![],
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                     recipient: account.account.clone(),
                     amount: account.amount,
                 })
@@ -263,7 +263,7 @@ fn multiple_claim() {
             })),
             SubMsg::new(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: "credits0000".to_string(),
-                msg: to_binary(&AddVesting {
+                msg: to_json_binary(&AddVesting {
                     address: account.account.clone(),
                     amount: account.amount,
                     start_time: vesting_start,
@@ -288,7 +288,7 @@ fn multiple_claim() {
     // Check total claimed
     let env = mock_env();
     assert_eq!(
-        from_binary::<TotalClaimedResponse>(
+        from_json::<TotalClaimedResponse>(
             &query(deps.as_ref(), env, QueryMsg::TotalClaimed {}).unwrap()
         )
         .unwrap()
@@ -415,7 +415,7 @@ fn update_reserve_address() {
     );
 
     assert_eq!(
-        from_binary::<ConfigResponse>(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap())
+        from_json::<ConfigResponse>(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap())
             .unwrap()
             .reserve_address,
         "reserve0002"
@@ -424,7 +424,7 @@ fn update_reserve_address() {
 
 #[test]
 fn withdraw_all() {
-    let test_data: Encoded = from_slice(TEST_DATA_1).unwrap();
+    let test_data: Encoded = from_json(TEST_DATA_1).unwrap();
     let mut router = mock_app();
     router
         .init_modules(|router, _api, storage| {
