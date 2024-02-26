@@ -19,20 +19,20 @@ The LP Bootstrap via auction contract facilitates cNTRN-NATIVE Neutron pool init
 
 ### Handle Messages
 
-| Message                     | Description                                                                                                                                                                                                                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ExecuteMsg::Receive`       | ReceiveCW20 Hook which facilitates cNTRN tokens delegation by lockdrop participants / airdrop recipients                                                                                                                                                                                      |
-| `ExecuteMsg::UpdateConfig`  | Admin function to update any of the configuration parameters.                                                                                                                                                                                                                                 |
-| `ExecuteMsg::DepositUst`    | Facilitates UST deposits by users                                                                                                                                                                                                                                                             |
+| Message                     | Description                                                                                                                                                                                                                                                                                    |
+|-----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `ExecuteMsg::Receive`       | ReceiveCW20 Hook which facilitates cNTRN tokens delegation by lockdrop participants / airdrop recipients                                                                                                                                                                                       |
+| `ExecuteMsg::UpdateConfig`  | Admin function to update any of the configuration parameters.                                                                                                                                                                                                                                  |
+| `ExecuteMsg::DepositUst`    | Facilitates UST deposits by users                                                                                                                                                                                                                                                              |
 | `ExecuteMsg::WithdrawUst`   | Facilitates UST withdrawals by users. 100% amount can be withdrawn during deposit window, which is then limited to 50% during 1st half of deposit window which then decreases linearly during 2nd half of deposit window. Only 1 withdrawal can be made by a user during the withdrawal window |
-| `ExecuteMsg::InitPool`      | Admin function which facilitates Liquidity addtion to the Astroport cNTRN-UST Pool. Uses CallbackMsg to update state post liquidity addition to the pool                                                                                                                                      |
-| `ExecuteMsg::StakeLpTokens` | Admin function to stake cNTRN-UST LP tokens with the generator contract                                                                                                                                                                                                                       |
-| `ExecuteMsg::ClaimRewards`  | Facilitates cNTRN rewards claim (staking incentives from generator) for users and the withdrawal of LP shares which have been unlocked for the user.                                                                                                                                          |
+| `ExecuteMsg::InitPool`      | Admin function which facilitates Liquidity addtion to the Astroport cNTRN-UST Pool. Uses CallbackMsg to update state post liquidity addition to the pool                                                                                                                                       |
+| `ExecuteMsg::StakeLpTokens` | Admin function to stake cNTRN-UST LP tokens with the generator contract                                                                                                                                                                                                                        |
+| `ExecuteMsg::ClaimRewards`  | Facilitates cNTRN rewards claim (staking incentives from generator) for users and the withdrawal of LP shares which have been unlocked for the user.                                                                                                                                           |
 
 ### Handle Messages :: Callback
 
 | Message                                             | Description                                                                                          |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+|-----------------------------------------------------|------------------------------------------------------------------------------------------------------|
 | `CallbackMsg::UpdateStateOnLiquidityAdditionToPool` | Callback function to update state after liquidity is added to the cNTRN-UST Pool                     |
 | `CallbackMsg::UpdateStateOnRewardClaim`             | Callback function to update state after cNTRN rewards are claimed from the generator                 |
 | `CallbackMsg::WithdrawUserRewardsCallback`          | Callback function to facilitate cNTRN reward claiming and unlocked LP tokens withdrawal for the user |
@@ -40,10 +40,10 @@ The LP Bootstrap via auction contract facilitates cNTRN-NATIVE Neutron pool init
 ### Query Messages
 
 | Message              | Description                   |
-| -------------------- | ----------------------------- |
+|----------------------|-------------------------------|
 | `QueryMsg::Config`   | Returns the config info       |
 | `QueryMsg::State`    | Returns state of the contract |
-| `QueryMsg::UserInfo` | Returns _user position details |
+| `QueryMsg::UserInfo` | Returns user position details |
 
 ## Build schema and run unit-tests
 
