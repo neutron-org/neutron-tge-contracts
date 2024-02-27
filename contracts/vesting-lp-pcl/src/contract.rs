@@ -91,7 +91,7 @@ fn receive_cw20(
             if !is_sender_whitelisted(
                 deps.storage,
                 &config,
-                &deps.api.addr_validate(sender.as_str())?,
+                &deps.api.addr_validate(cw20_msg.sender.as_str())?,
             ) || token_asset_info(sender.clone()) != vesting_token
             {
                 return Err(ContractError::Unauthorized {});
@@ -102,7 +102,10 @@ fn receive_cw20(
             user_address_raw,
             user_vesting_info,
         } => {
-            if !is_sender_xyk_vesting_lp(deps.storage, &sender) {
+            if !is_sender_xyk_vesting_lp(
+                deps.storage,
+                &deps.api.addr_validate(cw20_msg.sender.as_str())?,
+            ) {
                 return Err(ContractError::Unauthorized {});
             }
             handle_migrate_xyk_liquidity(deps, env, user_address_raw, user_vesting_info)
@@ -112,10 +115,6 @@ fn receive_cw20(
 
 fn is_sender_whitelisted(store: &mut dyn Storage, config: &Config, sender: &Addr) -> bool {
     if *sender == config.owner {
-        return true;
-    }
-    let xyk_vesting_lp_contract = XYK_VESTING_LP_CONTRACT.load(store).unwrap();
-    if *sender == xyk_vesting_lp_contract {
         return true;
     }
     if VESTING_MANAGERS.has(store, sender.clone()) {
