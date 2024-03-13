@@ -117,7 +117,6 @@ pub struct MigrateMsg {
     pub cl_pair: String,
     pub new_lp_token: String,
     pub pcl_vesting: String,
-    pub dust_threshold: Uint128,
 }
 
 impl From<ExecuteMsg> for BaseExecute {

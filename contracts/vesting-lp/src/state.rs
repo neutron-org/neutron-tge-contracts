@@ -1,5 +1,5 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Addr, Decimal, Uint128};
+use cosmwasm_std::{Addr, Decimal};
 use cw_storage_plus::Item;
 
 /// Config for xyk->CL liquidity migration.
@@ -13,7 +13,6 @@ pub struct XykToClMigrationConfig {
     pub cl_pair: Addr,
     pub new_lp_token: Addr,
     pub pcl_vesting: Addr,
-    pub dust_threshold: Uint128,
 }
 
 pub const XYK_TO_CL_MIGRATION_CONFIG: Item<XykToClMigrationConfig> =
