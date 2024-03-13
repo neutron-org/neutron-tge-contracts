@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QueryMsgHistorical",
+  "description": "This structure describes the query messages available in a historical vesting contract.",
+  "oneOf": [
+    {
+      "description": "Returns the total unclaimed amount of tokens for a specific address at certain height.",
+      "type": "object",
+      "required": [
+        "unclaimed_amount_at_height"
+      ],
+      "properties": {
+        "unclaimed_amount_at_height": {
+          "type": "object",
+          "required": [
+            "address",
+            "height"
+          ],
+          "properties": {
+            "address": {
+              "type": "string"
+            },
+            "height": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "description": "Returns the total unclaimed amount of tokens for all the users at certain height.",
+      "type": "object",
+      "required": [
+        "unclaimed_total_amount_at_height"
+      ],
+      "properties": {
+        "unclaimed_total_amount_at_height": {
+          "type": "object",
+          "required": [
+            "height"
+          ],
+          "properties": {
+            "height": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

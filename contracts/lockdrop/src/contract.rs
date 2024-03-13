@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::convert::TryInto;
+use std::ops::Sub;
 use std::str::FromStr;
 
 use astroport::asset::{Asset, AssetInfo};
@@ -12,12 +13,12 @@ use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
 use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, from_binary, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
+    attr, coins, entry_point, from_json, to_json_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
     Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
     Uint128, Uint256, WasmMsg,
 };
 use cw2::set_contract_version;
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg};
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg, MinterResponse};
 
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
 use astroport_periphery::lockdrop::{
@@ -25,10 +26,11 @@ use astroport_periphery::lockdrop::{
     LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolType, QueryMsg, State,
     StateResponse, UpdateConfigMsg, UserInfoResponse, UserInfoWithListResponse,
 };
+use astroport_periphery::lockdrop_pcl::ExecuteMsg as LockdropPCLExecuteMsg;
 
 use crate::state::{
-    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE,
-    TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
+    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, PCL_LOCKDROP_CONTRACT,
+    STATE, TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
 
 const AIRDROP_REWARDS_MULTIPLIER: &str = "1.0";
@@ -212,6 +214,9 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             atom_token,
             generator,
         } => handle_set_token_info(deps, env, info, usdc_token, atom_token, generator),
+        ExecuteMsg::MigrateLiquidityToPCLPools { user_address_raw } => {
+            handle_migrate_liquidity_to_pcl_pools(deps, info, env, user_address_raw)
+        }
     }
 }
 
@@ -240,7 +245,7 @@ pub fn receive_cw20(
         ));
     }
 
-    match from_binary(&cw20_msg.msg)? {
+    match from_json(&cw20_msg.msg)? {
         Cw20HookMsg::InitializePool {
             pool_type,
             incentives_share,
@@ -303,6 +308,58 @@ fn _handle_callback(
             duration,
             withdraw_lp_stake,
         ),
+        CallbackMsg::InitMigrateLockupToPCLPoolsCallback {
+            pool_type,
+            user_address,
+            duration,
+        } => {
+            callback_init_migrate_lockup_to_pcl_pools(deps, env, pool_type, user_address, duration)
+        }
+        CallbackMsg::TransferAllRewardsBeforeMigrationCallback {
+            pool_type,
+            user_address,
+            duration,
+        } => callback_transfer_all_rewards_before_migration(
+            deps,
+            env,
+            pool_type,
+            user_address,
+            duration,
+        ),
+        CallbackMsg::WithdrawUserLockupCallback {
+            pool_type,
+            user_address,
+            duration,
+            generator,
+            astroport_lp_token,
+            astroport_lp_amount,
+        } => callback_withdraw_user_lockup(
+            deps,
+            env,
+            pool_type,
+            user_address,
+            duration,
+            generator,
+            astroport_lp_token,
+            astroport_lp_amount,
+        ),
+        CallbackMsg::MigrateUserLockupToPCLPairCallback {
+            pool_type,
+            user_address,
+            duration,
+            ntrn_balance,
+            paired_asset_denom,
+            paired_asset_balance,
+        } => callback_migrate_user_lockup_to_pcl_pair(
+            deps,
+            env,
+            pool_type,
+            user_address,
+            duration,
+            ntrn_balance,
+            paired_asset_denom,
+            paired_asset_balance,
+        ),
     }
 }
 
@@ -350,18 +407,18 @@ fn _handle_callback(
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Config {} => to_binary(&CONFIG.load(deps.storage)?),
-        QueryMsg::State {} => to_binary(&query_state(deps)?),
-        QueryMsg::Pool { pool_type } => to_binary(&query_pool(deps, pool_type)?),
-        QueryMsg::UserInfo { address } => to_binary(&query_user_info(deps, env, address)?),
+        QueryMsg::Config {} => to_json_binary(&CONFIG.load(deps.storage)?),
+        QueryMsg::State {} => to_json_binary(&query_state(deps)?),
+        QueryMsg::Pool { pool_type } => to_json_binary(&query_pool(deps, pool_type)?),
+        QueryMsg::UserInfo { address } => to_json_binary(&query_user_info(deps, env, address)?),
         QueryMsg::UserInfoWithLockupsList { address } => {
-            to_binary(&query_user_info_with_lockups_list(deps, env, address)?)
+            to_json_binary(&query_user_info_with_lockups_list(deps, env, address)?)
         }
         QueryMsg::LockUpInfo {
             user_address,
             pool_type,
             duration,
-        } => to_binary(&query_lockup_info(
+        } => to_json_binary(&query_lockup_info(
             deps,
             &env,
             &user_address,
@@ -372,14 +429,14 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
             pool_type,
             user_address,
             height,
-        } => to_binary(&query_user_lockup_total_at_height(
+        } => to_json_binary(&query_user_lockup_total_at_height(
             deps,
             pool_type,
             deps.api.addr_validate(&user_address)?,
             height,
         )?),
         QueryMsg::QueryLockupTotalAtHeight { pool_type, height } => {
-            to_binary(&query_lockup_total_at_height(deps, pool_type, height)?)
+            to_json_binary(&query_lockup_total_at_height(deps, pool_type, height)?)
         }
     }
 }
@@ -392,7 +449,11 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 ///
 /// * **_msg** is an object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
+    PCL_LOCKDROP_CONTRACT.save(
+        deps.storage,
+        &deps.api.addr_validate(&msg.pcl_lockdrop_contract)?,
+    )?;
     Ok(Response::default())
 }
 
@@ -444,6 +505,180 @@ pub fn handle_update_config(
 
     CONFIG.save(deps.storage, &config)?;
     Ok(Response::new().add_attributes(attributes))
+}
+
+/// Liquidity migration entry point. Starts the locked liquidity migration from this lockdrop contract
+/// which stores the liquidity in XYK pools to another lockdrop contract which works with PCL pools.
+/// A single call to this handler migrates all lockup positions of a single user. If user is not
+/// specified, the caller's address is used to determine the lockup positions to migrate.
+///
+/// Liquidity migration process consists of several sequential messages invocation and from this
+/// contract's point of view it mostly mimics (and clones code of) the **ClaimRewardsAndOptionallyUnlock**
+/// called with **withdraw_lp_stake=true** for each lockup position. So, for this contract's state,
+/// liquidity migration looks like lockup positions unlock by the user.
+pub fn handle_migrate_liquidity_to_pcl_pools(
+    mut deps: DepsMut,
+    info: MessageInfo,
+    env: Env,
+    user_address_raw: Option<String>,
+) -> StdResult<Response> {
+    let user_address = match user_address_raw {
+        Some(addr) => deps.api.addr_validate(&addr)?,
+        None => info.sender,
+    };
+
+    let config = CONFIG.load(deps.storage)?;
+    let state = STATE.load(deps.storage)?;
+
+    let mut user_info = USER_INFO
+        .may_load(deps.storage, &user_address)?
+        .unwrap_or_default();
+    // If user's total NTRN rewards == 0 :: We update all of the user's lockup positions to
+    // calculate NTRN rewards and for each alongwith their equivalent Astroport LP Shares
+    if user_info.total_ntrn_rewards == Uint128::zero() {
+        user_info.total_ntrn_rewards = update_user_lockup_positions_and_calc_rewards(
+            deps.branch(),
+            &config,
+            &state,
+            &user_address,
+        )?;
+        USER_INFO.save(deps.storage, &user_address, &user_info)?;
+    }
+
+    // collect all user's lockups
+    let mut user_lockups: Vec<(PoolType, u64)> = vec![];
+    for pool_type in ASSET_POOLS
+        .keys(deps.storage, None, None, Order::Ascending)
+        .collect::<Result<Vec<PoolType>, StdError>>()?
+    {
+        for duration in LOCKUP_INFO
+            .prefix((pool_type, &user_address))
+            .keys(deps.storage, None, None, Order::Ascending)
+            .collect::<Result<Vec<u64>, StdError>>()?
+        {
+            user_lockups.push((pool_type, duration));
+        }
+    }
+
+    let mut cosmos_msgs = vec![];
+    // migrate all user lockups sequentially
+    for (pool_type, duration) in user_lockups {
+        cosmos_msgs.push(
+            CallbackMsg::InitMigrateLockupToPCLPoolsCallback {
+                pool_type,
+                user_address: user_address.clone(),
+                duration,
+            }
+            .to_cosmos_msg(&env)?,
+        );
+    }
+    Ok(Response::default().add_messages(cosmos_msgs))
+}
+
+/// Entry point for a single lockup position migration to PCL lockdrop contract. Performs generator
+/// rewards claiming and initializes liquidity withdrawal+transfer process by invocation of the
+/// respective callback message.
+fn callback_init_migrate_lockup_to_pcl_pools(
+    deps: DepsMut,
+    env: Env,
+    pool_type: PoolType,
+    user_address: Addr,
+    duration: u64,
+) -> Result<Response, StdError> {
+    let lockup_info = query_lockup_info(
+        deps.as_ref(),
+        &env,
+        user_address.as_str(),
+        pool_type,
+        duration,
+    )?;
+
+    if lockup_info.astroport_lp_transferred.is_some() {
+        return Ok(Response::default().add_attribute(
+            format!("{:?}_for_{}", pool_type, duration),
+            "already_been_withdrawn",
+        ));
+    }
+
+    let config = CONFIG.load(deps.storage)?;
+    let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
+    let astroport_lp_token = pool_info.lp_token;
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator should be set at this moment!"))?;
+
+    // QUERY :: Check if there are any pending staking rewards
+    let pending_rewards: PendingTokenResponse = deps.querier.query_wasm_smart(
+        generator,
+        &GenQueryMsg::PendingToken {
+            lp_token: astroport_lp_token.to_string(),
+            user: env.contract.address.to_string(),
+        },
+    )?;
+    let pending_on_proxy = &pending_rewards.pending_on_proxy.unwrap_or_default();
+    let mut cosmos_msgs = vec![];
+    if !pending_rewards.pending.is_zero()
+        || pending_on_proxy.iter().any(|asset| !asset.amount.is_zero())
+    {
+        let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
+            generator,
+            &GenQueryMsg::RewardInfo {
+                lp_token: astroport_lp_token.to_string(),
+            },
+        )?;
+
+        let reward_token_balance = deps
+            .querier
+            .query_balance(
+                env.contract.address.clone(),
+                rwi.base_reward_token.to_string(),
+            )?
+            .amount;
+
+        let prev_proxy_reward_balances: Vec<Asset> = pending_on_proxy
+            .iter()
+            .map(|asset| {
+                let balance = asset
+                    .info
+                    .query_pool(&deps.querier, env.contract.address.clone())
+                    .unwrap_or_default();
+
+                Asset {
+                    info: asset.info.clone(),
+                    amount: balance,
+                }
+            })
+            .collect();
+
+        cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: generator.to_string(),
+            funds: vec![],
+            msg: to_json_binary(&GenExecuteMsg::ClaimRewards {
+                lp_tokens: vec![astroport_lp_token.to_string()],
+            })?,
+        }));
+
+        cosmos_msgs.push(
+            CallbackMsg::UpdatePoolOnDualRewardsClaim {
+                pool_type,
+                prev_ntrn_balance: reward_token_balance,
+                prev_proxy_reward_balances,
+            }
+            .to_cosmos_msg(&env)?,
+        );
+    }
+
+    cosmos_msgs.push(
+        CallbackMsg::TransferAllRewardsBeforeMigrationCallback {
+            pool_type,
+            user_address,
+            duration,
+        }
+        .to_cosmos_msg(&env)?,
+    );
+
+    Ok(Response::default().add_messages(cosmos_msgs))
 }
 
 pub fn handle_set_token_info(
@@ -619,7 +854,7 @@ fn stake_messages(
     cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token_address.to_string(),
         funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::IncreaseAllowance {
+        msg: to_json_binary(&Cw20ExecuteMsg::IncreaseAllowance {
             spender: generator.to_string(),
             amount,
             expires: Some(cw20::Expiration::AtHeight(height)),
@@ -629,9 +864,9 @@ fn stake_messages(
     cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: lp_token_address.to_string(),
         funds: vec![],
-        msg: to_binary(&Cw20ExecuteMsg::Send {
+        msg: to_json_binary(&Cw20ExecuteMsg::Send {
             contract: generator.to_string(),
-            msg: to_binary(&astroport::generator::Cw20HookMsg::Deposit {})?,
+            msg: to_json_binary(&astroport::generator::Cw20HookMsg::Deposit {})?,
             amount,
         })?,
     }));
@@ -1046,7 +1281,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: generator.to_string(),
                 funds: vec![],
-                msg: to_binary(&GenExecuteMsg::ClaimRewards {
+                msg: to_json_binary(&GenExecuteMsg::ClaimRewards {
                     lp_tokens: vec![astroport_lp_token.to_string()],
                 })?,
             }));
@@ -1123,7 +1358,7 @@ pub fn claim_airdrop_tokens_with_multiplier_msg(
 
     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: credits_contract.to_string(),
-        msg: to_binary(&Cw20ExecuteMsg::BurnFrom {
+        msg: to_json_binary(&Cw20ExecuteMsg::BurnFrom {
             owner: user_addr.to_string(),
             amount: claimable_vested_amount.checked_add(unvested_tokens_amount.amount)?,
         })?,
@@ -1355,7 +1590,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
 
         // If claimable proxy staking rewards > 0, claim them
         for pending_proxy_reward in pending_proxy_rewards {
-            cosmos_msgs.push(pending_proxy_reward.into_msg(&deps.querier, user_address.clone())?);
+            cosmos_msgs.push(pending_proxy_reward.into_msg(user_address.clone())?);
         }
 
         //  COSMOSMSG :: If LP Tokens are staked, we unstake the amount which needs to be returned to the user
@@ -1363,7 +1598,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: generator.to_string(),
                 funds: vec![],
-                msg: to_binary(&GenExecuteMsg::Withdraw {
+                msg: to_json_binary(&GenExecuteMsg::Withdraw {
                     lp_token: astroport_lp_token.to_string(),
                     amount: astroport_lp_amount,
                 })?,
@@ -1375,7 +1610,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
         // COSMOSMSG :: Returns LP units locked by the user in the current lockup position
         cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: astroport_lp_token.to_string(),
-            msg: to_binary(&Cw20ExecuteMsg::Transfer {
+            msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                 recipient: user_address.to_string(),
                 amount: astroport_lp_amount,
             })?,
@@ -1441,6 +1676,337 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     Ok(Response::new()
         .add_messages(cosmos_msgs)
         .add_attributes(attributes))
+}
+
+/// Claims all possible rewards for the user. The claimed user's rewards are generator staking
+/// rewards and proxy rewards, one time NTRN rewards and rewards for airdrop participants. This
+/// makes sure the XYK lockdrop contract has no obligations once the liquidity is migrated, and
+/// the only obligations the PCL lockdrop contract will have are the minted LP tokens and further
+/// generator staking rewards and proxy rewards associated with the LP tokens.
+pub fn callback_transfer_all_rewards_before_migration(
+    deps: DepsMut,
+    env: Env,
+    pool_type: PoolType,
+    user_address: Addr,
+    duration: u64,
+) -> StdResult<Response> {
+    let config = CONFIG.load(deps.storage)?;
+    let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
+    let lockup_key = (pool_type, &user_address, duration);
+    let mut lockup_info =
+        LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key, &config.generator)?;
+
+    let mut user_info = USER_INFO
+        .may_load(deps.storage, &user_address)?
+        .unwrap_or_default();
+
+    let mut cosmos_msgs = vec![];
+
+    let astroport_lp_token = pool_info.lp_token.clone();
+
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator should be set"))?;
+
+    // Calculate Astro LP share for the lockup position
+    let astroport_lp_amount: Uint128 = {
+        let balance: Uint128 = if pool_info.is_staked {
+            deps.querier.query_wasm_smart(
+                generator,
+                &GenQueryMsg::Deposit {
+                    lp_token: astroport_lp_token.to_string(),
+                    user: env.contract.address.to_string(),
+                },
+            )?
+        } else {
+            let res: BalanceResponse = deps.querier.query_wasm_smart(
+                astroport_lp_token.clone(),
+                &Cw20QueryMsg::Balance {
+                    address: env.contract.address.to_string(),
+                },
+            )?;
+            res.balance
+        };
+
+        (lockup_info
+            .lp_units_locked
+            .full_mul(balance)
+            .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
+        .try_into()?
+    };
+
+    let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
+        generator,
+        &GenQueryMsg::RewardInfo {
+            lp_token: astroport_lp_token.to_string(),
+        },
+    )?;
+
+    // Calculate claimable staking rewards for this lockup
+    let total_lockup_astro_rewards = pool_info
+        .generator_ntrn_per_share
+        .checked_mul(astroport_lp_amount.to_decimal())?
+        .to_uint_floor();
+    let pending_astro_rewards =
+        total_lockup_astro_rewards.checked_sub(lockup_info.generator_ntrn_debt)?;
+    lockup_info.generator_ntrn_debt = total_lockup_astro_rewards;
+
+    // If claimable staking rewards > 0, claim them and send to the user
+    if pending_astro_rewards > Uint128::zero() {
+        cosmos_msgs.push(CosmosMsg::Bank(BankMsg::Send {
+            to_address: user_address.to_string(),
+            amount: vec![Coin {
+                denom: rwi.base_reward_token.to_string(),
+                amount: pending_astro_rewards,
+            }],
+        }));
+    }
+
+    let mut pending_proxy_rewards: Vec<Asset> = vec![];
+    // If this LP token is getting dual incentives
+    // Calculate claimable proxy staking rewards for this lockup
+    lockup_info.generator_proxy_debt = lockup_info
+        .generator_proxy_debt
+        .inner_ref()
+        .iter()
+        .map(|(asset, debt)| {
+            let generator_proxy_per_share = pool_info
+                .generator_proxy_per_share
+                .load(asset)
+                .unwrap_or_default();
+            let total_lockup_proxy_reward =
+                generator_proxy_per_share.checked_mul_uint128(astroport_lp_amount)?;
+            let pending_proxy_reward: Uint128 = total_lockup_proxy_reward.checked_sub(*debt)?;
+
+            if !pending_proxy_reward.is_zero() {
+                pending_proxy_rewards.push(Asset {
+                    info: asset.clone(),
+                    amount: pending_proxy_reward,
+                });
+            }
+            Ok((asset.clone(), total_lockup_proxy_reward))
+        })
+        .collect::<StdResult<Vec<_>>>()?
+        .into();
+
+    // If claimable proxy staking rewards > 0, claim them
+    for pending_proxy_reward in pending_proxy_rewards {
+        cosmos_msgs.push(pending_proxy_reward.into_msg(user_address.clone())?);
+    }
+
+    // Transfers claimable one time NTRN rewards to the user that the user gets for all his lock
+    if !user_info.ntrn_transferred {
+        // Calculating how much NTRN user can claim (from total one time reward)
+        let total_claimable_ntrn_rewards = user_info.total_ntrn_rewards;
+        if total_claimable_ntrn_rewards > Uint128::zero() {
+            cosmos_msgs.push(CosmosMsg::Bank(BankMsg::Send {
+                to_address: user_address.to_string(),
+                amount: coins(total_claimable_ntrn_rewards.u128(), UNTRN_DENOM),
+            }))
+        }
+
+        // claim airdrop rewards for airdrop participants
+        let res: BalanceResponse = deps.querier.query_wasm_smart(
+            config.credits_contract.clone(),
+            &Cw20QueryMsg::Balance {
+                address: user_address.to_string(),
+            },
+        )?;
+        if res.balance > Uint128::zero() {
+            cosmos_msgs.push(claim_airdrop_tokens_with_multiplier_msg(
+                deps.as_ref(),
+                config.credits_contract,
+                user_address.clone(),
+                total_claimable_ntrn_rewards,
+            )?);
+        }
+
+        user_info.ntrn_transferred = true;
+        USER_INFO.save(deps.storage, &user_address, &user_info)?;
+    }
+
+    cosmos_msgs.push(
+        CallbackMsg::WithdrawUserLockupCallback {
+            pool_type,
+            user_address: user_address.clone(),
+            duration,
+            generator: generator.clone(),
+            astroport_lp_token,
+            astroport_lp_amount,
+        }
+        .to_cosmos_msg(&env)?,
+    );
+
+    Ok(Response::new().add_messages(cosmos_msgs))
+}
+
+#[allow(clippy::too_many_arguments)]
+// Unstakes the staked LP amount, withdraws it from the pool and invokes callback that will
+// send the withdrawn assets to the PCL lockdrop contract
+pub fn callback_withdraw_user_lockup(
+    deps: DepsMut,
+    env: Env,
+    pool_type: PoolType,
+    user_address: Addr,
+    duration: u64,
+    generator: Addr,
+    astroport_lp_token: Addr,
+    astroport_lp_amount: Uint128,
+) -> StdResult<Response> {
+    let mut cosmos_msgs = vec![];
+
+    // withdraw the staked lp tokens from the generator
+    cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: generator.to_string(),
+        funds: vec![],
+        msg: to_json_binary(&GenExecuteMsg::Withdraw {
+            lp_token: astroport_lp_token.to_string(),
+            amount: astroport_lp_amount,
+        })?,
+    }));
+
+    // determine the pool address and the denom of the second (not untrn) token in the pool
+    let astroport_pool: String = deps
+        .querier
+        .query_wasm_smart::<MinterResponse>(
+            astroport_lp_token.to_string(),
+            &cw20::Cw20QueryMsg::Minter {},
+        )?
+        .minter;
+    let astroport_pool_info: astroport::pair::PoolResponse = deps
+        .querier
+        .query_wasm_smart(astroport_pool.clone(), &astroport::pair::QueryMsg::Pool {})?;
+    let paired_asset_denom = astroport_pool_info
+        .assets
+        .iter()
+        .find_map(|x| match &x.info {
+            AssetInfo::NativeToken { denom } if denom != UNTRN_DENOM => Some(denom.clone()),
+            _ => None,
+        })
+        .ok_or_else(|| StdError::generic_err("No second leg of pair found"))?;
+
+    // determine contract balances before withdrawal
+    let ntrn_balance = deps
+        .querier
+        .query_balance(&env.contract.address, UNTRN_DENOM)?
+        .amount;
+    let paired_asset_balance = deps
+        .querier
+        .query_balance(&env.contract.address, paired_asset_denom.clone())?
+        .amount;
+
+    // withdraw liquidity from the XYK pool
+    cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: astroport_lp_token.to_string(),
+        funds: vec![],
+        msg: to_json_binary(&Cw20ExecuteMsg::Send {
+            contract: astroport_pool,
+            amount: astroport_lp_amount,
+            msg: to_json_binary(&astroport::pair::Cw20HookMsg::WithdrawLiquidity {
+                assets: vec![],
+            })?,
+        })?,
+    }));
+
+    // update contract's state in accordance with the just made withdrawal
+    let config = CONFIG.load(deps.storage)?;
+    let lockup_key = (pool_type, &user_address, duration);
+    let mut lockup_info =
+        LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key, &config.generator)?;
+    let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
+    pool_info.amount_in_lockups = pool_info
+        .amount_in_lockups
+        .checked_sub(lockup_info.lp_units_locked)?;
+    ASSET_POOLS.save(deps.storage, pool_type, &pool_info, env.block.height)?;
+    lockup_info.astroport_lp_transferred = Some(astroport_lp_amount);
+    TOTAL_USER_LOCKUP_AMOUNT.update(
+        deps.storage,
+        (pool_type, &user_address),
+        env.block.height,
+        |lockup_amount| -> StdResult<Uint128> {
+            if let Some(la) = lockup_amount {
+                Ok(la.checked_sub(lockup_info.lp_units_locked)?)
+            } else {
+                Ok(Uint128::zero())
+            }
+        },
+    )?;
+    LOCKUP_INFO.save(deps.storage, lockup_key, &lockup_info)?;
+
+    cosmos_msgs.push(
+        CallbackMsg::MigrateUserLockupToPCLPairCallback {
+            pool_type,
+            user_address: user_address.clone(),
+            duration,
+            ntrn_balance,
+            paired_asset_denom,
+            paired_asset_balance,
+        }
+        .to_cosmos_msg(&env)?,
+    );
+
+    Ok(Response::new().add_messages(cosmos_msgs))
+}
+
+#[allow(clippy::too_many_arguments)]
+/// Invokes the PCL lockdrop contract's MigrateXYKLiquidity handler which creates an LP position in
+/// the PCL pool and a lockup in the PCL lockdrop contract in accordance with the withdrawn user's
+/// lockup position. The funds attached to the MigrateXYKLiquidity message are calculated based on
+/// the balance differences of the assets from the WithdrawLiquidity made at the previous step of the
+/// migration process.
+pub fn callback_migrate_user_lockup_to_pcl_pair(
+    deps: DepsMut,
+    env: Env,
+    pool_type: PoolType,
+    user_address: Addr,
+    duration: u64,
+    ntrn_balance: Uint128,
+    paired_asset_denom: String,
+    paired_asset_balance: Uint128,
+) -> StdResult<Response> {
+    let config = CONFIG.load(deps.storage)?;
+    let lockup_key = (pool_type, &user_address, duration);
+    let lockup_info = LOCKUP_INFO.compatible_load(deps.as_ref(), lockup_key, &config.generator)?;
+    let user_info = USER_INFO
+        .may_load(deps.storage, &user_address)?
+        .unwrap_or_default();
+
+    // determine withdrawn amounts
+    let ntrn_withdrawn = deps
+        .querier
+        .query_balance(&env.contract.address, UNTRN_DENOM)?
+        .amount
+        .sub(ntrn_balance);
+    let paired_asset_withdrawn = deps
+        .querier
+        .query_balance(&env.contract.address, paired_asset_denom.clone())?
+        .amount
+        .sub(paired_asset_balance);
+
+    let pcl_lockdrop = PCL_LOCKDROP_CONTRACT.load(deps.storage)?;
+    Ok(
+        Response::default().add_message(CosmosMsg::Wasm(WasmMsg::Execute {
+            contract_addr: pcl_lockdrop.to_string(),
+            funds: vec![
+                Coin {
+                    denom: UNTRN_DENOM.to_string(),
+                    amount: ntrn_withdrawn,
+                },
+                Coin {
+                    denom: paired_asset_denom.to_string(),
+                    amount: paired_asset_withdrawn,
+                },
+            ],
+            msg: to_json_binary(&LockdropPCLExecuteMsg::MigrateXYKLiquidity {
+                pool_type,
+                user_address_raw: user_address.to_string(),
+                duration,
+                user_info,
+                lockup_info,
+            })?,
+        })),
+    )
 }
 
 /// Returns the contract's State.

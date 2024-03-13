@@ -81,6 +81,15 @@ pub struct VestingAccountResponse {
     pub info: VestingInfo,
 }
 
+/// This structure describes a custom struct used to pass the vesting data about a specific vesting target during migration.
+#[cw_serde]
+pub struct VestingAccountFullInfo {
+    /// The address that's vesting tokens
+    pub address: Addr,
+    /// Vesting information
+    pub info: VestingInfo,
+}
+
 /// This structure describes a custom struct used to return vesting data for multiple vesting targets.
 #[cw_serde]
 pub struct VestingAccountsResponse {

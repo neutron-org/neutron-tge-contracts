@@ -7,8 +7,8 @@ use crate::querier::{
     query_balance, query_token_balance, query_token_precision, query_token_symbol,
 };
 use cosmwasm_std::{
-    to_binary, Addr, Api, BankMsg, Coin, ConversionOverflowError, CosmosMsg, Decimal256, Fraction,
-    MessageInfo, QuerierWrapper, StdError, StdResult, Uint128, Uint256, WasmMsg,
+    to_json_binary, Addr, Api, BankMsg, Coin, ConversionOverflowError, CosmosMsg, Decimal256,
+    Fraction, MessageInfo, QuerierWrapper, StdError, StdResult, Uint128, Uint256, WasmMsg,
 };
 use cw20::{Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
 use itertools::Itertools;
@@ -79,7 +79,7 @@ impl Asset {
         match &self.info {
             AssetInfo::Token { contract_addr } => Ok(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: contract_addr.to_string(),
-                msg: to_binary(&Cw20ExecuteMsg::Transfer {
+                msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
                     recipient,
                     amount: self.amount,
                 })?,

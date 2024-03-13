@@ -1,31 +1,29 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ExecuteMsg",
-  "description": "This structure describes the execute messages available in a vesting contract.",
   "oneOf": [
     {
-      "description": "Claim claims vested tokens and sends them to a recipient",
       "type": "object",
       "required": [
-        "claim"
+        "base"
       ],
       "properties": {
-        "claim": {
+        "base": {
+          "$ref": "#/definitions/ExecuteMsg"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "migrate_liquidity_to_pcl_pool"
+      ],
+      "properties": {
+        "migrate_liquidity_to_pcl_pool": {
           "type": "object",
           "properties": {
-            "amount": {
-              "description": "The amount of tokens to claim",
-              "anyOf": [
-                {
-                  "$ref": "#/definitions/Uint128"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "recipient": {
-              "description": "The address that receives the vested tokens",
+            "user": {
               "type": [
                 "string",
                 "null"
@@ -38,185 +36,14 @@
       "additionalProperties": false
     },
     {
-      "description": "Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template",
+      "description": "Callbacks; only callable by the contract itself.",
       "type": "object",
       "required": [
-        "receive"
+        "callback"
       ],
       "properties": {
-        "receive": {
-          "$ref": "#/definitions/Cw20ReceiveMsg"
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "RegisterVestingAccounts registers vesting targets/accounts",
-      "type": "object",
-      "required": [
-        "register_vesting_accounts"
-      ],
-      "properties": {
-        "register_vesting_accounts": {
-          "type": "object",
-          "required": [
-            "vesting_accounts"
-          ],
-          "properties": {
-            "vesting_accounts": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/VestingAccount"
-              }
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Creates a request to change contract ownership ## Executor Only the current owner can execute this",
-      "type": "object",
-      "required": [
-        "propose_new_owner"
-      ],
-      "properties": {
-        "propose_new_owner": {
-          "type": "object",
-          "required": [
-            "expires_in",
-            "owner"
-          ],
-          "properties": {
-            "expires_in": {
-              "description": "The validity period of the offer to change the owner",
-              "type": "integer",
-              "format": "uint64",
-              "minimum": 0.0
-            },
-            "owner": {
-              "description": "The newly proposed owner",
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Removes a request to change contract ownership ## Executor Only the current owner can execute this",
-      "type": "object",
-      "required": [
-        "drop_ownership_proposal"
-      ],
-      "properties": {
-        "drop_ownership_proposal": {
-          "type": "object",
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Claims contract ownership ## Executor Only the newly proposed owner can execute this",
-      "type": "object",
-      "required": [
-        "claim_ownership"
-      ],
-      "properties": {
-        "claim_ownership": {
-          "type": "object",
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Sets vesting token ## Executor Only the current owner or token info manager can execute this",
-      "type": "object",
-      "required": [
-        "set_vesting_token"
-      ],
-      "properties": {
-        "set_vesting_token": {
-          "type": "object",
-          "required": [
-            "vesting_token"
-          ],
-          "properties": {
-            "vesting_token": {
-              "$ref": "#/definitions/AssetInfo"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Contains messages associated with the managed extension for vesting contracts.",
-      "type": "object",
-      "required": [
-        "managed_extension"
-      ],
-      "properties": {
-        "managed_extension": {
-          "type": "object",
-          "required": [
-            "msg"
-          ],
-          "properties": {
-            "msg": {
-              "$ref": "#/definitions/ExecuteMsgManaged"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Contains messages associated with the with_managers extension for vesting contracts.",
-      "type": "object",
-      "required": [
-        "with_managers_extension"
-      ],
-      "properties": {
-        "with_managers_extension": {
-          "type": "object",
-          "required": [
-            "msg"
-          ],
-          "properties": {
-            "msg": {
-              "$ref": "#/definitions/ExecuteMsgWithManagers"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "description": "Contains messages associated with the historical extension for vesting contracts.",
-      "type": "object",
-      "required": [
-        "historical_extension"
-      ],
-      "properties": {
-        "historical_extension": {
-          "type": "object",
-          "required": [
-            "msg"
-          ],
-          "properties": {
-            "msg": {
-              "$ref": "#/definitions/ExecuteMsgHistorical"
-            }
-          },
-          "additionalProperties": false
+        "callback": {
+          "$ref": "#/definitions/CallbackMsg"
         }
       },
       "additionalProperties": false
@@ -280,6 +107,125 @@
       "description": "Binary is a wrapper around Vec<u8> to add base64 de/serialization with serde. It also adds some helper methods to help encode inline.\n\nThis is only needed as serde-json-{core,wasm} has a horrible encoding for Vec<u8>. See also <https://github.com/CosmWasm/cosmwasm/blob/main/docs/MESSAGE_TYPES.md>.",
       "type": "string"
     },
+    "CallbackMsg": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "migrate_liquidity_to_cl_pair"
+          ],
+          "properties": {
+            "migrate_liquidity_to_cl_pair": {
+              "type": "object",
+              "required": [
+                "amount",
+                "cl_pair",
+                "ntrn_denom",
+                "paired_asset_denom",
+                "slippage_tolerance",
+                "user",
+                "xyk_lp_token",
+                "xyk_pair"
+              ],
+              "properties": {
+                "amount": {
+                  "$ref": "#/definitions/Uint128"
+                },
+                "cl_pair": {
+                  "$ref": "#/definitions/Addr"
+                },
+                "ntrn_denom": {
+                  "type": "string"
+                },
+                "paired_asset_denom": {
+                  "type": "string"
+                },
+                "slippage_tolerance": {
+                  "$ref": "#/definitions/Decimal"
+                },
+                "user": {
+                  "$ref": "#/definitions/VestingAccountResponse"
+                },
+                "xyk_lp_token": {
+                  "$ref": "#/definitions/Addr"
+                },
+                "xyk_pair": {
+                  "$ref": "#/definitions/Addr"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "provide_liquidity_to_cl_pair_after_withdrawal"
+          ],
+          "properties": {
+            "provide_liquidity_to_cl_pair_after_withdrawal": {
+              "type": "object",
+              "required": [
+                "cl_pair",
+                "ntrn_denom",
+                "ntrn_init_balance",
+                "paired_asset_denom",
+                "paired_asset_init_balance",
+                "slippage_tolerance",
+                "user"
+              ],
+              "properties": {
+                "cl_pair": {
+                  "$ref": "#/definitions/Addr"
+                },
+                "ntrn_denom": {
+                  "type": "string"
+                },
+                "ntrn_init_balance": {
+                  "$ref": "#/definitions/Uint128"
+                },
+                "paired_asset_denom": {
+                  "type": "string"
+                },
+                "paired_asset_init_balance": {
+                  "$ref": "#/definitions/Uint128"
+                },
+                "slippage_tolerance": {
+                  "$ref": "#/definitions/Decimal"
+                },
+                "user": {
+                  "$ref": "#/definitions/VestingAccountResponse"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "post_migration_vesting_reschedule"
+          ],
+          "properties": {
+            "post_migration_vesting_reschedule": {
+              "type": "object",
+              "required": [
+                "user"
+              ],
+              "properties": {
+                "user": {
+                  "$ref": "#/definitions/VestingAccountResponse"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "Cw20ReceiveMsg": {
       "description": "Cw20ReceiveMsg should be de/serialized under `Receive()` variant in a ExecuteMsg",
       "type": "object",
@@ -300,6 +246,233 @@
         }
       },
       "additionalProperties": false
+    },
+    "Decimal": {
+      "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
+      "type": "string"
+    },
+    "ExecuteMsg": {
+      "description": "This structure describes the execute messages available in a vesting contract.",
+      "oneOf": [
+        {
+          "description": "Claim claims vested tokens and sends them to a recipient",
+          "type": "object",
+          "required": [
+            "claim"
+          ],
+          "properties": {
+            "claim": {
+              "type": "object",
+              "properties": {
+                "amount": {
+                  "description": "The amount of tokens to claim",
+                  "anyOf": [
+                    {
+                      "$ref": "#/definitions/Uint128"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "recipient": {
+                  "description": "The address that receives the vested tokens",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Receives a message of type [`Cw20ReceiveMsg`] and processes it depending on the received template",
+          "type": "object",
+          "required": [
+            "receive"
+          ],
+          "properties": {
+            "receive": {
+              "$ref": "#/definitions/Cw20ReceiveMsg"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "RegisterVestingAccounts registers vesting targets/accounts",
+          "type": "object",
+          "required": [
+            "register_vesting_accounts"
+          ],
+          "properties": {
+            "register_vesting_accounts": {
+              "type": "object",
+              "required": [
+                "vesting_accounts"
+              ],
+              "properties": {
+                "vesting_accounts": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/VestingAccount"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Creates a request to change contract ownership ## Executor Only the current owner can execute this",
+          "type": "object",
+          "required": [
+            "propose_new_owner"
+          ],
+          "properties": {
+            "propose_new_owner": {
+              "type": "object",
+              "required": [
+                "expires_in",
+                "owner"
+              ],
+              "properties": {
+                "expires_in": {
+                  "description": "The validity period of the offer to change the owner",
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                },
+                "owner": {
+                  "description": "The newly proposed owner",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Removes a request to change contract ownership ## Executor Only the current owner can execute this",
+          "type": "object",
+          "required": [
+            "drop_ownership_proposal"
+          ],
+          "properties": {
+            "drop_ownership_proposal": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Claims contract ownership ## Executor Only the newly proposed owner can execute this",
+          "type": "object",
+          "required": [
+            "claim_ownership"
+          ],
+          "properties": {
+            "claim_ownership": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Sets vesting token ## Executor Only the current owner or token info manager can execute this",
+          "type": "object",
+          "required": [
+            "set_vesting_token"
+          ],
+          "properties": {
+            "set_vesting_token": {
+              "type": "object",
+              "required": [
+                "vesting_token"
+              ],
+              "properties": {
+                "vesting_token": {
+                  "$ref": "#/definitions/AssetInfo"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Contains messages associated with the managed extension for vesting contracts.",
+          "type": "object",
+          "required": [
+            "managed_extension"
+          ],
+          "properties": {
+            "managed_extension": {
+              "type": "object",
+              "required": [
+                "msg"
+              ],
+              "properties": {
+                "msg": {
+                  "$ref": "#/definitions/ExecuteMsgManaged"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Contains messages associated with the with_managers extension for vesting contracts.",
+          "type": "object",
+          "required": [
+            "with_managers_extension"
+          ],
+          "properties": {
+            "with_managers_extension": {
+              "type": "object",
+              "required": [
+                "msg"
+              ],
+              "properties": {
+                "msg": {
+                  "$ref": "#/definitions/ExecuteMsgWithManagers"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Contains messages associated with the historical extension for vesting contracts.",
+          "type": "object",
+          "required": [
+            "historical_extension"
+          ],
+          "properties": {
+            "historical_extension": {
+              "type": "object",
+              "required": [
+                "msg"
+              ],
+              "properties": {
+                "msg": {
+                  "$ref": "#/definitions/ExecuteMsgHistorical"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "ExecuteMsgHistorical": {
       "description": "This structure describes the execute messages available in a historical vesting contract.",
@@ -414,6 +587,59 @@
         },
         "schedules": {
           "description": "The vesting schedules targeted at the `address`",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VestingSchedule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "VestingAccountResponse": {
+      "description": "This structure describes a custom struct used to return vesting data about a specific vesting target.",
+      "type": "object",
+      "required": [
+        "address",
+        "info"
+      ],
+      "properties": {
+        "address": {
+          "description": "The address that's vesting tokens",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Addr"
+            }
+          ]
+        },
+        "info": {
+          "description": "Vesting information",
+          "allOf": [
+            {
+              "$ref": "#/definitions/VestingInfo"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "VestingInfo": {
+      "description": "This structure stores parameters for a batch of vesting schedules.",
+      "type": "object",
+      "required": [
+        "released_amount",
+        "schedules"
+      ],
+      "properties": {
+        "released_amount": {
+          "description": "The total amount of vested tokens already claimed",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Uint128"
+            }
+          ]
+        },
+        "schedules": {
+          "description": "The vesting schedules",
           "type": "array",
           "items": {
             "$ref": "#/definitions/VestingSchedule"

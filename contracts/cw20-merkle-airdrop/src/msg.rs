@@ -1,6 +1,6 @@
 use crate::ContractError;
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{from_slice, Binary, Uint128};
+use cosmwasm_std::{from_json, Binary, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -133,7 +133,7 @@ pub struct SignatureInfo {
 }
 impl SignatureInfo {
     pub fn extract_addr(&self) -> Result<String, ContractError> {
-        let claim_msg = from_slice::<ClaimMsg>(&self.claim_msg)?;
+        let claim_msg = from_json::<ClaimMsg>(&self.claim_msg)?;
         Ok(claim_msg.address)
     }
 }

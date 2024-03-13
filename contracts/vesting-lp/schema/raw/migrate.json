@@ -3,5 +3,43 @@
   "title": "MigrateMsg",
   "description": "This structure describes a migration message. We currently take no arguments for migrations.",
   "type": "object",
-  "additionalProperties": false
+  "required": [
+    "cl_pair",
+    "max_slippage",
+    "new_lp_token",
+    "ntrn_denom",
+    "paired_denom",
+    "pcl_vesting",
+    "xyk_pair"
+  ],
+  "properties": {
+    "cl_pair": {
+      "type": "string"
+    },
+    "max_slippage": {
+      "$ref": "#/definitions/Decimal"
+    },
+    "new_lp_token": {
+      "type": "string"
+    },
+    "ntrn_denom": {
+      "type": "string"
+    },
+    "paired_denom": {
+      "type": "string"
+    },
+    "pcl_vesting": {
+      "type": "string"
+    },
+    "xyk_pair": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Decimal": {
+      "description": "A fixed-point decimal value with 18 fractional digits, i.e. Decimal(1_000_000_000_000_000_000) == 1.0\n\nThe greatest possible value that can be represented is 340282366920938463463.374607431768211455 (which is (2^128 - 1) / 10^18)",
+      "type": "string"
+    }
+  }
 }

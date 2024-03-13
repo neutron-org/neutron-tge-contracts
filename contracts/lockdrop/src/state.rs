@@ -14,6 +14,9 @@ use crate::raw_queries::raw_proxy_asset;
 
 pub const CONFIG: Item<Config> = Item::new("config");
 pub const STATE: Item<State> = Item::new("state");
+/// The address of the lockdrop contract working with PCL pools. Used in users' locked liquidity
+/// migration from XYK pools to PCL ones.
+pub const PCL_LOCKDROP_CONTRACT: Item<Addr> = Item::new("pcl_lockdrop_contract");
 
 /// Key is an Terraswap LP token address
 pub const ASSET_POOLS: SnapshotMap<PoolType, PoolInfo> = SnapshotMap::new(
