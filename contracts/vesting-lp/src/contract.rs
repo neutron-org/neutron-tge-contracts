@@ -112,14 +112,14 @@ fn execute_migrate_liquidity(
         .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
 
     let user_share = compute_share(&user.info)?;
-    let xyk_amount_to_withdraw: Vec<Asset> = deps.querier.query_wasm_smart(
+    let user_share_assets: Vec<Asset> = deps.querier.query_wasm_smart(
         migration_config.xyk_pair.clone(),
         &Share { amount: user_share },
     )?;
 
     // if there is nothing to migrate just update vi and quit.
     // if there is only dust, then send it back to user, update vi and quit
-    if xyk_amount_to_withdraw.iter().any(|a| a.amount.is_zero()) {
+    if user_share_assets.iter().any(|a| a.amount.is_zero()) {
         if !user_share.is_zero() {
             resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: pair_info.liquidity_token.to_string(),
