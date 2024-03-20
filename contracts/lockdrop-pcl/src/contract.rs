@@ -437,9 +437,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     // CHECK ::: Is LP Token Pool supported or not ?
     let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
-    let mut user_info = USER_INFO
-        .may_load(deps.storage, &user_address)?
-        .unwrap_or_default();
+    let mut user_info = USER_INFO.load(deps.storage, &user_address)?;
 
     // If user's total NTRN rewards == 0 :: We update all of the user's lockup positions to calculate NTRN rewards and for each alongwith their equivalent Astroport LP Shares
     if user_info.total_ntrn_rewards == Uint128::zero() {
