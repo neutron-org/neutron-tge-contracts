@@ -5,25 +5,25 @@ use std::str::FromStr;
 use astroport::asset::{Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::cosmwasm_ext::IntegerToDecimal;
+use astroport::DecimalCheckedOps;
 use astroport::incentives::{ExecuteMsg as IncentivesExecuteMsg, QueryMsg as IncentivesQueryMsg};
 use astroport::pair::ExecuteMsg::ProvideLiquidity;
 use astroport::restricted_vector::RestrictedVector;
-use astroport::DecimalCheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, to_json_binary, Addr, BankMsg, Binary, CosmosMsg, Decimal,
-    Decimal256, Deps, DepsMut, Empty, Env, MessageInfo, Order, Response, StdError, StdResult,
+    Addr, attr, BankMsg, Binary, coins, CosmosMsg, Decimal, Decimal256, Deps,
+    DepsMut, Empty, entry_point, Env, MessageInfo, Order, Response, StdError, StdResult, to_json_binary,
     Uint128, Uint256, WasmMsg,
 };
-use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
+use cw2::set_contract_version;
 
 use astroport_periphery::lockdrop::{
     LockupInfoV2 as LockdropXYKLockupInfoV2, PoolType as LockdropXYKPoolType,
     UserInfo as LockdropXYKUserInfo,
 };
 use astroport_periphery::lockdrop_pcl::{
-    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockUpInfoResponse, LockUpInfoSummary,
-    LockupInfo, MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockupInfo, LockUpInfoResponse,
+    LockUpInfoSummary, MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
     UserInfo, UserInfoResponse, UserInfoWithListResponse,
 };
 use astroport_periphery::utils::Decimal256CheckedOps;
@@ -371,8 +371,9 @@ pub fn handle_migrate_xyk_liquidity(
         },
     )?;
 
+    let mut cosmos_msgs: Vec<CosmosMsg<Empty>> = vec![];
     // provide the transferred liquidity to the PCL pool
-    let mut cosmos_msgs: Vec<CosmosMsg<Empty>> = vec![CosmosMsg::Wasm(WasmMsg::Execute {
+    cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: astroport_pool.to_string(),
         funds: info.funds.clone(),
         msg: to_json_binary(&ProvideLiquidity {
@@ -390,7 +391,46 @@ pub fn handle_migrate_xyk_liquidity(
             auto_stake: Some(true),
             receiver: None,
         })?,
-    })];
+    }));
+
+    let incentives = &config.incentives;
+
+    // QUERY :: Check if there are any pending staking rewards
+    let pending_rewards_response: StdResult<Vec<Asset>> = deps.querier.query_wasm_smart(
+        incentives,
+        &IncentivesQueryMsg::PendingRewards {
+            lp_token: pool_info.lp_token.to_string(),
+            user: env.contract.address.to_string(),
+        },
+    );
+
+    // the incentives contract claims rewards on LP Deposit: https://github.com/astroport-fi/astroport-core/blob/514d83331da3232111c5c590fd8086ef62025ca9/contracts/tokenomics/incentives/src/execute.rs#L190
+    // thus we need update pool info after the deposit otherwise there will be unaccounted rewards on PCL lockdrop during users migration
+    if let Ok(pending_rewards) = pending_rewards_response {
+        let prev_pending_rewards_balances: Vec<Asset> = pending_rewards
+            .iter()
+            .map(|asset| {
+                let balance = asset
+                    .info
+                    .query_pool(&deps.querier, env.contract.address.clone())
+                    .unwrap_or_default();
+
+                Asset {
+                    info: asset.info.clone(),
+                    amount: balance,
+                }
+            })
+            .collect();
+
+        cosmos_msgs.push(
+            CallbackMsg::UpdatePoolOnDualRewardsClaim {
+                pool_type: pool_type.into(),
+                prev_reward_balances: prev_pending_rewards_balances,
+            }
+                .to_cosmos_msg(&env)?,
+        );
+    }
+
     // invoke callback that creates a lockup entry for the provided liquidity
     cosmos_msgs.push(
         CallbackMsg::FinishLockupMigrationCallback {
@@ -402,7 +442,7 @@ pub fn handle_migrate_xyk_liquidity(
             user_info,
             lockup_info,
         }
-        .to_cosmos_msg(&env)?,
+            .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::default().add_messages(cosmos_msgs))
@@ -517,7 +557,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
                 pool_type,
                 prev_reward_balances: prev_pending_rewards_balances,
             }
-            .to_cosmos_msg(&env)?,
+                .to_cosmos_msg(&env)?,
         );
     }
 
@@ -528,7 +568,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             duration,
             withdraw_lp_stake,
         }
-        .to_cosmos_msg(&env)?,
+            .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
@@ -693,7 +733,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             .lp_units_locked
             .full_mul(balance)
             .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-        .try_into()?
+            .try_into()?
     };
 
     let mut pending_reward_assets: Vec<Asset> = vec![];
@@ -1090,7 +1130,7 @@ pub fn query_lockup_info(
                 .lp_units_locked
                 .full_mul(pool_astroport_lp_units)
                 .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-            .try_into()?
+                .try_into()?
         };
         lockup_astroport_lp_units_opt = Some(lockup_astroport_lp_units);
         astroport_lp_token_opt = astroport_lp_token.clone();
@@ -1181,7 +1221,7 @@ pub fn calculate_astro_incentives_for_lockup(
             Uint256::from(pool_incentives_share).checked_mul(lockup_weighted_balance)?,
             Uint256::from(total_incentives_share).checked_mul(total_weighted_amount)?,
         )
-        .checked_mul_uint256(total_lockdrop_incentives.into())?)
+            .checked_mul_uint256(total_lockdrop_incentives.into())?)
     }
 }
 
