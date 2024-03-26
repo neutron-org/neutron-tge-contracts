@@ -6,18 +6,18 @@ use std::str::FromStr;
 use astroport::asset::{Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::cosmwasm_ext::IntegerToDecimal;
-use astroport::DecimalCheckedOps;
 use astroport::generator::{
     ExecuteMsg as GenExecuteMsg, PendingTokenResponse, QueryMsg as GenQueryMsg, RewardInfoResponse,
 };
 use astroport::restricted_vector::RestrictedVector;
+use astroport::DecimalCheckedOps;
 use cosmwasm_std::{
-    Addr, attr, BankMsg, Binary, Coin, coins, CosmosMsg, Decimal, Decimal256, Deps,
-    DepsMut, entry_point, Env, from_json, MessageInfo, Order, Response, StdError, StdResult, to_json_binary,
+    attr, coins, entry_point, from_json, to_json_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
+    Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
     Uint128, Uint256, WasmMsg,
 };
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg, MinterResponse};
 use cw2::set_contract_version;
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg, MinterResponse};
 
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
@@ -29,7 +29,7 @@ use astroport_periphery::utils::Decimal256CheckedOps;
 
 use crate::raw_queries::{raw_balance, raw_generator_deposit};
 use crate::state::{
-    ASSET_POOLS, CompatibleLoader, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, PCL_LOCKDROP_CONTRACT,
+    CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, PCL_LOCKDROP_CONTRACT,
     STATE, TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
 };
 
@@ -571,7 +571,7 @@ pub fn handle_migrate_liquidity_to_pcl_pools(
                 user_address: user_address.clone(),
                 duration,
             }
-                .to_cosmos_msg(&env)?,
+            .to_cosmos_msg(&env)?,
         );
     }
     Ok(Response::default().add_messages(cosmos_msgs))
@@ -667,7 +667,7 @@ fn callback_init_migrate_lockup_to_pcl_pools(
                 prev_ntrn_balance: reward_token_balance,
                 prev_proxy_reward_balances,
             }
-                .to_cosmos_msg(&env)?,
+            .to_cosmos_msg(&env)?,
         );
     }
 
@@ -677,7 +677,7 @@ fn callback_init_migrate_lockup_to_pcl_pools(
             user_address,
             duration,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::default().add_messages(cosmos_msgs))
@@ -1294,7 +1294,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
                     prev_ntrn_balance: reward_token_balance,
                     prev_proxy_reward_balances,
                 }
-                    .to_cosmos_msg(&env)?,
+                .to_cosmos_msg(&env)?,
             );
         }
     } else if user_info.ntrn_transferred && !withdraw_lp_stake {
@@ -1308,7 +1308,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             duration,
             withdraw_lp_stake,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
@@ -1520,7 +1520,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             .lp_units_locked
             .full_mul(balance)
             .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-            .try_into()?
+        .try_into()?
     };
 
     // If Astro LP tokens are staked with Astro generator
@@ -1735,7 +1735,7 @@ pub fn callback_transfer_all_rewards_before_migration(
             .lp_units_locked
             .full_mul(balance)
             .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-            .try_into()?
+        .try_into()?
     };
 
     let rwi: RewardInfoResponse = deps.querier.query_wasm_smart(
@@ -1837,7 +1837,7 @@ pub fn callback_transfer_all_rewards_before_migration(
             astroport_lp_token,
             astroport_lp_amount,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
@@ -1945,7 +1945,7 @@ pub fn callback_withdraw_user_lockup(
             paired_asset_denom,
             paired_asset_balance,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
@@ -2218,7 +2218,7 @@ pub fn query_lockup_info(
                 .lp_units_locked
                 .full_mul(pool_astroport_lp_units)
                 .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-                .try_into()?
+            .try_into()?
         };
         lockup_astroport_lp_units_opt = Some(lockup_astroport_lp_units);
         astroport_lp_token_opt = astroport_lp_token.clone();
@@ -2333,7 +2333,7 @@ pub fn calculate_astro_incentives_for_lockup(
             Uint256::from(pool_incentives_share).checked_mul(lockup_weighted_balance)?,
             Uint256::from(total_incentives_share).checked_mul(total_weighted_amount)?,
         )
-            .checked_mul_uint256(total_lockdrop_incentives.into())?)
+        .checked_mul_uint256(total_lockdrop_incentives.into())?)
     }
 }
 

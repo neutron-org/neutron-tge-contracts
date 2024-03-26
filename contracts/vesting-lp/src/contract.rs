@@ -1,9 +1,9 @@
 use cosmwasm_std::{
-    Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, entry_point, Env, MessageInfo,
-    Response, StdResult, to_json_binary, Uint128, WasmMsg,
+    entry_point, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
+    MessageInfo, Response, StdResult, Uint128, WasmMsg,
 };
-use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 use cw2::set_contract_version;
+use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
 
 use astroport::asset::{native_asset, PairInfo};
 use astroport::pair::{
@@ -14,13 +14,13 @@ use vesting_base::error::ContractError;
 use vesting_base::handlers::execute as base_execute;
 use vesting_base::handlers::query as base_query;
 use vesting_base::msg::{ExecuteMsg as BaseExecute, QueryMsg};
-use vesting_base::state::{CONFIG, vesting_info, vesting_state};
+use vesting_base::state::{vesting_info, vesting_state, CONFIG};
 use vesting_base::types::{
     VestingAccountFullInfo, VestingInfo, VestingSchedule, VestingSchedulePoint,
 };
 
 use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg};
-use crate::state::{XYK_TO_CL_MIGRATION_CONFIG, XykToClMigrationConfig};
+use crate::state::{XykToClMigrationConfig, XYK_TO_CL_MIGRATION_CONFIG};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "neutron-vesting-lp";
@@ -108,7 +108,10 @@ fn execute_migrate_liquidity(
     let vesting_info = vesting_info(config.extensions.historical);
     let info = vesting_info.load(deps.storage, address.clone())?;
     let mut resp = Response::default();
-    let user = VestingAccountFullInfo { address, info: info.clone() };
+    let user = VestingAccountFullInfo {
+        address,
+        info: info.clone(),
+    };
 
     // get pairs LP token addresses
     let pair_info: PairInfo = deps
@@ -164,7 +167,7 @@ fn execute_migrate_liquidity(
             paired_asset_denom: migration_config.paired_denom.clone(),
             user,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(resp)
@@ -283,7 +286,7 @@ fn migrate_liquidity_to_cl_pair_callback(
             slippage_tolerance,
             user,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::default().add_messages(msgs))
@@ -349,7 +352,7 @@ fn provide_liquidity_to_cl_pair_after_withdrawal_callback(
             user,
             init_balance_pcl_lp: current_balance,
         }
-            .to_cosmos_msg(&env)?,
+        .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::default().add_messages(msgs))
