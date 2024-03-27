@@ -1,15 +1,14 @@
-use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg};
-use crate::state::{XykToClMigrationConfig, XYK_TO_CL_MIGRATION_CONFIG};
-use astroport::asset::{native_asset, PairInfo};
-use astroport::pair::{
-    Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
-};
 use cosmwasm_std::{
     entry_point, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Response, StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
+
+use astroport::asset::{native_asset, PairInfo};
+use astroport::pair::{
+    Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
+};
 use vesting_base::builder::VestingBaseBuilder;
 use vesting_base::error::ContractError;
 use vesting_base::handlers::execute as base_execute;
@@ -19,6 +18,9 @@ use vesting_base::state::{vesting_info, vesting_state, CONFIG};
 use vesting_base::types::{
     VestingAccountFullInfo, VestingInfo, VestingSchedule, VestingSchedulePoint,
 };
+
+use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg};
+use crate::state::{XykToClMigrationConfig, XYK_TO_CL_MIGRATION_CONFIG};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "neutron-vesting-lp";
@@ -71,6 +73,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// Manages contract migration.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
     XYK_TO_CL_MIGRATION_CONFIG.save(
         deps.storage,
         &XykToClMigrationConfig {
@@ -104,7 +108,10 @@ fn execute_migrate_liquidity(
     let vesting_info = vesting_info(config.extensions.historical);
     let info = vesting_info.load(deps.storage, address.clone())?;
     let mut resp = Response::default();
-    let user = VestingAccountFullInfo { address, info };
+    let user = VestingAccountFullInfo {
+        address,
+        info: info.clone(),
+    };
 
     // get pairs LP token addresses
     let pair_info: PairInfo = deps
@@ -127,15 +134,17 @@ fn execute_migrate_liquidity(
             }));
         }
 
-        vesting_info.save(
-            deps.storage,
-            user.address.clone(),
-            &VestingInfo {
-                schedules: vec![],
-                released_amount: Uint128::zero(),
-            },
-            env.block.height,
-        )?;
+        if !info.schedules.is_empty() {
+            vesting_info.save(
+                deps.storage,
+                user.address.clone(),
+                &VestingInfo {
+                    schedules: vec![],
+                    released_amount: Uint128::zero(),
+                },
+                env.block.height,
+            )?;
+        }
         return Ok(resp);
     };
 
