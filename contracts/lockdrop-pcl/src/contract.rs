@@ -657,6 +657,8 @@ pub fn update_pool_on_dual_rewards_claim(
 /// * **duration** is a vector of type [`u64`]. Duration of the lockup for which rewards have been claimed / position unlocked.
 ///
 /// * **withdraw_lp_stake** is an object of type [`bool`]. Boolean value indicating if the ASTRO LP Tokens are to be sent to the user or not.
+///
+/// * **reward_tokens** is vector of [`AssetInfo`]. A list of assets to calculate claimable staking rewards for.
 pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     deps: DepsMut,
     env: Env,
