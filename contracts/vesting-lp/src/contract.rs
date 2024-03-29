@@ -1,14 +1,16 @@
+use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg};
+use crate::state::{XykToClMigrationConfig, XYK_TO_CL_MIGRATION_CONFIG};
+use astroport::asset::{native_asset, Asset, PairInfo};
+use astroport::pair::QueryMsg::Share;
+use astroport::pair::{
+    Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
+};
 use cosmwasm_std::{
     entry_point, to_json_binary, Addr, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Env,
     MessageInfo, Response, StdResult, Uint128, WasmMsg,
 };
 use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg};
-
-use astroport::asset::{native_asset, PairInfo};
-use astroport::pair::{
-    Cw20HookMsg as PairCw20HookMsg, ExecuteMsg as PairExecuteMsg, QueryMsg as PairQueryMsg,
-};
 use vesting_base::builder::VestingBaseBuilder;
 use vesting_base::error::ContractError;
 use vesting_base::handlers::execute as base_execute;
@@ -18,9 +20,6 @@ use vesting_base::state::{vesting_info, vesting_state, CONFIG};
 use vesting_base::types::{
     VestingAccountFullInfo, VestingInfo, VestingSchedule, VestingSchedulePoint,
 };
-
-use crate::msg::{CallbackMsg, ExecuteMsg, InstantiateMsg, MigrateMsg};
-use crate::state::{XykToClMigrationConfig, XYK_TO_CL_MIGRATION_CONFIG};
 
 /// Contract name that is used for migration.
 const CONTRACT_NAME: &str = "neutron-vesting-lp";
@@ -85,7 +84,6 @@ pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, Co
             cl_pair: deps.api.addr_validate(msg.cl_pair.as_str())?,
             new_lp_token: deps.api.addr_validate(msg.new_lp_token.as_str())?,
             pcl_vesting: deps.api.addr_validate(msg.pcl_vesting.as_str())?,
-            dust_threshold: msg.dust_threshold,
         },
     )?;
 
@@ -119,10 +117,14 @@ fn execute_migrate_liquidity(
         .query_wasm_smart(migration_config.xyk_pair.clone(), &PairQueryMsg::Pair {})?;
 
     let user_share = compute_share(&user.info)?;
+    let user_share_assets: Vec<Asset> = deps.querier.query_wasm_smart(
+        migration_config.xyk_pair.clone(),
+        &Share { amount: user_share },
+    )?;
 
     // if there is nothing to migrate just update vi and quit.
-    // if there is only dust, than send it back to user, update vi and quit
-    if user_share < migration_config.dust_threshold {
+    // if there is only dust, then send it back to user, update vi and quit
+    if user_share_assets.iter().any(|a| a.amount.is_zero()) {
         if !user_share.is_zero() {
             resp = resp.add_message(CosmosMsg::Wasm(WasmMsg::Execute {
                 contract_addr: pair_info.liquidity_token.to_string(),

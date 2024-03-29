@@ -371,8 +371,9 @@ pub fn handle_migrate_xyk_liquidity(
         },
     )?;
 
+    let mut cosmos_msgs: Vec<CosmosMsg<Empty>> = vec![];
     // provide the transferred liquidity to the PCL pool
-    let mut cosmos_msgs: Vec<CosmosMsg<Empty>> = vec![CosmosMsg::Wasm(WasmMsg::Execute {
+    cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: astroport_pool.to_string(),
         funds: info.funds.clone(),
         msg: to_json_binary(&ProvideLiquidity {
@@ -390,7 +391,46 @@ pub fn handle_migrate_xyk_liquidity(
             auto_stake: Some(true),
             receiver: None,
         })?,
-    })];
+    }));
+
+    let incentives = &config.incentives;
+
+    // QUERY :: Check if there are any pending staking rewards
+    let pending_rewards_response: StdResult<Vec<Asset>> = deps.querier.query_wasm_smart(
+        incentives,
+        &IncentivesQueryMsg::PendingRewards {
+            lp_token: pool_info.lp_token.to_string(),
+            user: env.contract.address.to_string(),
+        },
+    );
+
+    // the incentives contract claims rewards on LP Deposit: https://github.com/astroport-fi/astroport-core/blob/514d83331da3232111c5c590fd8086ef62025ca9/contracts/tokenomics/incentives/src/execute.rs#L190
+    // thus we need update pool info after the deposit otherwise there will be unaccounted rewards on PCL lockdrop during users migration
+    if let Ok(pending_rewards) = pending_rewards_response {
+        let prev_pending_rewards_balances: Vec<Asset> = pending_rewards
+            .iter()
+            .map(|asset| {
+                let balance = asset
+                    .info
+                    .query_pool(&deps.querier, env.contract.address.clone())
+                    .unwrap_or_default();
+
+                Asset {
+                    info: asset.info.clone(),
+                    amount: balance,
+                }
+            })
+            .collect();
+
+        cosmos_msgs.push(
+            CallbackMsg::UpdatePoolOnDualRewardsClaim {
+                pool_type: pool_type.into(),
+                prev_reward_balances: prev_pending_rewards_balances,
+            }
+            .to_cosmos_msg(&env)?,
+        );
+    }
+
     // invoke callback that creates a lockup entry for the provided liquidity
     cosmos_msgs.push(
         CallbackMsg::FinishLockupMigrationCallback {
@@ -437,9 +477,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     // CHECK ::: Is LP Token Pool supported or not ?
     let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
 
-    let mut user_info = USER_INFO
-        .may_load(deps.storage, &user_address)?
-        .unwrap_or_default();
+    let mut user_info = USER_INFO.load(deps.storage, &user_address)?;
 
     // If user's total NTRN rewards == 0 :: We update all of the user's lockup positions to calculate NTRN rewards and for each alongwith their equivalent Astroport LP Shares
     if user_info.total_ntrn_rewards == Uint128::zero() {
