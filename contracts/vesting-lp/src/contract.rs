@@ -72,6 +72,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// Manages contract migration.
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
     XYK_TO_CL_MIGRATION_CONFIG.save(
         deps.storage,
         &XykToClMigrationConfig {
@@ -104,7 +106,10 @@ fn execute_migrate_liquidity(
     let vesting_info = vesting_info(config.extensions.historical);
     let info = vesting_info.load(deps.storage, address.clone())?;
     let mut resp = Response::default();
-    let user = VestingAccountFullInfo { address, info };
+    let user = VestingAccountFullInfo {
+        address,
+        info: info.clone(),
+    };
 
     // get pairs LP token addresses
     let pair_info: PairInfo = deps
@@ -131,15 +136,17 @@ fn execute_migrate_liquidity(
             }));
         }
 
-        vesting_info.save(
-            deps.storage,
-            user.address.clone(),
-            &VestingInfo {
-                schedules: vec![],
-                released_amount: Uint128::zero(),
-            },
-            env.block.height,
-        )?;
+        if !info.schedules.is_empty() {
+            vesting_info.save(
+                deps.storage,
+                user.address.clone(),
+                &VestingInfo {
+                    schedules: vec![],
+                    released_amount: Uint128::zero(),
+                },
+                env.block.height,
+            )?;
+        }
         return Ok(resp);
     };
 

@@ -11,7 +11,6 @@ use astroport::generator::{
 };
 use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
-use astroport_periphery::utils::Decimal256CheckedOps;
 use cosmwasm_std::{
     attr, coins, entry_point, from_json, to_json_binary, Addr, BankMsg, Binary, Coin, CosmosMsg,
     Decimal, Decimal256, Deps, DepsMut, Env, MessageInfo, Order, Response, StdError, StdResult,
@@ -20,14 +19,15 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, Cw20ReceiveMsg, MinterResponse};
 
-use crate::raw_queries::{raw_balance, raw_generator_deposit};
 use astroport_periphery::lockdrop::{
     CallbackMsg, Config, Cw20HookMsg, ExecuteMsg, InstantiateMsg, LockUpInfoResponse,
     LockUpInfoSummary, LockupInfoV2, MigrateMsg, PoolInfo, PoolType, QueryMsg, State,
     StateResponse, UpdateConfigMsg, UserInfoResponse, UserInfoWithListResponse,
 };
 use astroport_periphery::lockdrop_pcl::ExecuteMsg as LockdropPCLExecuteMsg;
+use astroport_periphery::utils::Decimal256CheckedOps;
 
+use crate::raw_queries::{raw_balance, raw_generator_deposit};
 use crate::state::{
     CompatibleLoader, ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, PCL_LOCKDROP_CONTRACT,
     STATE, TOTAL_USER_LOCKUP_AMOUNT, USER_INFO,
@@ -450,6 +450,8 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 /// * **_msg** is an object of type [`MigrateMsg`].
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> StdResult<Response> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
     PCL_LOCKDROP_CONTRACT.save(
         deps.storage,
         &deps.api.addr_validate(&msg.pcl_lockdrop_contract)?,
