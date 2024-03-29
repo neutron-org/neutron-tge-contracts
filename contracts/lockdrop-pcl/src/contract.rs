@@ -190,6 +190,7 @@ fn _handle_callback(
             user_address,
             duration,
             withdraw_lp_stake,
+            reward_tokens,
         } => callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             deps,
             env,
@@ -197,6 +198,7 @@ fn _handle_callback(
             user_address,
             duration,
             withdraw_lp_stake,
+            reward_tokens,
         ),
         CallbackMsg::FinishLockupMigrationCallback {
             pool_type,
@@ -523,6 +525,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
         },
     )?;
 
+    let mut reward_tokens: Vec<AssetInfo> = vec![];
     if pending_rewards_response
         .iter()
         .any(|asset| !asset.amount.is_zero())
@@ -530,6 +533,8 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
         let prev_pending_rewards_balances: Vec<Asset> = pending_rewards_response
             .iter()
             .map(|asset| {
+                reward_tokens.push(asset.info.clone());
+
                 let balance = asset
                     .info
                     .query_pool(&deps.querier, env.contract.address.clone())
@@ -565,6 +570,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             user_address,
             duration,
             withdraw_lp_stake,
+            reward_tokens,
         }
         .to_cosmos_msg(&env)?,
     );
@@ -689,6 +695,8 @@ pub fn update_pool_on_dual_rewards_claim(
 /// * **duration** is a vector of type [`u64`]. Duration of the lockup for which rewards have been claimed / position unlocked.
 ///
 /// * **withdraw_lp_stake** is an object of type [`bool`]. Boolean value indicating if the ASTRO LP Tokens are to be sent to the user or not.
+///
+/// * **reward_tokens** is vector of [`AssetInfo`]. A list of assets to calculate claimable staking rewards for.
 pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     deps: DepsMut,
     env: Env,
@@ -696,6 +704,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     user_address: Addr,
     duration: u64,
     withdraw_lp_stake: bool,
+    reward_tokens: Vec<AssetInfo>,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
@@ -737,17 +746,10 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     let mut pending_reward_assets: Vec<Asset> = vec![];
     // If this LP token is getting incentives
     // Calculate claimable staking rewards for this lockup
-    let pending_rewards: Vec<Asset> = deps.querier.query_wasm_smart(
-        incentives,
-        &IncentivesQueryMsg::PendingRewards {
-            lp_token: astroport_lp_token.to_string(),
-            user: env.contract.address.to_string(),
-        },
-    )?;
-    for reward in pending_rewards {
+    for reward_token in reward_tokens {
         let incentives_rewards_per_share = pool_info
             .incentives_rewards_per_share
-            .load(&reward.info)
+            .load(&reward_token)
             .unwrap_or_default();
         if incentives_rewards_per_share.is_zero() {
             continue;
@@ -758,20 +760,20 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             .to_uint_floor();
         let debt = lockup_info
             .incentives_debt
-            .load(&reward.info)
+            .load(&reward_token)
             .unwrap_or_default();
         let pending_reward = total_lockup_rewards.checked_sub(debt)?;
 
         if !pending_reward.is_zero() {
             pending_reward_assets.push(Asset {
-                info: reward.info.clone(),
+                info: reward_token.clone(),
                 amount: pending_reward,
             });
         }
 
         lockup_info
             .incentives_debt
-            .update(&reward.info, total_lockup_rewards.checked_sub(debt)?)?;
+            .update(&reward_token, total_lockup_rewards.checked_sub(debt)?)?;
     }
 
     // If this is a void transaction (no state change), then return error.
