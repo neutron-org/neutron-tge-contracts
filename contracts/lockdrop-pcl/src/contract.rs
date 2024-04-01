@@ -5,30 +5,30 @@ use std::str::FromStr;
 use astroport::asset::{Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::cosmwasm_ext::IntegerToDecimal;
+use astroport::DecimalCheckedOps;
 use astroport::incentives::{ExecuteMsg as IncentivesExecuteMsg, QueryMsg as IncentivesQueryMsg};
 use astroport::pair::ExecuteMsg::ProvideLiquidity;
 use astroport::restricted_vector::RestrictedVector;
-use astroport::DecimalCheckedOps;
 use cosmwasm_std::{
-    attr, coins, entry_point, to_json_binary, Addr, BankMsg, Binary, CosmosMsg, Decimal,
-    Decimal256, Deps, DepsMut, Empty, Env, MessageInfo, Order, Response, StdError, StdResult,
+    Addr, attr, BankMsg, Binary, coins, CosmosMsg, Decimal, Decimal256, Deps,
+    DepsMut, Empty, entry_point, Env, MessageInfo, Order, Response, StdError, StdResult, to_json_binary,
     Uint128, Uint256, WasmMsg,
 };
-use cw2::set_contract_version;
 use cw20::{BalanceResponse, Cw20ExecuteMsg, Cw20QueryMsg, MinterResponse};
+use cw2::set_contract_version;
 
 use astroport_periphery::lockdrop::{
     LockupInfoV2 as LockdropXYKLockupInfoV2, PoolType as LockdropXYKPoolType,
     UserInfo as LockdropXYKUserInfo,
 };
 use astroport_periphery::lockdrop_pcl::{
-    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockUpInfoResponse, LockUpInfoSummary,
-    LockupInfo, MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
+    CallbackMsg, Config, ExecuteMsg, InstantiateMsg, LockupInfo, LockUpInfoResponse,
+    LockUpInfoSummary, MigrateMsg, PoolInfo, PoolType, QueryMsg, State, StateResponse, UpdateConfigMsg,
     UserInfo, UserInfoResponse, UserInfoWithListResponse,
 };
 use astroport_periphery::utils::Decimal256CheckedOps;
 
-use crate::raw_queries::raw_incentives_deposit;
+use crate::raw_queries::{raw_balance, raw_incentives_deposit};
 use crate::state::{
     ASSET_POOLS, CONFIG, LOCKUP_INFO, OWNERSHIP_PROPOSAL, STATE, TOTAL_USER_LOCKUP_AMOUNT,
     USER_INFO,
@@ -154,6 +154,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             duration,
             user_info,
             lockup_info,
+            deposit_all
         } => handle_migrate_xyk_liquidity(
             deps,
             env,
@@ -163,6 +164,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             duration,
             user_info,
             lockup_info,
+            deposit_all,
         ),
     }
 }
@@ -319,6 +321,26 @@ pub fn handle_update_config(
     Ok(Response::new().add_attributes(attributes))
 }
 
+fn stake_messages(
+    config: Config,
+    lp_token_address: Addr,
+    amount: Uint128,
+) -> StdResult<Vec<CosmosMsg>> {
+    let mut cosmos_msgs = vec![];
+
+    cosmos_msgs.push(CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: lp_token_address.to_string(),
+        funds: vec![],
+        msg: to_json_binary(&Cw20ExecuteMsg::Send {
+            contract: config.incentives.to_string(),
+            msg: to_json_binary(&astroport::generator::Cw20HookMsg::Deposit {})?,
+            amount,
+        })?,
+    }));
+
+    Ok(cosmos_msgs)
+}
+
 #[allow(clippy::too_many_arguments)]
 /// Creates a lockup position based on the provided parameters and XYK lockdrop contract's state. No
 /// validation is performed on the lockup parameters, they are expected to be valid ones because the
@@ -343,6 +365,7 @@ pub fn handle_migrate_xyk_liquidity(
     duration: u64,
     user_info: LockdropXYKUserInfo,
     lockup_info: LockdropXYKLockupInfoV2,
+    deposit_all: bool,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
     if info.sender != config.xyk_lockdrop_contract {
@@ -390,7 +413,7 @@ pub fn handle_migrate_xyk_liquidity(
                 })
                 .collect(),
             slippage_tolerance: None,
-            auto_stake: Some(true),
+            auto_stake: Some(false),
             receiver: None,
         })?,
     }));
@@ -429,7 +452,7 @@ pub fn handle_migrate_xyk_liquidity(
                 pool_type: pool_type.into(),
                 prev_reward_balances: prev_pending_rewards_balances,
             }
-            .to_cosmos_msg(&env)?,
+                .to_cosmos_msg(&env)?,
         );
     }
 
@@ -444,8 +467,14 @@ pub fn handle_migrate_xyk_liquidity(
             user_info,
             lockup_info,
         }
-        .to_cosmos_msg(&env)?,
+            .to_cosmos_msg(&env)?,
     );
+
+    let lp_balance = raw_balance(deps.querier, &pool_info.lp_token, env.contract.address.as_bytes())?;
+
+    if deposit_all {
+        cosmos_msgs.extend(stake_messages(config, pool_info.lp_token, lp_balance)?);
+    }
 
     Ok(Response::default().add_messages(cosmos_msgs))
 }
@@ -560,7 +589,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
                 pool_type,
                 prev_reward_balances: prev_pending_rewards_balances,
             }
-            .to_cosmos_msg(&env)?,
+                .to_cosmos_msg(&env)?,
         );
     }
 
@@ -572,7 +601,7 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             withdraw_lp_stake,
             reward_tokens,
         }
-        .to_cosmos_msg(&env)?,
+            .to_cosmos_msg(&env)?,
     );
 
     Ok(Response::new().add_messages(cosmos_msgs))
@@ -740,7 +769,7 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             .lp_units_locked
             .full_mul(balance)
             .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-        .try_into()?
+            .try_into()?
     };
 
     let mut pending_reward_assets: Vec<Asset> = vec![];
@@ -1130,7 +1159,7 @@ pub fn query_lockup_info(
                 .lp_units_locked
                 .full_mul(pool_astroport_lp_units)
                 .checked_div(Uint256::from(pool_info.amount_in_lockups))?)
-            .try_into()?
+                .try_into()?
         };
         lockup_astroport_lp_units_opt = Some(lockup_astroport_lp_units);
         astroport_lp_token_opt = astroport_lp_token.clone();
@@ -1221,7 +1250,7 @@ pub fn calculate_astro_incentives_for_lockup(
             Uint256::from(pool_incentives_share).checked_mul(lockup_weighted_balance)?,
             Uint256::from(total_incentives_share).checked_mul(total_weighted_amount)?,
         )
-        .checked_mul_uint256(total_lockdrop_incentives.into())?)
+            .checked_mul_uint256(total_lockdrop_incentives.into())?)
     }
 }
 

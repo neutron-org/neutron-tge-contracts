@@ -1,17 +1,18 @@
-use crate::lockdrop::{
-    LockupInfoV2 as LockdropXYKLockupInfoV2, PoolType as LockdropXYKPoolType,
-    UserInfo as LockdropXYKUserInfo,
-};
 use astroport::asset::{Asset, AssetInfo};
 use astroport::restricted_vector::RestrictedVector;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{
-    to_json_binary, Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, Uint128,
+    Addr, CosmosMsg, Decimal, Decimal256, Env, StdError, StdResult, to_json_binary, Uint128,
     Uint256, WasmMsg,
 };
 use cw_storage_plus::{Key, KeyDeserialize, Prefixer, PrimaryKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+use crate::lockdrop::{
+    LockupInfoV2 as LockdropXYKLockupInfoV2, PoolType as LockdropXYKPoolType,
+    UserInfo as LockdropXYKUserInfo,
+};
 
 // TODO: implement display trait
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Copy)]
@@ -168,6 +169,7 @@ pub enum ExecuteMsg {
         /// The lockup info from the XYK lockdrop contract. Is used to create a LockupInfoV2 entry
         /// on the PCL lockdrop contract's side.
         lockup_info: LockdropXYKLockupInfoV2,
+        deposit_all: bool,
     },
 }
 
@@ -240,13 +242,13 @@ pub enum QueryMsg {
         pool_type: PoolType,
         duration: u64,
     },
-    #[returns(Option<Uint128>)]
+    #[returns(Option < Uint128 >)]
     QueryUserLockupTotalAtHeight {
         pool_type: PoolType,
         user_address: String,
         height: u64,
     },
-    #[returns(Option<Uint128>)]
+    #[returns(Option < Uint128 >)]
     QueryLockupTotalAtHeight { pool_type: PoolType, height: u64 },
 }
 
