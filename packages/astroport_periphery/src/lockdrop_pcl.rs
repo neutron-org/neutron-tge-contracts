@@ -188,7 +188,6 @@ pub enum CallbackMsg {
         user_address: Addr,
         duration: u64,
         withdraw_lp_stake: bool,
-        reward_tokens: Vec<AssetInfo>,
     },
     /// Completes the liquidity migration process by making all necessary state updates for the
     /// lockup position.

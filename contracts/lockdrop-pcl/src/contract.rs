@@ -5,7 +5,9 @@ use std::str::FromStr;
 use astroport::asset::{Asset, AssetInfo};
 use astroport::common::{claim_ownership, drop_ownership_proposal, propose_new_owner};
 use astroport::cosmwasm_ext::IntegerToDecimal;
-use astroport::incentives::{ExecuteMsg as IncentivesExecuteMsg, QueryMsg as IncentivesQueryMsg};
+use astroport::incentives::{
+    ExecuteMsg as IncentivesExecuteMsg, QueryMsg as IncentivesQueryMsg, RewardInfo, RewardType,
+};
 use astroport::pair::ExecuteMsg::ProvideLiquidity;
 use astroport::restricted_vector::RestrictedVector;
 use astroport::DecimalCheckedOps;
@@ -194,7 +196,6 @@ fn _handle_callback(
             user_address,
             duration,
             withdraw_lp_stake,
-            reward_tokens,
         } => callback_withdraw_user_rewards_for_lockup_optional_withdraw(
             deps,
             env,
@@ -202,7 +203,6 @@ fn _handle_callback(
             user_address,
             duration,
             withdraw_lp_stake,
-            reward_tokens,
         ),
         CallbackMsg::FinishLockupMigrationCallback {
             pool_type,
@@ -482,7 +482,6 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
     let astroport_lp_token = pool_info.lp_token;
 
     let mut cosmos_msgs = vec![];
-    let mut reward_tokens: Vec<AssetInfo> = vec![];
     if pool_info.is_staked {
         let incentives = &config.incentives;
         // QUERY :: Check if there are any pending staking rewards
@@ -501,8 +500,6 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             let prev_pending_rewards_balances: Vec<Asset> = pending_rewards_response
                 .iter()
                 .map(|asset| {
-                    reward_tokens.push(asset.info.clone());
-
                     let balance = asset
                         .info
                         .query_pool(&deps.querier, env.contract.address.clone())
@@ -539,7 +536,6 @@ pub fn handle_claim_rewards_and_unlock_for_lockup(
             user_address,
             duration,
             withdraw_lp_stake,
-            reward_tokens,
         }
         .to_cosmos_msg(&env)?,
     );
@@ -673,7 +669,6 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     user_address: Addr,
     duration: u64,
     withdraw_lp_stake: bool,
-    reward_tokens: Vec<AssetInfo>,
 ) -> StdResult<Response> {
     let config = CONFIG.load(deps.storage)?;
     let mut pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
@@ -723,10 +718,25 @@ pub fn callback_withdraw_user_rewards_for_lockup_optional_withdraw(
     };
 
     if pool_info.is_staked {
+        // QUERY :: Get list of all reward assets for the lp token
+        let reward_infos: Vec<RewardInfo> = deps.querier.query_wasm_smart(
+            &config.incentives,
+            &IncentivesQueryMsg::RewardInfo {
+                lp_token: astroport_lp_token.to_string(),
+            },
+        )?;
+
         let mut pending_reward_assets: Vec<Asset> = vec![];
         // If this LP token is getting incentives
         // Calculate claimable staking rewards for this lockup
-        for reward_token in reward_tokens {
+        for reward_info in reward_infos {
+            let reward_token: AssetInfo = match reward_info.reward {
+                RewardType::Int(asset) => asset,
+                RewardType::Ext {
+                    info,
+                    next_update_ts: _,
+                } => info,
+            };
             let incentives_rewards_per_share = pool_info
                 .incentives_rewards_per_share
                 .load(&reward_token)
