@@ -1983,6 +1983,20 @@ pub fn callback_migrate_user_lockup_to_pcl_pair(
         .sub(paired_asset_balance);
 
     let pcl_lockdrop = PCL_LOCKDROP_CONTRACT.load(deps.storage)?;
+
+    let pool_info = ASSET_POOLS.load(deps.storage, pool_type)?;
+    let generator = config
+        .generator
+        .as_ref()
+        .ok_or_else(|| StdError::generic_err("Generator should be set"))?;
+    let staked_lp_tokens: Uint128 = deps.querier.query_wasm_smart(
+        generator,
+        &GenQueryMsg::Deposit {
+            lp_token: pool_info.lp_token.to_string(),
+            user: env.contract.address.to_string(),
+        },
+    )?;
+
     Ok(
         Response::default().add_message(CosmosMsg::Wasm(WasmMsg::Execute {
             contract_addr: pcl_lockdrop.to_string(),
@@ -2002,6 +2016,9 @@ pub fn callback_migrate_user_lockup_to_pcl_pair(
                 duration,
                 user_info,
                 lockup_info,
+                // zero LP tokens left for the XYK lockdrop contract means this is the last
+                // lockdrop participant being migrated, => time to stake pool's LP tokens
+                stake: staked_lp_tokens.is_zero(),
             })?,
         })),
     )

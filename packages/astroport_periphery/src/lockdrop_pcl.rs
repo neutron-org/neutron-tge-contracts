@@ -152,7 +152,7 @@ pub enum ExecuteMsg {
     DropOwnershipProposal {},
     /// Used to claim contract ownership.
     ClaimOwnership {},
-    /// A handler to receive lockdrop liquidity migrated from xyl pools to PCL ones. Only callable
+    /// A handler to receive lockdrop liquidity migrated from XYK pools to PCL ones. Only callable
     /// by the original lockdrop contract. Expects two **Coin**s to be attached as funds.
     #[serde(rename = "migrate_xyk_liquidity")]
     MigrateXYKLiquidity {
@@ -168,6 +168,11 @@ pub enum ExecuteMsg {
         /// The lockup info from the XYK lockdrop contract. Is used to create a LockupInfoV2 entry
         /// on the PCL lockdrop contract's side.
         lockup_info: LockdropXYKLockupInfoV2,
+        /// Whether to stake all LP tokens in PCL Lockdrop possession to the incentives contract.
+        /// Should be false unless the last lockdrop participant is being migrated for a given
+        /// pool type. Before staked, all LP tokens are just collected on the PCL Lockdrop
+        /// contract's account and therefore no incentive rewards are accrued.
+        stake: bool,
     },
 }
 
@@ -183,10 +188,9 @@ pub enum CallbackMsg {
         user_address: Addr,
         duration: u64,
         withdraw_lp_stake: bool,
-        reward_tokens: Vec<AssetInfo>,
     },
-    /// Completes the liquidity migration process by making all necessary state updates for the lockup
-    /// position.
+    /// Completes the liquidity migration process by making all necessary state updates for the
+    /// lockup position.
     FinishLockupMigrationCallback {
         /// The type of the pool the lockup is related to.
         pool_type: PoolType,
@@ -196,16 +200,20 @@ pub enum CallbackMsg {
         duration: u64,
         /// The address of the LP token of the pool.
         lp_token: String,
-        /// The amount of staked LP token the PCL lockdrop contract possesses of before liquidity
-        /// provision and staking to the incentives. Used to calculate LP token amount received for
-        /// liquidity provision.
-        staked_lp_token_amount: Uint128,
+        /// The amount of LP token the PCL lockdrop contract possesses of before liquidity provision.
+        /// Used to calculate LP token amount received for liquidity provision.
+        prev_lp_token_amount: Uint128,
         /// The lockup owner's info from the XYK lockdrop contract. Is used to create a UserInfo
         /// entry on the PCL lockdrop contract's side.
         user_info: LockdropXYKUserInfo,
         /// The lockup info from the XYK lockdrop contract. Is used to create a LockupInfoV2 entry
         /// on the PCL lockdrop contract's side.
         lockup_info: LockdropXYKLockupInfoV2,
+        /// Whether to stake all LP tokens in PCL Lockdrop possession to the incentives contract.
+        /// Should be false unless the last lockdrop participant is being migrated for a given
+        /// pool type. Before staked, all LP tokens are just collected on the PCL Lockdrop
+        /// contract's account and therefore no incentive rewards are accrued.
+        stake: bool,
     },
 }
 
@@ -293,6 +301,8 @@ pub struct PoolInfo {
     pub weighted_amount: Uint256,
     /// Ratio of incentives rewards accured to astroport pool share
     pub incentives_rewards_per_share: RestrictedVector<AssetInfo, Decimal>,
+    /// Boolean value indicating if the LP Tokens are staked with the Incentives contract
+    pub is_staked: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema, Default)]
