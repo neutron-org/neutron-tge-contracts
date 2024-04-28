@@ -7,7 +7,7 @@ use crate::msg::{
 use crate::types::{Config, Extensions};
 use astroport::asset::token_asset_info;
 use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-use cosmwasm_std::{from_binary, Addr};
+use cosmwasm_std::{from_json, Addr};
 
 #[test]
 fn set_vesting_token() {
@@ -21,7 +21,7 @@ fn set_vesting_token() {
 
     // check initialisation
     assert_eq!(
-        from_binary::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
+        from_json::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
             .unwrap(),
         Config {
             owner: Addr::unchecked("owner"),
@@ -63,7 +63,7 @@ fn set_vesting_token() {
     .unwrap();
 
     assert_eq!(
-        from_binary::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
+        from_json::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
             .unwrap(),
         Config {
             owner: Addr::unchecked("owner"),
@@ -92,7 +92,7 @@ fn set_vesting_token() {
     );
 
     assert_eq!(
-        from_binary::<Config>(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap(),
+        from_json::<Config>(&query(deps.as_ref(), env, QueryMsg::Config {}).unwrap()).unwrap(),
         Config {
             owner: Addr::unchecked("owner"),
             token_info_manager: Addr::unchecked(token_info_manager),
@@ -119,7 +119,7 @@ fn proper_building_standard() {
 
     // check initialisation
     assert_eq!(
-        from_binary::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
+        from_json::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
             .unwrap(),
         Config {
             owner: Addr::unchecked("owner"),
@@ -192,7 +192,7 @@ fn proper_building_managers() {
 
     // check initialisation
     assert_eq!(
-        from_binary::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
+        from_json::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
             .unwrap(),
         Config {
             owner: Addr::unchecked("owner"),
@@ -208,7 +208,7 @@ fn proper_building_managers() {
 
     // make sure with_managers extension is enabled
     assert_eq!(
-        from_binary::<Vec<String>>(
+        from_json::<Vec<String>>(
             &query(
                 deps.as_ref(),
                 env.clone(),
@@ -267,7 +267,7 @@ fn proper_building_historical() {
 
     // check initialisation
     assert_eq!(
-        from_binary::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
+        from_json::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
             .unwrap(),
         Config {
             owner: Addr::unchecked("owner"),
@@ -335,7 +335,7 @@ fn proper_building_managed() {
 
     // check initialisation and set vesting token
     assert_eq!(
-        from_binary::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
+        from_json::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
             .unwrap(),
         Config {
             owner: Addr::unchecked("owner"),
@@ -417,7 +417,7 @@ fn proper_building_all_extensions() {
 
     // check initialisation and set vesting token
     assert_eq!(
-        from_binary::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
+        from_json::<Config>(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap())
             .unwrap(),
         Config {
             owner: Addr::unchecked("owner"),
@@ -443,7 +443,7 @@ fn proper_building_all_extensions() {
 
     // make sure with_managers extension is enabled
     assert_eq!(
-        from_binary::<Vec<String>>(
+        from_json::<Vec<String>>(
             &query(
                 deps.as_ref(),
                 env.clone(),

@@ -1,0 +1,38 @@
+[package]
+name = "neutron-lockdrop-pcl"
+version = "1.0.0"
+authors = ["_astromartian", "sotnikov-s"]
+edition = "2021"
+
+
+exclude = [
+    # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
+    "contract.wasm",
+    "hash.txt",
+]
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+
+[dependencies]
+# we have to keep it 0.15.1 because it is the same version as in astroport
+cw-storage-plus = { version = "0.15.1" }
+astroport = { git = "https://github.com/astroport-fi/astroport-core.git", tag = "v3.11.0" }
+credits = { path = "../credits" }
+astroport-periphery = { workspace = true }
+cosmwasm-std = { workspace = true }
+cw20 = { workspace = true }
+cw2 = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+cosmwasm-schema = { workspace = true }

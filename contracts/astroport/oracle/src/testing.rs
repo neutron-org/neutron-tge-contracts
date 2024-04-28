@@ -5,7 +5,7 @@ use astroport::asset::{Asset, AssetInfo, PairInfo};
 use astroport::oracle::{Config, ExecuteMsg, InstantiateMsg, QueryMsg};
 use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
 use cosmwasm_std::{
-    from_binary, Addr, Decimal256, DepsMut, Env, MessageInfo, Uint128, Uint256, Uint64,
+    from_json, Addr, Decimal256, DepsMut, Env, MessageInfo, Uint128, Uint256, Uint64,
 };
 use std::ops::{Add, Mul};
 
@@ -205,7 +205,7 @@ fn cfg_and_last_update_ts() {
 
     // make sure config query works as expected
     let cfg: Config =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap()).unwrap();
+        from_json(query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap()).unwrap();
     assert_eq!(
         cfg,
         Config {
@@ -249,7 +249,7 @@ fn cfg_and_last_update_ts() {
     )
     .unwrap();
     let last_update_ts: u64 =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
+        from_json(query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
     assert_eq!(last_update_ts, first_update_ts);
     env.block.time = env.block.time.plus_seconds(100);
@@ -261,7 +261,7 @@ fn cfg_and_last_update_ts() {
     )
     .unwrap();
     let last_update_ts: u64 =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
+        from_json(query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
     assert_eq!(last_update_ts, first_update_ts.add(100));
 
@@ -274,12 +274,12 @@ fn cfg_and_last_update_ts() {
     )
     .unwrap();
     let cfg: Config =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap()).unwrap();
+        from_json(query(deps.as_ref(), env.clone(), QueryMsg::Config {}).unwrap()).unwrap();
     assert_eq!(cfg.period, 500u64);
 
     // make sure premature update doesn't work
     let last_update_ts: u64 =
-        from_binary(&query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
+        from_json(query(deps.as_ref(), env.clone(), QueryMsg::LastUpdateTimestamp {}).unwrap())
             .unwrap();
     assert_eq!(last_update_ts, first_update_ts.add(100));
     env.block.time = env.block.time.plus_seconds(100);
@@ -295,7 +295,7 @@ fn cfg_and_last_update_ts() {
     env.block.time = env.block.time.plus_seconds(500);
     execute(deps.as_mut(), env.clone(), info, ExecuteMsg::Update {}).unwrap();
     let last_update_ts: u64 =
-        from_binary(&query(deps.as_ref(), env, QueryMsg::LastUpdateTimestamp {}).unwrap()).unwrap();
+        from_json(query(deps.as_ref(), env, QueryMsg::LastUpdateTimestamp {}).unwrap()).unwrap();
     assert_eq!(last_update_ts, first_update_ts.add(700));
 }
 
