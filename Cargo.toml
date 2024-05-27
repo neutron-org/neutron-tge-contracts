@@ -11,6 +11,7 @@ members = [
     "contracts/cw20-merkle-airdrop",
     "contracts/price-feed",
     "contracts/astroport/*",
+    "contracts/usdc-converter",
 ]
 
 [profile.release]
