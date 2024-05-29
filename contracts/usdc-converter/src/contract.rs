@@ -96,6 +96,7 @@ pub fn receive_cw20(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_convert_and_stake(
     deps: DepsMut,
     env: Env,
@@ -215,6 +216,7 @@ fn handle_callback(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_swap_callback(
     deps: DepsMut,
     env: Env,
@@ -248,8 +250,7 @@ fn handle_swap_callback(
         .querier
         .query_balance(env.contract.address.to_string(), NTRN_DENOM.to_string())?
         .amount
-        .checked_sub(ntrn_prev_balance)?
-        .into();
+        .checked_sub(ntrn_prev_balance)?;
     let axl_usdc_withdrawn: Uint128 = deps
         .querier
         .query_balance(
@@ -257,8 +258,7 @@ fn handle_swap_callback(
             config.axl_usdc_denom.clone(),
         )?
         .amount
-        .checked_sub(axl_usdc_prev_balance)?
-        .into();
+        .checked_sub(axl_usdc_prev_balance)?;
     let noble_usdc_balance: Uint128 = deps
         .querier
         .query_balance(env.contract.address.to_string(), noble_usdc_denom.clone())?
@@ -307,6 +307,7 @@ fn handle_swap_callback(
         .add_attribute("axl_usdc_withdrawn", axl_usdc_withdrawn))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_stake_callback(
     deps: DepsMut,
     env: Env,
@@ -328,8 +329,7 @@ fn handle_stake_callback(
         .querier
         .query_balance(env.contract.address.to_string(), noble_usdc_denom.clone())?
         .amount
-        .checked_sub(noble_usdc_prev_balance)?
-        .into();
+        .checked_sub(noble_usdc_prev_balance)?;
 
     Ok(Response::new()
         .add_message(CosmosMsg::Wasm(WasmMsg::Execute {
