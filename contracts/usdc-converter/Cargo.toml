@@ -1,0 +1,34 @@
+[package]
+authors = ["Sergei Sotnikov <ssotnikov93@gmail.com>"]
+description = "A contract for NTRN<>USDC.axl LP tokens conversion to NTRN and Noble USDC native assets, providing them to the pair and staking them to Astroport incentives"
+edition = "2021"
+name = "usdc-converter"
+repository = "https://github.com/neutron-org/neutron-tge-contracts"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# for more explicit tests, cargo test --features=backtraces
+backtraces = ["cosmwasm-std/backtraces"]
+# use library feature to disable all instantiate/execute/query exports
+library = []
+
+[dependencies]
+cosmwasm-schema = { version = "1.3.0" }
+cosmwasm-std = { version = "1.3.0" }
+cosmwasm-storage = { version = "1.3.0" }
+cw-controllers = "1.1.0"
+cw-storage-plus = "1.1.0"
+cw-utils = { version = "1.0.1" }
+cw2 = "1.1.0"
+cw20 = { workspace = true }
+schemars = "0.8.8"
+serde = { version = "1.0.175", default-features = false, features = ["derive"] }
+thiserror = { version = "1.0" }
+astroport = { path = "../../packages/astroport" }
+
+[dev-dependencies]
+anyhow = "1.0.57"
+cw-multi-test = "0.16.5"
