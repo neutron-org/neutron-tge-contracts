@@ -19,7 +19,7 @@ compile:
 	    cosmwasm/workspace-optimizer:0.14.0
 
 check_contracts:
-	@cargo install cosmwasm-check --locked
+	@cargo install cosmwasm-check --version 2.0.4 --locked
 	@cosmwasm-check --available-capabilities iterator,staking,stargate,neutron artifacts/*.wasm
 
 build: schema clippy test fmt compile check_contracts
