@@ -8,8 +8,8 @@
   "dependencies": {
     "@cosmjs/crypto": "^0.25.5",
     "@cosmjs/encoding": "^0.25.5",
-    "@oclif/command": "^1",
-    "@oclif/config": "^1",
+    "@oclif/command": "^1.8.36",
+    "@oclif/config": "^1.18.17",
     "@oclif/plugin-help": "^3",
     "@types/crypto-js": "^4.0.2",
     "ethereumjs-util": "^7.1.0",
