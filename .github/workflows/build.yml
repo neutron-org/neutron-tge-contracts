@@ -100,14 +100,10 @@ jobs:
         run: echo "::notice::Artifacts already exist in GCP Bucket, skipping workflow."
       - uses: dtolnay/rust-toolchain@master
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
-        id: toolchain
         with:
           toolchain: ${{ env.TOOLCHAIN }}
-          targets: ${{ env.TARGET}}
+          target: ${{ env.TARGET}}
           components: rustfmt, clippy
-      - name: Set toolchain override
-        if: ${{ env.ARTIFACTS_EXIST == 'false' }}
-        run: rustup override set ${{ steps.toolchain.outputs.name }}
       - run: make schema
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
       - run: cargo fetch --verbose
