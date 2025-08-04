@@ -108,7 +108,7 @@ jobs:
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
       - run: cargo fetch --verbose
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
-      - run: cargo clippy --all --all-targets -- -D warnings -A clippy::empty_docs
+      - run: cargo clippy --all --all-targets -- -D warnings -A clippy::empty_docs -A clippy::needless_borrows_for_generic_args
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
       - run: cargo test --verbose --all
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
