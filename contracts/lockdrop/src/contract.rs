@@ -2244,7 +2244,7 @@ pub fn query_lockup_info(
 
             // QUERY :: Check if there are any pending staking rewards
             let pending_rewards: PendingTokenResponse = deps.querier.query_wasm_smart(
-                &generator,
+                generator,
                 &GenQueryMsg::PendingToken {
                     lp_token: astroport_lp_token.to_string(),
                     user: env.contract.address.to_string(),
