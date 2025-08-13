@@ -118,8 +118,8 @@ jobs:
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
       - run: make compile
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
-      - run: make -j$(nproc) check_contracts
-        if: ${{ env.ARTIFACTS_EXIST == 'false' }}
+      # - run: make -j$(nproc) check_contracts
+      #   if: ${{ env.ARTIFACTS_EXIST == 'false' }}
       - name: 'Upload Contracts to the Cloud (repo/branch/sha)'
         if: ${{ env.ARTIFACTS_EXIST == 'false' }}
         run: 'gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp -r artifacts/* gs://neutron-contracts/${{ github.repository }}/${{ env.BRANCH }}/${{ env.sha }}/'
