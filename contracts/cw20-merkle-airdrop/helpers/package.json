@@ -6,7 +6,7 @@
     "merkle-airdrop-cli": "./bin/run"
   },
   "dependencies": {
-    "@cosmjs/crypto": "^0.25.5",
+    "@cosmjs/crypto": "^0.33.1",
     "@cosmjs/encoding": "^0.25.5",
     "@oclif/command": "^1",
     "@oclif/config": "^1",
